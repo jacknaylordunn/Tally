@@ -143,7 +143,7 @@ export const ActionHandler = () => {
                     </button>
                     <button 
                         onClick={() => navigate('/staff')}
-                        className="bg-white text-danger px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-slate-100 transition"
+                        className="bg-black text-danger px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-slate-100 transition"
                     >
                         Go to Dashboard
                     </button>

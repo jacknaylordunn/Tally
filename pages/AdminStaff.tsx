@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { getCompanyStaff, updateUserProfile, deleteUser, getCompany } from '../services/api';
+import { getCompanyStaff, updateUserProfile, removeUserFromCompany, getCompany } from '../services/api';
 import { User, Company, UserRole } from '../types';
 import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -70,12 +70,18 @@ export const AdminStaff = () => {
 
   const handleDelete = async () => {
       if (!editingUser) return;
-      if (confirm(`Are you sure you want to remove ${editingUser.name} from the company? This cannot be undone.`)) {
+      if (confirm(`Are you sure you want to remove ${editingUser.name} from the company? They will keep their account but lose access to this team.`)) {
           setSaving(true);
-          await deleteUser(editingUser.id);
-          await loadData();
-          setEditingUser(null);
-          setSaving(false);
+          try {
+            await removeUserFromCompany(editingUser.id);
+            await loadData();
+            setEditingUser(null);
+          } catch (e) {
+            console.error(e);
+            alert("Failed to remove staff.");
+          } finally {
+            setSaving(false);
+          }
       }
   };
 

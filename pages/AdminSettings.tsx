@@ -2,9 +2,10 @@
 import React, { useEffect, useState } from 'react';
 import { getCompany, updateCompanySettings, deleteCompanyFull } from '../services/api';
 import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { APP_NAME } from '../constants';
 
 export const AdminSettings = () => {
   const { user } = useAuth();
@@ -46,6 +47,25 @@ export const AdminSettings = () => {
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
       }
+  };
+
+  const handleShareCode = async () => {
+        if (!company?.code) return;
+        const text = `Hey, we are now using ${APP_NAME} for our clock-in system. Please create an account at tallyd.app. Use ${company.code} as invite code.`;
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Join ${company.name} on ${APP_NAME}`,
+                    text: text,
+                    url: 'https://tallyd.app'
+                });
+            } catch (err) {
+                // User cancelled or not supported
+            }
+        } else {
+            handleCopyCode();
+            alert("Sharing not supported on this device. Code copied to clipboard.");
+        }
   };
 
   const handleSave = async () => {
@@ -98,15 +118,24 @@ export const AdminSettings = () => {
                 >
                     <div className="relative z-10">
                         <h2 className="text-white/80 font-medium mb-1 uppercase tracking-wider text-xs">Company Invite Code</h2>
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
                             <span className="text-4xl font-bold tracking-widest">{company?.code}</span>
-                            <button 
-                                onClick={handleCopyCode}
-                                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition backdrop-blur-sm"
-                                title="Copy to clipboard"
-                            >
-                                {copied ? <Check className="w-5 h-5 text-emerald-300" /> : <Copy className="w-5 h-5" />}
-                            </button>
+                            <div className="flex space-x-1">
+                                <button 
+                                    onClick={handleCopyCode}
+                                    className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition backdrop-blur-sm"
+                                    title="Copy to clipboard"
+                                >
+                                    {copied ? <Check className="w-5 h-5 text-emerald-300" /> : <Copy className="w-5 h-5" />}
+                                </button>
+                                <button 
+                                    onClick={handleShareCode}
+                                    className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition backdrop-blur-sm"
+                                    title="Share invite"
+                                >
+                                    <Share2 className="w-5 h-5" />
+                                </button>
+                            </div>
                         </div>
                         <p className="mt-4 text-white/80 text-sm">
                             Share this code with your staff.

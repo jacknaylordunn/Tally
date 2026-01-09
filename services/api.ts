@@ -11,7 +11,8 @@ import {
     where, 
     orderBy, 
     limit,
-    writeBatch
+    writeBatch,
+    deleteField
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Shift, Company, User, Location, ValidationResult, UserRole } from '../types';
@@ -46,6 +47,18 @@ export const updateUserProfile = async (userId: string, updates: Partial<User>):
 
 export const deleteUser = async (userId: string): Promise<void> => {
     await deleteDoc(doc(db, USERS_REF, userId));
+};
+
+export const removeUserFromCompany = async (userId: string): Promise<void> => {
+    const docRef = doc(db, USERS_REF, userId);
+    await updateDoc(docRef, {
+        currentCompanyId: deleteField(),
+        activeShiftId: null,
+        customHourlyRate: deleteField(),
+        position: deleteField(),
+        isApproved: deleteField(),
+        role: UserRole.STAFF // Reset to staff
+    });
 };
 
 export const getCompanyStaff = async (companyId: string): Promise<User[]> => {

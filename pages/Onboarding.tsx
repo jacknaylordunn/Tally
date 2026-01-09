@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Company, Location } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { Building, ArrowRight, User, MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Globe, Loader2, Navigation } from 'lucide-react';
+import { Building, ArrowRight, User, MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Globe, Loader2, Navigation, Share2 } from 'lucide-react';
 import { updateCompanySettings, getCompany, createLocation } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
+import { APP_NAME } from '../constants';
 
 export const Onboarding = () => {
   const { user } = useAuth();
@@ -169,6 +170,25 @@ export const Onboarding = () => {
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
       }
+  };
+
+  const shareCode = async () => {
+        if (!company?.code) return;
+        const text = `Hey, we are now using ${APP_NAME} for our clock-in system. Please create an account at tallyd.app. Use ${company.code} as invite code.`;
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Join ${company.name} on ${APP_NAME}`,
+                    text: text,
+                    url: 'https://tallyd.app'
+                });
+            } catch (err) {
+                // User cancelled or not supported
+            }
+        } else {
+            copyCode();
+            alert("Sharing not supported on this device. Code copied to clipboard.");
+        }
   };
 
   const AdminFlow = () => (
@@ -349,15 +369,19 @@ export const Onboarding = () => {
                     <p className="text-slate-500">Share this code with your staff to get them started.</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 p-8 rounded-2xl relative overflow-hidden group cursor-pointer hover:border-brand-500 transition-colors" onClick={copyCode}>
+                <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 p-8 rounded-2xl relative overflow-hidden group hover:border-brand-500 transition-colors">
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Company Invite Code</p>
                     <div className="text-5xl font-black tracking-wider flex items-center justify-center space-x-3 text-slate-900 dark:text-white">
                         <span>{company?.code}</span>
                     </div>
-                    <div className="absolute top-4 right-4 text-slate-400 group-hover:text-brand-600 transition">
-                        {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
+                    <div className="absolute top-4 right-4 flex space-x-2">
+                        <button onClick={copyCode} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition" title="Copy">
+                            {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
+                        </button>
+                        <button onClick={shareCode} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition" title="Share">
+                            <Share2 className="w-5 h-5" />
+                        </button>
                     </div>
-                    <div className="mt-4 text-xs text-brand-600 font-medium opacity-0 group-hover:opacity-100 transition">Tap to copy</div>
                 </div>
 
                 <button onClick={handleFinish} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-xl font-bold hover:opacity-90 transition shadow-lg">

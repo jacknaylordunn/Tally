@@ -256,10 +256,10 @@ export const Register = () => {
                         <input 
                             type="password" required
                             value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                            className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none ${
+                            className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none dark:bg-slate-900 ${
                                 confirmPassword && password !== confirmPassword 
-                                ? 'border-red-300 focus:ring-red-200' 
-                                : 'border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-brand-500'
+                                ? 'border-red-500 focus:ring-red-200 dark:focus:ring-red-900/30' 
+                                : 'border-slate-200 dark:border-slate-700 focus:ring-brand-500'
                             }`}
                             placeholder="••••••••"
                         />
