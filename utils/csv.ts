@@ -1,6 +1,7 @@
+
 import { Shift } from '../types';
 
-export const downloadShiftsCSV = (shifts: Shift[], filename: string) => {
+export const downloadShiftsCSV = (shifts: Shift[], filename: string, currency: string = '$') => {
   if (!shifts.length) return;
 
   // Transform data for CSV
@@ -23,7 +24,7 @@ export const downloadShiftsCSV = (shifts: Shift[], filename: string) => {
       'End Time': endTime ? endTime.toLocaleTimeString() : 'Active',
       'Hours': durationHours,
       'Rate': shift.hourlyRate,
-      'Est. Pay': pay,
+      [`Est. Pay (${currency})`]: pay,
       'Method': shift.startMethod
     };
   });

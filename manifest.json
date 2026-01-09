@@ -1,18 +1,19 @@
+
 {
-  "name": "Tally Attendance",
-  "short_name": "Tally",
+  "name": "Tallyd Attendance",
+  "short_name": "Tallyd",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0ea5e9",
   "icons": [
     {
-      "src": "https://picsum.photos/192/192",
+      "src": "https://145955222.fs1.hubspotusercontent-eu1.net/hubfs/145955222/Tally%20Logo.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://picsum.photos/512/512",
+      "src": "https://145955222.fs1.hubspotusercontent-eu1.net/hubfs/145955222/Tally%20Logo.png",
       "sizes": "512x512",
       "type": "image/png"
     }

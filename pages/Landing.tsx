@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Smartphone, Zap, Check, ArrowRight, Menu, X, QrCode, MapPin, Users } from 'lucide-react';
+import { APP_NAME, LOGO_URL } from '../constants';
 
 export const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -21,8 +22,8 @@ export const Landing = () => {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center space-x-2 cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
-                <div className="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-brand-500/30">T</div>
-                <span className="font-bold text-xl tracking-tight">Tally</span>
+                <img src={LOGO_URL} alt="Logo" className="w-9 h-9 rounded-lg object-contain bg-white" />
+                <span className="font-bold text-xl tracking-tight">{APP_NAME}</span>
             </div>
             
             {/* Desktop Menu */}
@@ -78,7 +79,7 @@ export const Landing = () => {
         </h1>
         
         <p className="text-xl text-slate-500 dark:text-slate-400 max-w-2xl mb-12 leading-relaxed animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            Eliminate apps, fobs, and paper sheets. Tally uses secure, rotating QR codes and geolocation to clock staff in using their native phone camera.
+            Eliminate apps, fobs, and paper sheets. {APP_NAME} uses secure, rotating QR codes and geolocation to clock staff in using their native phone camera.
         </p>
 
         <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:w-auto animate-slide-up" style={{ animationDelay: '0.2s' }}>
@@ -146,7 +147,7 @@ export const Landing = () => {
                     </div>
                     <h3 className="text-xl font-bold mb-3">Native Scanning</h3>
                     <p className="text-slate-500 leading-relaxed text-sm">
-                        Staff don't need to download an app. They simply open their camera, scan the Tally QR, and they are verified instantly.
+                        Staff don't need to download an app. They simply open their camera, scan the {APP_NAME} QR, and they are verified instantly.
                     </p>
                 </div>
                 <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
@@ -287,7 +288,7 @@ export const Landing = () => {
                   <div className="relative z-10">
                       <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">Ready to modernize your workforce?</h2>
                       <p className="text-slate-300 dark:text-white/80 text-lg mb-10 max-w-2xl mx-auto">
-                          Join 500+ companies using Tally to track time without the friction.
+                          Join 500+ companies using {APP_NAME} to track time without the friction.
                       </p>
                       <Link to="/register" className="inline-flex items-center bg-white text-slate-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-100 transition">
                           Get Started for Free
@@ -302,14 +303,14 @@ export const Landing = () => {
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 py-12">
           <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
               <div className="flex items-center space-x-2 mb-4 md:mb-0">
-                  <div className="w-8 h-8 bg-slate-900 dark:bg-white rounded-lg flex items-center justify-center text-white dark:text-slate-900 font-bold">T</div>
-                  <span className="font-bold text-xl">Tally</span>
+                  <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg object-contain bg-white" />
+                  <span className="font-bold text-xl">{APP_NAME}</span>
               </div>
               <div className="flex space-x-6 text-slate-500 text-sm">
                   <a href="#" className="hover:text-slate-900 dark:hover:text-white">Privacy</a>
                   <a href="#" className="hover:text-slate-900 dark:hover:text-white">Terms</a>
                   <a href="#" className="hover:text-slate-900 dark:hover:text-white">Contact</a>
-                  <span>&copy; {new Date().getFullYear()} Tally Inc.</span>
+                  <span>&copy; {new Date().getFullYear()} {APP_NAME} Inc.</span>
               </div>
           </div>
       </footer>

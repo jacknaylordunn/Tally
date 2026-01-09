@@ -2,22 +2,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { X, RefreshCw, Zap } from 'lucide-react';
+import { X, Zap, ShieldCheck, Maximize, Minimize } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { getCompany } from '../services/api';
 import { Company } from '../types';
+import { LOGO_URL } from '../constants';
 
 export const KioskMode = () => {
   const { user } = useAuth();
   const [qrValue, setQrValue] = useState('');
   const [timeLeft, setTimeLeft] = useState(10);
   const [company, setCompany] = useState<Company | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const wakeLockRef = useRef<any>(null);
   
-  // Base URL for the action handler (Hash Router aware)
   const baseUrl = `${window.location.protocol}//${window.location.host}/#/action`;
 
-  // Fetch Company Branding
   useEffect(() => {
     const loadCompany = async () => {
         if (user?.currentCompanyId) {
@@ -28,7 +28,6 @@ export const KioskMode = () => {
     loadCompany();
   }, [user]);
 
-  // Request Wake Lock
   useEffect(() => {
     const requestWakeLock = async () => {
         try {
@@ -42,7 +41,6 @@ export const KioskMode = () => {
     };
     requestWakeLock();
     
-    // Re-request if visibility changes (tab switching)
     const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
             requestWakeLock();
@@ -56,7 +54,6 @@ export const KioskMode = () => {
     };
   }, []);
 
-  // QR & Timer Logic
   useEffect(() => {
     if (!user?.currentCompanyId) return;
 
@@ -65,9 +62,8 @@ export const KioskMode = () => {
       const params = new URLSearchParams({
         type: 'kiosk',
         t: timestamp.toString(),
-        cid: user.currentCompanyId! // Force non-null here as checked above
+        cid: user.currentCompanyId! 
       });
-      // URL: domain/#/action?params
       setQrValue(`${baseUrl}?${params.toString()}`);
       setTimeLeft(10);
     };
@@ -88,76 +84,116 @@ export const KioskMode = () => {
     };
   }, [baseUrl, user]);
 
-  // Calculate Dash Offset for SVG Circle
-  // Circumference = 2 * PI * r (r=22) ~= 138
-  const circumference = 138;
-  const strokeDashoffset = circumference - (timeLeft / 10) * circumference;
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+            setIsFullscreen(false);
+        }
+    }
+  };
 
+  const circumference = 138;
   const brandColor = company?.settings.primaryColor || '#0ea5e9';
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center relative overflow-hidden font-sans selection:bg-brand-500/30">
-        {/* Background Ambient Glow */}
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-brand-900 via-slate-900 to-slate-900 opacity-50 z-0"></div>
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob" style={{ backgroundColor: brandColor }}></div>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-purple-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col items-center justify-center relative overflow-hidden font-sans select-none">
+        
+        {/* Ambient Background */}
+        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-900/40 via-slate-900 to-slate-900 z-0"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-brand-500/10 rounded-full blur-[100px] opacity-30 pointer-events-none"></div>
 
-        <Link to="/admin" className="absolute top-8 right-8 p-3 bg-white/10 hover:bg-white/20 rounded-full z-20 transition-all backdrop-blur-sm group">
-            <X className="w-6 h-6 text-slate-300 group-hover:text-white" />
-        </Link>
+        {/* Header / Nav */}
+        <div className="absolute top-0 left-0 right-0 p-8 flex justify-between items-center z-20">
+             <div className="flex items-center space-x-3 bg-white/5 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                 <span className="text-xs font-medium tracking-wide text-white/80">LIVE CONNECTION</span>
+             </div>
 
+             <div className="flex items-center space-x-4">
+                 <button 
+                    onClick={toggleFullscreen}
+                    className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition text-slate-400 hover:text-white"
+                >
+                    {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                 </button>
+                 <Link to="/admin" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all backdrop-blur-sm group">
+                    <X className="w-6 h-6 text-slate-300 group-hover:text-white" />
+                </Link>
+             </div>
+        </div>
+
+        {/* Main Content */}
         <div className="z-10 flex flex-col items-center max-w-lg w-full p-8 animate-in fade-in zoom-in duration-500">
-            {/* Company Header */}
+            
+            {/* Branding */}
              <div className="mb-10 text-center flex flex-col items-center">
-                 {company?.settings.logoUrl ? (
-                     <img src={company.settings.logoUrl} alt="Logo" className="w-20 h-20 rounded-2xl mb-6 shadow-xl object-cover bg-white" />
-                 ) : (
-                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center font-bold text-3xl shadow-xl shadow-brand-900/50 mb-4" style={{ color: brandColor }}>
-                        {user?.name.charAt(0) || 'T'}
-                    </div>
-                 )}
-                <h1 className="text-3xl font-bold tracking-tight mb-2">Scan to Clock In</h1>
-                <p className="text-slate-400">Open your camera app</p>
+                 <div className="relative">
+                    {company?.settings.logoUrl ? (
+                        <img src={company.settings.logoUrl} alt="Logo" className="w-24 h-24 rounded-2xl mb-6 shadow-2xl object-cover bg-white p-1" />
+                    ) : (
+                        <img src={LOGO_URL} alt="Logo" className="w-24 h-24 rounded-2xl mb-6 shadow-2xl object-contain bg-white p-4" />
+                    )}
+                 </div>
+                <h1 className="text-4xl font-bold tracking-tight mb-2 text-white">Scan to Clock In</h1>
+                <p className="text-slate-400 text-lg">Use your phone camera</p>
             </div>
 
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl shadow-brand-500/20 relative group">
-                {/* QR Code */}
-                {qrValue && (
-                    <div className="w-72 h-72 flex items-center justify-center relative z-10">
-                        <QRCode value={qrValue} size={256} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
-                    </div>
-                )}
+            {/* QR Card */}
+            <div className="relative group">
+                {/* Glow Effect */}
+                <div className="absolute inset-0 bg-brand-500 rounded-[2.5rem] blur-xl opacity-20 group-hover:opacity-30 transition-opacity duration-1000 animate-pulse"></div>
                 
-                {/* Timer Ring */}
-                <div className="absolute -bottom-6 -right-6 bg-slate-900 rounded-full p-1 shadow-xl">
-                    <div className="relative w-14 h-14 flex items-center justify-center">
+                <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col items-center">
+                    {/* ID Badge notch visual */}
+                    <div className="w-20 h-1.5 bg-slate-200 rounded-full mb-6"></div>
+
+                    {qrValue && (
+                        <div className="w-72 h-72 flex items-center justify-center relative">
+                            <QRCode value={qrValue} size={256} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+                            
+                            {/* Security Watermark / Logo Overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
+                                <ShieldCheck className="w-32 h-32 text-slate-900" />
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="mt-6 flex items-center space-x-2 text-slate-400 text-xs uppercase tracking-widest font-bold">
+                        <Zap className="w-3 h-3 text-brand-500" />
+                        <span>Dynamic Security Code</span>
+                    </div>
+                </div>
+
+                {/* Timer Floating Badge */}
+                <div className="absolute -bottom-5 -right-5 bg-slate-800 rounded-full p-1.5 shadow-xl border-4 border-slate-900 z-20">
+                    <div className="relative w-16 h-16 flex items-center justify-center">
                         <svg className="w-full h-full transform -rotate-90">
-                            <circle cx="28" cy="28" r="22" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
+                            <circle cx="32" cy="32" r="26" stroke="currentColor" strokeWidth="5" fill="transparent" className="text-slate-700" />
                             <circle 
-                                cx="28" cy="28" r="22" stroke="currentColor" strokeWidth="4" fill="transparent" 
+                                cx="32" cy="32" r="26" stroke="currentColor" strokeWidth="5" fill="transparent" 
                                 className="transition-all duration-1000 ease-linear"
                                 style={{ color: brandColor }}
-                                strokeDasharray={circumference}
-                                strokeDashoffset={strokeDashoffset}
+                                strokeDasharray="163" 
+                                strokeDashoffset={163 - (timeLeft / 10) * 163}
+                                strokeLinecap="round"
                             />
                         </svg>
-                        <span className="absolute text-sm font-bold">{timeLeft}</span>
+                        <span className="absolute text-lg font-bold font-mono">{timeLeft}</span>
                     </div>
                 </div>
             </div>
 
-            <div className="mt-16 flex items-center space-x-3 px-6 py-2 bg-white/5 rounded-full backdrop-blur-sm border border-white/5">
-                <div className="relative">
-                    <RefreshCw className="w-4 h-4 animate-spin-slow" style={{ color: brandColor }} />
+            {/* Footer */}
+            <div className="mt-20 flex flex-col items-center space-y-4 opacity-50">
+                <div className="flex items-center space-x-2 text-sm text-slate-400">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Powered by Tallyd</span>
                 </div>
-                <span className="text-slate-400 text-sm font-medium tracking-wide">Secure Token Active</span>
-            </div>
-
-            <div className="mt-6 text-center opacity-40 hover:opacity-100 transition-opacity">
-               <p className="text-xs text-slate-500 flex items-center gap-1">
-                   <Zap className="w-3 h-3" />
-                   Tally Kiosk
-               </p>
+                <p className="text-[10px] text-slate-600 uppercase tracking-widest">Device ID: {user?.id.substring(0,8)}</p>
             </div>
         </div>
     </div>

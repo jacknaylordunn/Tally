@@ -2,7 +2,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { NAVIGATION_ITEMS } from '../constants';
+import { NAVIGATION_ITEMS, APP_NAME, LOGO_URL } from '../constants';
 import { LogOut, Menu, X, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -29,8 +29,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-4 z-50 flex justify-between items-center">
         <div className="flex items-center space-x-2">
-           <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-brand-500/30">T</div>
-           <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">Tally</span>
+           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg object-contain bg-white" />
+           <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">{APP_NAME}</span>
         </div>
         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-slate-500">
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -67,8 +67,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-72 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 h-screen sticky top-0 py-8 px-6">
         <div className="flex items-center space-x-3 mb-12 px-2">
-           <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-brand-500/20">T</div>
-           <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">Tally</span>
+           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg object-contain bg-white" />
+           <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">{APP_NAME}</span>
         </div>
         
         <nav className="flex-1 space-y-1">

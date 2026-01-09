@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import { UserRole } from '../types';
+import { LOGO_URL } from '../constants';
 
 export const Login = () => {
   const { isAuthenticated, login, user } = useAuth();
@@ -53,7 +54,7 @@ export const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-[#0b1120] p-6">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-            <div className="w-12 h-12 bg-brand-500 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-brand-500/30 mx-auto mb-4">T</div>
+            <img src={LOGO_URL} alt="Logo" className="w-16 h-16 mx-auto mb-4 rounded-xl object-contain bg-white p-1 shadow-lg shadow-brand-500/20" />
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
             <p className="text-slate-500 mt-2">Enter your details to access your account.</p>
         </div>

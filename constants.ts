@@ -1,7 +1,8 @@
 
 import { Box, User, Clock, MapPin, QrCode, LogOut, LayoutDashboard, History, Settings, Users } from 'lucide-react';
 
-export const APP_NAME = "Tally";
+export const APP_NAME = "Tallyd";
+export const LOGO_URL = "https://145955222.fs1.hubspotusercontent-eu1.net/hubfs/145955222/Tally%20Logo.png";
 
 export const NAVIGATION_ITEMS = {
   ADMIN: [

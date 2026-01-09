@@ -1,24 +1,32 @@
+
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getStaffActivity } from '../services/api';
-import { Shift } from '../types';
+import { getStaffActivity, getCompany } from '../services/api';
+import { Shift, Company } from '../types';
 import { Calendar, DollarSign, Clock, Filter } from 'lucide-react';
 
 export const StaffActivity = () => {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'month'>('all');
 
   useEffect(() => {
     const loadData = async () => {
         if (!user) return;
-        const data = await getStaffActivity(user.id);
-        setShifts(data);
+        const [shiftsData, companyData] = await Promise.all([
+            getStaffActivity(user.id),
+            user.currentCompanyId ? getCompany(user.currentCompanyId) : Promise.resolve(null)
+        ]);
+        setShifts(shiftsData);
+        setCompany(companyData);
         setLoading(false);
     };
     loadData();
   }, [user]);
+
+  const currency = company?.settings.currency || '$';
 
   const filteredShifts = shifts.filter(s => {
       if (filter === 'all') return true;
@@ -60,7 +68,7 @@ export const StaffActivity = () => {
                    <DollarSign className="w-4 h-4" />
                    <span className="text-xs font-bold uppercase">Est. Earnings</span>
                </div>
-               <p className="text-2xl font-bold text-slate-900 dark:text-white">${totalEarnings.toFixed(2)}</p>
+               <p className="text-2xl font-bold text-slate-900 dark:text-white">{currency}{totalEarnings.toFixed(2)}</p>
            </div>
        </div>
 
@@ -118,7 +126,7 @@ export const StaffActivity = () => {
                         <div className="text-right min-w-[5rem]">
                             <div className="text-xs text-slate-400 uppercase font-medium">Earned</div>
                             <div className="font-bold text-green-600 dark:text-green-400 text-lg">
-                                ${calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
+                                {currency}{calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
                             </div>
                         </div>
                    </div>

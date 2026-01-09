@@ -1,23 +1,35 @@
 
 import React, { useEffect, useState } from 'react';
-import { getShifts } from '../services/api';
-import { Shift } from '../types';
-import { Users, Clock, AlertCircle, Search, Filter, Download, ArrowUpRight } from 'lucide-react';
+import { getShifts, getLocations } from '../services/api';
+import { Shift, Location } from '../types';
+import { Users, Clock, AlertCircle, Search, Filter, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadShiftsCSV } from '../utils/csv';
+import { Link } from 'react-router-dom';
+import QRCode from 'react-qr-code';
+import { APP_NAME } from '../constants';
 
 export const AdminDashboard = () => {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'active'>('all');
 
+  // Modal States
+  const [isLocationSelectorOpen, setIsLocationSelectorOpen] = useState(false);
+  const [selectedLocationForPoster, setSelectedLocationForPoster] = useState<Location | null>(null);
+
   useEffect(() => {
     const loadData = async () => {
         if (!user || !user.currentCompanyId) return;
-        const data = await getShifts(user.currentCompanyId);
-        setShifts(data);
+        const [shiftsData, locationsData] = await Promise.all([
+            getShifts(user.currentCompanyId),
+            getLocations(user.currentCompanyId)
+        ]);
+        setShifts(shiftsData);
+        setLocations(locationsData);
         setLoading(false);
     };
     loadData();
@@ -35,6 +47,10 @@ export const AdminDashboard = () => {
 
   const handleExport = () => {
       downloadShiftsCSV(filteredShifts, 'tally_full_report');
+  };
+
+  const getStaticQrUrl = (locId: string) => {
+    return `${window.location.protocol}//${window.location.host}/#/action?type=static&lid=${locId}`;
   };
 
   const StatCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
@@ -69,6 +85,42 @@ export const AdminDashboard = () => {
                  </button>
             </div>
         </header>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Link to="/admin/kiosk" className="group relative overflow-hidden bg-gradient-to-br from-brand-600 to-brand-700 rounded-3xl p-6 shadow-xl shadow-brand-500/20 text-white flex items-center justify-between hover:scale-[1.01] transition-all duration-300">
+                <div className="relative z-10">
+                    <div className="flex items-center space-x-2 mb-2 text-brand-100 font-medium text-sm uppercase tracking-wider">
+                        <Zap className="w-4 h-4" />
+                        <span>Kiosk Mode</span>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1">Launch Live Kiosk</h3>
+                    <p className="text-brand-100 text-sm">Open the secure QR scanner for this device.</p>
+                </div>
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm group-hover:bg-white/30 transition">
+                    <QrCode className="w-6 h-6" />
+                </div>
+                {/* Decoration */}
+                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+            </Link>
+
+            <button 
+                onClick={() => setIsLocationSelectorOpen(true)}
+                className="group relative overflow-hidden bg-slate-900 dark:bg-slate-800 rounded-3xl p-6 shadow-lg text-white flex items-center justify-between hover:bg-slate-800 dark:hover:bg-slate-700 transition-all duration-300 text-left"
+            >
+                <div className="relative z-10">
+                     <div className="flex items-center space-x-2 mb-2 text-slate-400 font-medium text-sm uppercase tracking-wider">
+                        <Printer className="w-4 h-4" />
+                        <span>Static QR</span>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1">Print QR Poster</h3>
+                    <p className="text-slate-400 text-sm">Generate a physical scan point for a location.</p>
+                </div>
+                <div className="w-12 h-12 bg-slate-700 dark:bg-slate-600 rounded-full flex items-center justify-center group-hover:bg-slate-600 dark:group-hover:bg-slate-500 transition">
+                    <ArrowUpRight className="w-6 h-6" />
+                </div>
+            </button>
+        </div>
 
         {/* Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -137,7 +189,7 @@ export const AdminDashboard = () => {
                                 <th className="px-6 py-4 font-medium">Method</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                        <tbody className="divide-y divide-slate-5 dark:divide-slate-800">
                             {loading ? (
                                 <tr><td colSpan={5} className="p-8 text-center text-slate-400">Loading data...</td></tr>
                             ) : filteredShifts.length === 0 ? (
@@ -188,6 +240,94 @@ export const AdminDashboard = () => {
                 </div>
             </div>
         </div>
+
+        {/* Modal: Select Location for Poster */}
+        {isLocationSelectorOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select Location</h2>
+                        <button onClick={() => setIsLocationSelectorOpen(false)} className="text-slate-400 hover:text-slate-600">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+                    
+                    {locations.length === 0 ? (
+                        <div className="text-center py-8">
+                             <MapPin className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                             <p className="text-slate-500 mb-4">No locations found.</p>
+                             <Link to="/admin/locations" className="text-brand-600 font-bold hover:underline">Add a location first</Link>
+                        </div>
+                    ) : (
+                        <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+                            {locations.map(loc => (
+                                <button 
+                                    key={loc.id}
+                                    onClick={() => {
+                                        setIsLocationSelectorOpen(false);
+                                        setSelectedLocationForPoster(loc);
+                                    }}
+                                    className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-slate-700 transition group text-left"
+                                >
+                                    <div className="flex items-center space-x-3">
+                                        <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 group-hover:text-brand-600 group-hover:bg-brand-100 dark:group-hover:text-white">
+                                            <MapPin className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-900 dark:text-white">{loc.name}</h4>
+                                            <p className="text-xs text-slate-500">Radius: {loc.radius}m</p>
+                                        </div>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-500" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* Modal: Poster Display (Copied from Locations for convenience) */}
+        {selectedLocationForPoster && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white rounded-none md:rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl print:shadow-none print:w-screen print:h-screen print:max-w-none print:rounded-none print:flex print:flex-col print:items-center print:justify-center">
+                    <button 
+                        onClick={() => setSelectedLocationForPoster(null)}
+                        className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition print:hidden"
+                    >
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
+
+                    <div className="mb-8 space-y-2">
+                        <div className="flex items-center justify-center space-x-2 mb-4 text-slate-400">
+                             <Building className="w-5 h-5" />
+                             <span className="font-semibold uppercase tracking-widest text-sm">{APP_NAME}</span>
+                        </div>
+                        <h2 className="text-4xl font-extrabold text-slate-900">{selectedLocationForPoster.name}</h2>
+                        <p className="text-slate-500 text-lg">Scan to Clock In or Out</p>
+                    </div>
+
+                    <div className="bg-white border-4 border-slate-900 p-8 rounded-3xl inline-block mb-8 shadow-xl print:shadow-none">
+                         <QRCode value={getStaticQrUrl(selectedLocationForPoster.id)} size={300} />
+                    </div>
+                    
+                    <div className="text-slate-400 text-sm font-medium mb-8">
+                        <p>1. Open your camera</p>
+                        <p>2. Scan the code</p>
+                        <p>3. Confirm your location</p>
+                    </div>
+
+                    <div className="flex gap-4 print:hidden">
+                        <button 
+                            className="flex-1 bg-brand-500 text-white py-3 rounded-xl font-bold hover:bg-brand-600 transition shadow-lg shadow-brand-500/30"
+                            onClick={() => window.print()}
+                        >
+                            Print Poster
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

@@ -1,12 +1,12 @@
 
-
 import React, { useEffect, useState } from 'react';
-import { getLocations, createLocation, deleteLocation } from '../services/api';
-import { Location } from '../types';
-import { MapPin, Plus, Printer, Trash2, X, Save } from 'lucide-react';
+import { getLocations, createLocation, deleteLocation, getCompany } from '../services/api';
+import { Location, Company } from '../types';
+import { MapPin, Plus, Printer, Trash2, X, Save, Building } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { LocationMap } from '../components/LocationMap';
 import QRCode from 'react-qr-code';
+import { APP_NAME } from '../constants';
 
 export const AdminLocations = () => {
   const { user } = useAuth();
@@ -14,6 +14,7 @@ export const AdminLocations = () => {
   const [loading, setLoading] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [companyName, setCompanyName] = useState(APP_NAME);
   
   // New Location Form State
   const [newLocName, setNewLocName] = useState('');
@@ -24,8 +25,12 @@ export const AdminLocations = () => {
   useEffect(() => {
     const loadData = async () => {
         if (!user || !user.currentCompanyId) return;
-        const data = await getLocations(user.currentCompanyId);
-        setLocations(data);
+        const [locData, companyData] = await Promise.all([
+            getLocations(user.currentCompanyId),
+            getCompany(user.currentCompanyId)
+        ]);
+        setLocations(locData);
+        setCompanyName(companyData.name);
         setLoading(false);
     };
     loadData();
@@ -139,26 +144,36 @@ export const AdminLocations = () => {
         {/* Modal for QR Poster */}
         {selectedLocation && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl">
+                <div className="bg-white rounded-none md:rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl print:shadow-none print:w-screen print:h-screen print:max-w-none print:rounded-none print:flex print:flex-col print:items-center print:justify-center">
                     <button 
                         onClick={() => setSelectedLocation(null)}
-                        className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition"
+                        className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition print:hidden"
                     >
                         <X className="w-5 h-5 text-slate-500" />
                     </button>
 
-                    <div className="mb-6">
-                        <h2 className="text-2xl font-bold text-slate-900">{selectedLocation.name}</h2>
-                        <p className="text-slate-500">Scan to clock in at this location.</p>
+                    <div className="mb-8 space-y-2">
+                        <div className="flex items-center justify-center space-x-2 mb-4 text-slate-400">
+                             <Building className="w-5 h-5" />
+                             <span className="font-semibold uppercase tracking-widest text-sm">{companyName}</span>
+                        </div>
+                        <h2 className="text-4xl font-extrabold text-slate-900">{selectedLocation.name}</h2>
+                        <p className="text-slate-500 text-lg">Scan to Clock In or Out</p>
                     </div>
 
-                    <div className="bg-white border-2 border-slate-900 p-6 rounded-2xl inline-block mb-6">
-                         <QRCode value={getStaticQrUrl(selectedLocation.id)} size={256} />
+                    <div className="bg-white border-4 border-slate-900 p-8 rounded-3xl inline-block mb-8 shadow-xl print:shadow-none">
+                         <QRCode value={getStaticQrUrl(selectedLocation.id)} size={300} />
                     </div>
                     
-                    <div className="flex gap-4">
+                    <div className="text-slate-400 text-sm font-medium mb-8">
+                        <p>1. Open your camera</p>
+                        <p>2. Scan the code</p>
+                        <p>3. Confirm your location</p>
+                    </div>
+
+                    <div className="flex gap-4 print:hidden">
                         <button 
-                            className="flex-1 bg-brand-500 text-white py-3 rounded-xl font-bold hover:bg-brand-600 transition"
+                            className="flex-1 bg-brand-500 text-white py-3 rounded-xl font-bold hover:bg-brand-600 transition shadow-lg shadow-brand-500/30"
                             onClick={() => window.print()}
                         >
                             Print Poster
@@ -167,7 +182,7 @@ export const AdminLocations = () => {
                             className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-200 transition"
                             onClick={() => {
                                 navigator.clipboard.writeText(getStaticQrUrl(selectedLocation.id));
-                                alert("Link copied!");
+                                alert("Link copied to clipboard");
                             }}
                         >
                             Copy Link

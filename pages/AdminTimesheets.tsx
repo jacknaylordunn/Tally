@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState } from 'react';
-import { getShifts, updateShift } from '../services/api';
-import { Shift } from '../types';
-import { Download, Edit2, Search, Calendar, ChevronLeft, ChevronRight, X, Save, Clock } from 'lucide-react';
+import { getShifts, updateShift, deleteShift, getCompany } from '../services/api';
+import { Shift, Company } from '../types';
+import { Download, Edit2, Search, Calendar, ChevronLeft, ChevronRight, X, Save, Clock, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadShiftsCSV } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -9,6 +10,7 @@ import { TableRowSkeleton } from '../components/Skeleton';
 export const AdminTimesheets = () => {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -25,8 +27,12 @@ export const AdminTimesheets = () => {
   const loadData = async () => {
     if (!user || !user.currentCompanyId) return;
     setLoading(true);
-    const data = await getShifts(user.currentCompanyId);
-    setShifts(data);
+    const [shiftsData, companyData] = await Promise.all([
+        getShifts(user.currentCompanyId),
+        getCompany(user.currentCompanyId)
+    ]);
+    setShifts(shiftsData);
+    setCompany(companyData);
     setLoading(false);
   };
 
@@ -40,14 +46,28 @@ export const AdminTimesheets = () => {
       return `${hours.toFixed(2)} hrs`;
   };
 
+  const currency = company?.settings.currency || '$';
+
   const calculatePay = (start: number, end: number | null, rate: number) => {
       if (!end) return '-';
       const hours = (end - start) / 3600000;
-      return `$${(hours * rate).toFixed(2)}`;
+      return `${currency}${(hours * rate).toFixed(2)}`;
   };
 
   const handleExport = () => {
-    downloadShiftsCSV(filteredShifts, 'tally_timesheet');
+    downloadShiftsCSV(filteredShifts, 'tally_timesheet', currency);
+  };
+
+  const handleDelete = async (shiftId: string) => {
+      if (window.confirm("Are you sure you want to delete this shift entry? This cannot be undone.")) {
+          try {
+              await deleteShift(shiftId);
+              setShifts(prev => prev.filter(s => s.id !== shiftId));
+          } catch (e) {
+              console.error(e);
+              alert("Failed to delete shift.");
+          }
+      }
   };
 
   // --- EDIT LOGIC ---
@@ -177,12 +197,20 @@ export const AdminTimesheets = () => {
                                 <td className="px-6 py-4">
                                     {calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="px-6 py-4 text-right flex justify-end space-x-1">
                                     <button 
                                         onClick={() => openEditModal(shift)}
                                         className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                        title="Edit"
                                     >
                                         <Edit2 className="w-4 h-4" />
+                                    </button>
+                                     <button 
+                                        onClick={() => handleDelete(shift.id)}
+                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                        title="Delete"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
                                 </td>
                             </tr>

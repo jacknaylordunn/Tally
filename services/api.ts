@@ -10,7 +10,8 @@ import {
     query, 
     where, 
     orderBy, 
-    limit 
+    limit,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Shift, Company, User, Location, ValidationResult, UserRole } from '../types';
@@ -57,6 +58,25 @@ export const getCompanyStaff = async (companyId: string): Promise<User[]> => {
     return querySnapshot.docs.map(doc => doc.data() as User);
 };
 
+export const switchUserCompany = async (userId: string, inviteCode: string): Promise<{ success: boolean, message: string }> => {
+    const company = await getCompanyByCode(inviteCode);
+    if (!company) {
+        return { success: false, message: 'Invalid Invite Code' };
+    }
+
+    // Update user profile to point to new company
+    // We intentionally reset activeShiftId to null to prevent "ghost" shifts in new company
+    await updateUserProfile(userId, { 
+        currentCompanyId: company.id,
+        activeShiftId: null,
+        // Reset specific role overrides when joining new company
+        position: undefined,
+        customHourlyRate: undefined
+    });
+
+    return { success: true, message: `Joined ${company.name}` };
+};
+
 // --- COMPANY ---
 
 export const getCompanyByCode = async (code: string): Promise<Company | null> => {
@@ -84,6 +104,24 @@ export const updateCompanySettings = async (companyId: string, settings: Partial
     const newSettings = { ...company.settings, ...settings };
     const docRef = doc(db, COMPANIES_REF, companyId);
     await updateDoc(docRef, { settings: newSettings });
+};
+
+export const deleteCompanyFull = async (companyId: string): Promise<void> => {
+    const batch = writeBatch(db);
+
+    // 1. Delete Company Doc
+    const compRef = doc(db, COMPANIES_REF, companyId);
+    batch.delete(compRef);
+
+    // 2. Delete Locations
+    const locQ = query(collection(db, LOCATIONS_REF), where("companyId", "==", companyId));
+    const locSnaps = await getDocs(locQ);
+    locSnaps.forEach(d => batch.delete(d.ref));
+
+    // 3. (Optional) We could delete shifts, but usually better to keep them or let them be orphaned.
+    // For specific requirement "Delete Company", we proceed with removing structure.
+    
+    await batch.commit();
 };
 
 // --- LOCATIONS ---
@@ -155,6 +193,10 @@ export const getStaffActivity = async (userId: string): Promise<Shift[]> => {
 export const updateShift = async (shiftId: string, updates: Partial<Shift>): Promise<void> => {
     const docRef = doc(db, SHIFTS_REF, shiftId);
     await updateDoc(docRef, updates);
+};
+
+export const deleteShift = async (shiftId: string): Promise<void> => {
+    await deleteDoc(doc(db, SHIFTS_REF, shiftId));
 };
 
 export const toggleManualShift = async (userId: string, companyId: string): Promise<Shift | null> => {

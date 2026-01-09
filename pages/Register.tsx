@@ -1,13 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { Building, User, ArrowRight, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Building, User, ArrowRight, Check, AlertCircle, Loader2, X } from 'lucide-react';
 import { createUserProfile, createCompany, getCompanyByCode } from '../services/api';
 import { Company, User as UserType } from '../types';
 import { auth } from '../lib/firebase';
 import { createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
+import { APP_NAME, LOGO_URL } from '../constants';
 
 export const Register = () => {
   const navigate = useNavigate();
@@ -21,19 +22,53 @@ export const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [companyCode, setCompanyCode] = useState('');
   const [companyName, setCompanyName] = useState('');
+
+  // Password Requirements State
+  const [passwordCriteria, setPasswordCriteria] = useState({
+      length: false,
+      upper: false,
+      lower: false,
+      number: false,
+      special: false
+  });
+
+  useEffect(() => {
+    setPasswordCriteria({
+        length: password.length >= 6,
+        upper: /[A-Z]/.test(password),
+        lower: /[a-z]/.test(password),
+        number: /[0-9]/.test(password),
+        special: /[^A-Za-z0-9]/.test(password)
+    });
+  }, [password]);
+
+  const isPasswordValid = Object.values(passwordCriteria).every(Boolean);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
+
+    // Pre-flight checks
+    if (!isPasswordValid) {
+        setError("Password does not meet all requirements.");
+        setIsSubmitting(false);
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        setIsSubmitting(false);
+        return;
+    }
     
     let userCredential;
 
     try {
         // 1. Create Authentication User FIRST
-        // This ensures we are authenticated when we try to query the database
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
         let companyId = '';
@@ -43,13 +78,11 @@ export const Register = () => {
             if (!companyCode) {
                  throw new Error("Please enter a Company Invite Code.");
             }
-            // Now we are authenticated, this query works against Firestore rules
             const company = await getCompanyByCode(companyCode);
             if (!company) throw new Error("Invalid Company Invite Code.");
             companyId = company.id;
         } 
         else if (activeTab === UserRole.ADMIN) {
-            // Generate a code like "AMS-999"
             const initials = companyName.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
             const randomNum = Math.floor(100 + Math.random() * 900);
             const inviteCode = `${initials}-${randomNum}`;
@@ -83,14 +116,13 @@ export const Register = () => {
         };
         await createUserProfile(newUser);
         
-        // 4. Force Refresh Session to grab new profile and Redirect
+        // 4. Force Refresh Session
         await refreshSession();
         navigate('/onboarding');
 
     } catch (err: any) {
         console.error("Registration Error:", err);
         
-        // Cleanup: If we created an auth user but failed to link profile/company, delete the auth user
         if (userCredential && userCredential.user) {
             await deleteUser(userCredential.user).catch(cleanupErr => 
                 console.error("Failed to cleanup orphaned user", cleanupErr)
@@ -98,15 +130,8 @@ export const Register = () => {
         }
 
         let msg = "Registration failed. Please try again.";
-        
         if (err.code === 'auth/email-already-in-use') {
             msg = "Email is already in use.";
-        } else if (err.code === 'auth/weak-password') {
-            msg = "Password should be at least 6 characters.";
-        } else if (err.code === 'permission-denied' || err.message.includes('permission')) {
-             msg = "Database permission denied. Please ensure your internet is connected or contact support.";
-        } else if (err.message === "Invalid Company Invite Code.") {
-            msg = "The Company Invite Code is invalid. Please check with your manager.";
         } else if (err.message) {
             msg = err.message;
         }
@@ -117,6 +142,13 @@ export const Register = () => {
     }
   };
 
+  const Requirement = ({ met, text }: { met: boolean, text: string }) => (
+      <div className={`flex items-center space-x-2 text-xs transition-colors ${met ? 'text-green-600' : 'text-slate-400'}`}>
+          {met ? <Check className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full border border-slate-300"></div>}
+          <span>{text}</span>
+      </div>
+  );
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col md:flex-row">
@@ -125,8 +157,8 @@ export const Register = () => {
         <div className="hidden md:flex flex-col justify-between w-2/5 bg-brand-600 p-8 text-white relative overflow-hidden">
              <div className="z-10">
                 <div className="flex items-center space-x-2 mb-8">
-                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-brand-600 font-bold text-xl">T</div>
-                    <span className="font-bold text-2xl">Tally</span>
+                    <img src={LOGO_URL} alt="Logo" className="w-10 h-10 rounded-lg object-contain bg-white" />
+                    <span className="font-bold text-2xl">{APP_NAME}</span>
                 </div>
                 <h2 className="text-3xl font-bold mb-4">Start tracking time effortlessly.</h2>
                 <ul className="space-y-4 text-brand-100">
@@ -205,15 +237,38 @@ export const Register = () => {
                     </div>
                 </div>
 
-                <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-                    <input 
-                        type="password" required
-                        value={password} onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" 
-                        placeholder="••••••••"
-                        minLength={6}
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                        <input 
+                            type="password" required
+                            value={password} onChange={(e) => setPassword(e.target.value)}
+                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" 
+                            placeholder="••••••••"
+                        />
+                    </div>
+                     <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Confirm Password</label>
+                        <input 
+                            type="password" required
+                            value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                            className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none ${
+                                confirmPassword && password !== confirmPassword 
+                                ? 'border-red-300 focus:ring-red-200' 
+                                : 'border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-brand-500'
+                            }`}
+                            placeholder="••••••••"
+                        />
+                    </div>
+                </div>
+
+                {/* Password Criteria Checklist */}
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg grid grid-cols-2 gap-2">
+                    <Requirement met={passwordCriteria.length} text="Min 6 chars" />
+                    <Requirement met={passwordCriteria.upper} text="Uppercase" />
+                    <Requirement met={passwordCriteria.lower} text="Lowercase" />
+                    <Requirement met={passwordCriteria.number} text="Number" />
+                    <Requirement met={passwordCriteria.special} text="Special char" />
                 </div>
 
                 {activeTab === UserRole.STAFF ? (
@@ -242,8 +297,8 @@ export const Register = () => {
                 <div className="pt-4">
                     <button 
                         type="submit" 
-                        disabled={isSubmitting}
-                        className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-70"
+                        disabled={isSubmitting || !isPasswordValid || (confirmPassword !== password)}
+                        className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? (
                              <Loader2 className="w-6 h-6 animate-spin" />
