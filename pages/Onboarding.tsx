@@ -339,7 +339,7 @@ export const Onboarding = () => {
                     <div className="flex items-center justify-between">
                          <div>
                             <h4 className="font-bold text-slate-900 dark:text-white">Require Admin Approval</h4>
-                            <p className="text-xs text-slate-500">New staff must be approved before they can clock in.</p>
+                            <p className="text-xs text-slate-500">OPTIONAL: New staff must be approved before they can clock in.</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} className="sr-only peer" />
