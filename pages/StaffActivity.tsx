@@ -26,7 +26,8 @@ export const StaffActivity = () => {
     loadData();
   }, [user]);
 
-  const currency = company?.settings.currency || '$';
+  // Fallback to £ if company settings are missing currency
+  const currency = company?.settings.currency || '£';
 
   const filteredShifts = shifts.filter(s => {
       if (filter === 'all') return true;

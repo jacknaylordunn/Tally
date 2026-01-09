@@ -49,12 +49,16 @@ export const deleteUser = async (userId: string): Promise<void> => {
 };
 
 export const getCompanyStaff = async (companyId: string): Promise<User[]> => {
+    // Fetch all users in company, filter by role on client side or via separate queries if needed.
+    // To support "Promote to Admin", we should fetch all users in the company regardless of role,
+    // or specifically fetch both admins and staff.
+    // For simplicity, we'll fetch where currentCompanyId matches.
     const q = query(
         collection(db, USERS_REF), 
-        where("currentCompanyId", "==", companyId), 
-        where("role", "==", UserRole.STAFF)
+        where("currentCompanyId", "==", companyId)
     );
     const querySnapshot = await getDocs(q);
+    // Filter out the owner/admins if the UI expects specific lists, but AdminStaff.tsx handles it.
     return querySnapshot.docs.map(doc => doc.data() as User);
 };
 
@@ -64,6 +68,8 @@ export const switchUserCompany = async (userId: string, inviteCode: string): Pro
         return { success: false, message: 'Invalid Invite Code' };
     }
 
+    const isApproved = !company.settings.requireApproval;
+
     // Update user profile to point to new company
     // We intentionally reset activeShiftId to null to prevent "ghost" shifts in new company
     await updateUserProfile(userId, { 
@@ -71,10 +77,13 @@ export const switchUserCompany = async (userId: string, inviteCode: string): Pro
         activeShiftId: null,
         // Reset specific role overrides when joining new company
         position: undefined,
-        customHourlyRate: undefined
+        customHourlyRate: undefined,
+        role: UserRole.STAFF, // Default to staff
+        isApproved: isApproved
     });
 
-    return { success: true, message: `Joined ${company.name}` };
+    const msg = isApproved ? `Joined ${company.name}` : `Joined ${company.name}. Approval Pending.`;
+    return { success: true, message: msg };
 };
 
 // --- COMPANY ---
@@ -232,6 +241,11 @@ export const verifyToken = async (
     const user = await getUserProfile(userId);
     if (!user || !user.currentCompanyId) return { success: false, message: 'User not associated with company' };
     
+    // Approval Check
+    if (user.isApproved === false) {
+        return { success: false, message: 'Account pending admin approval.' };
+    }
+
     const company = await getCompany(user.currentCompanyId);
 
     // 2. Validate Token Type

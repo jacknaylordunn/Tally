@@ -61,8 +61,9 @@ service cloud.firestore {
       // Allow any authenticated user to create a new company (Registration flow)
       allow create: if isAuthenticated();
       
-      // Only the owner can update company settings or delete the company
-      allow update, delete: if isCompanyOwner();
+      // Admin can update settings, Owner can delete
+      allow update: if isCompanyOwner() || isCompanyAdmin(companyId);
+      allow delete: if isCompanyOwner();
     }
 
     // --- LOCATIONS ---

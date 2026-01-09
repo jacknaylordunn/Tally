@@ -42,7 +42,13 @@ export const AdminDashboard = () => {
   });
 
   const activeShiftsCount = shifts.filter(s => !s.endTime).length;
-  const totalHours = Math.floor(shifts.reduce((acc, s) => acc + (s.endTime ? s.endTime - s.startTime : Date.now() - s.startTime), 0) / 3600000);
+  
+  // Calculate Total Hours & Minutes
+  const totalMs = shifts.reduce((acc, s) => acc + (s.endTime ? s.endTime - s.startTime : Date.now() - s.startTime), 0);
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const totalDurationDisplay = `${hours}h ${minutes}m`;
+
   const lateCheckouts = shifts.filter(s => !s.endTime && (Date.now() - s.startTime > 43200000)).length;
 
   const handleExport = () => {
@@ -132,8 +138,8 @@ export const AdminDashboard = () => {
                 colorClass="bg-emerald-500 text-emerald-600"
             />
             <StatCard 
-                label="Total Hours" 
-                value={totalHours} 
+                label="Total Time" 
+                value={totalDurationDisplay} 
                 subtext="Tracked this week"
                 icon={Clock}
                 colorClass="bg-brand-500 text-brand-600"
@@ -196,9 +202,9 @@ export const AdminDashboard = () => {
                                 <tr><td colSpan={5} className="p-12 text-center text-slate-400">No activity found matching your criteria.</td></tr>
                             ) : filteredShifts.map((shift) => {
                                 const isActive = !shift.endTime;
-                                const duration = isActive 
-                                    ? Math.floor((Date.now() - shift.startTime) / (1000 * 60 * 60)) 
-                                    : Math.floor((shift.endTime! - shift.startTime) / (1000 * 60 * 60));
+                                const durationMs = (isActive ? Date.now() : shift.endTime!) - shift.startTime;
+                                const h = Math.floor(durationMs / 3600000);
+                                const m = Math.floor((durationMs % 3600000) / 60000);
                                 
                                 return (
                                     <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition duration-150">
@@ -227,7 +233,7 @@ export const AdminDashboard = () => {
                                             {new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                         </td>
                                         <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                                            {duration}h {Math.floor(((isActive ? Date.now() : shift.endTime!) - shift.startTime) % 3600000 / 60000)}m
+                                            {h}h {m}m
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="capitalize text-slate-500 text-xs">{shift.startMethod.replace('_', ' ')}</span>
@@ -287,7 +293,7 @@ export const AdminDashboard = () => {
             </div>
         )}
 
-        {/* Modal: Poster Display (Copied from Locations for convenience) */}
+        {/* Modal: Poster Display */}
         {selectedLocationForPoster && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
                 <div className="bg-white rounded-none md:rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl print:shadow-none print:w-screen print:h-screen print:max-w-none print:rounded-none print:flex print:flex-col print:items-center print:justify-center">

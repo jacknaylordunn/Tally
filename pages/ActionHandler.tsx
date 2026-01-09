@@ -52,8 +52,6 @@ export const ActionHandler = () => {
           // Security: Check Accuracy (allow up to 500m accuracy circle, logic in API checks distance)
           if (pos.coords.accuracy > 1000) {
               console.warn("Low GPS accuracy:", pos.coords.accuracy);
-              // We proceed but it might fail distance check if it's way off. 
-              // Stricter check would be throwing error here.
           }
 
           locationData = {
@@ -109,20 +107,20 @@ export const ActionHandler = () => {
 
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors duration-500 ${
-        status === 'success' ? 'bg-success text-white' : 
-        status === 'error' ? 'bg-danger text-white' : 
-        'bg-slate-900 text-white'
+        status === 'success' ? 'bg-success' : 
+        status === 'error' ? 'bg-danger' : 
+        'bg-slate-900'
     }`}>
       <div className="max-w-md w-full animate-in fade-in zoom-in duration-300">
         {status === 'loading' && (
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center text-white">
                 <Loader2 className="w-16 h-16 animate-spin mb-4 opacity-80" />
                 <h2 className="text-2xl font-bold">{message}</h2>
             </div>
         )}
 
         {status === 'success' && (
-            <div className="flex flex-col items-center animate-bounce-in">
+            <div className="flex flex-col items-center animate-bounce-in text-white">
                 <CheckCircle className="w-24 h-24 mb-6" />
                 <h2 className="text-4xl font-bold mb-2">Success!</h2>
                 <p className="text-xl opacity-90">{message}</p>
@@ -130,7 +128,7 @@ export const ActionHandler = () => {
         )}
 
         {status === 'error' && (
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center text-white">
                 <XCircle className="w-24 h-24 mb-6" />
                 <h2 className="text-3xl font-bold mb-2">Failed</h2>
                 <p className="text-lg opacity-90 mb-8">{message}</p>

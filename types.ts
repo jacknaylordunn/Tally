@@ -13,6 +13,7 @@ export interface User {
   role: UserRole;
   customHourlyRate?: number; // Override company default
   position?: string; // e.g. "Senior Medic"
+  isApproved?: boolean; // If true, can clock in. If undefined, assume true (migration).
 }
 
 export interface Company {

@@ -46,7 +46,7 @@ export const AdminTimesheets = () => {
       return `${hours.toFixed(2)} hrs`;
   };
 
-  const currency = company?.settings.currency || '$';
+  const currency = company?.settings.currency || '£';
 
   const calculatePay = (start: number, end: number | null, rate: number) => {
       if (!end) return '-';

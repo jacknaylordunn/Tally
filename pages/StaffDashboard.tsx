@@ -184,13 +184,6 @@ export const StaffDashboard = () => {
                         <Scan className="w-5 h-5" />
                         <span>Scan QR to Clock In</span>
                    </button>
-                   
-                   {/* Manual Fallback (Only if enabled by admin) */}
-                   {company?.settings.allowManualClockIn && (
-                       <p className="text-xs text-slate-400 mt-4">
-                           Scanner not working? <span className="underline cursor-pointer hover:text-brand-500">Manual Entry</span>
-                       </p>
-                   )}
                </div>
            )}
        </div>

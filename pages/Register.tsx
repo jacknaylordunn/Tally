@@ -72,6 +72,7 @@ export const Register = () => {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
         let companyId = '';
+        let isApproved = true; // Default for Admins
 
         // 2. Validate / Prepare Company Logic
         if (activeTab === UserRole.STAFF) {
@@ -81,6 +82,7 @@ export const Register = () => {
             const company = await getCompanyByCode(companyCode);
             if (!company) throw new Error("Invalid Company Invite Code.");
             companyId = company.id;
+            isApproved = !company.settings.requireApproval;
         } 
         else if (activeTab === UserRole.ADMIN) {
             const initials = companyName.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
@@ -99,7 +101,8 @@ export const Register = () => {
                     adminSecret: 'secret',
                     allowManualClockIn: true,
                     requireApproval: false,
-                    defaultHourlyRate: 15.00
+                    defaultHourlyRate: 15.00,
+                    currency: '£' 
                 }
             };
             await createCompany(newCompany);
@@ -112,7 +115,8 @@ export const Register = () => {
             name,
             role: activeTab,
             currentCompanyId: companyId,
-            activeShiftId: null
+            activeShiftId: null,
+            isApproved: isApproved
         };
         await createUserProfile(newUser);
         

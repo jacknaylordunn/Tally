@@ -17,6 +17,7 @@ export const AdminSettings = () => {
   // Form State
   const [radius, setRadius] = useState(200);
   const [manualClockIn, setManualClockIn] = useState(true);
+  const [requireApproval, setRequireApproval] = useState(false);
   const [defaultRate, setDefaultRate] = useState(15);
   const [currency, setCurrency] = useState('£');
   const [primaryColor, setPrimaryColor] = useState('#0ea5e9');
@@ -29,6 +30,7 @@ export const AdminSettings = () => {
         setCompany(data);
         setRadius(data.settings.geofenceRadius);
         setManualClockIn(data.settings.allowManualClockIn);
+        setRequireApproval(data.settings.requireApproval || false);
         setDefaultRate(data.settings.defaultHourlyRate || 15);
         setCurrency(data.settings.currency || '£');
         setPrimaryColor(data.settings.primaryColor || '#0ea5e9');
@@ -52,6 +54,7 @@ export const AdminSettings = () => {
       await updateCompanySettings(user.currentCompanyId, {
           geofenceRadius: radius,
           allowManualClockIn: manualClockIn,
+          requireApproval,
           defaultHourlyRate: defaultRate,
           currency: currency,
           primaryColor,
@@ -156,6 +159,21 @@ export const AdminSettings = () => {
                                     type="checkbox" 
                                     checked={manualClockIn} 
                                     onChange={(e) => setManualClockIn(e.target.checked)}
+                                    className="sr-only peer" 
+                                />
+                                <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            </label>
+                        </div>
+                        <div className="flex items-center justify-between pt-2">
+                            <div>
+                                <h4 className="font-medium text-slate-900 dark:text-white text-sm">Require Admin Approval</h4>
+                                <p className="text-xs text-slate-500">New staff must be approved before they can clock in.</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={requireApproval} 
+                                    onChange={(e) => setRequireApproval(e.target.checked)}
                                     className="sr-only peer" 
                                 />
                                 <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>

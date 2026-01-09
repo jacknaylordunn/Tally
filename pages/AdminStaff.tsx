@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { getCompanyStaff, updateUserProfile, deleteUser, getCompany } from '../services/api';
-import { User, Company } from '../types';
-import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users } from 'lucide-react';
+import { User, Company, UserRole } from '../types';
+import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { TableRowSkeleton } from '../components/Skeleton';
 
@@ -79,6 +79,39 @@ export const AdminStaff = () => {
       }
   };
 
+  const handleApprove = async () => {
+      if (!editingUser) return;
+      setSaving(true);
+      try {
+          await updateUserProfile(editingUser.id, { isApproved: true });
+          await loadData();
+          setEditingUser(null);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setSaving(false);
+      }
+  };
+
+  const handlePromote = async () => {
+      if (!editingUser) return;
+      if (!confirm(`Are you sure you want to make ${editingUser.name} an Admin? They will have full access to company settings.`)) return;
+      
+      setSaving(true);
+      try {
+          await updateUserProfile(editingUser.id, { 
+              role: UserRole.ADMIN,
+              isApproved: true // Implicit approval
+          });
+          await loadData();
+          setEditingUser(null);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setSaving(false);
+      }
+  };
+
   const handleBulkUpdate = async () => {
       if (!bulkOldRate || !bulkNewRate || !company) return;
       
@@ -126,7 +159,7 @@ export const AdminStaff = () => {
      downloadAnchorNode.remove();
   }
 
-  const currency = company?.settings.currency || '$';
+  const currency = company?.settings.currency || '£';
 
   return (
     <div className="space-y-6">
@@ -182,16 +215,20 @@ export const AdminStaff = () => {
                         ) : filteredStaff.map((u) => {
                             const effectiveRate = u.customHourlyRate ?? company?.settings.defaultHourlyRate ?? 0;
                             const isCustom = u.customHourlyRate !== undefined;
+                            const isPending = u.isApproved === false;
                             
                             return (
                                 <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center space-x-3">
-                                            <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 flex items-center justify-center font-bold">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-brand-100 text-brand-600'}`}>
                                                 {u.name.charAt(0)}
                                             </div>
                                             <div>
-                                                <p className="font-medium text-slate-900 dark:text-white">{u.name}</p>
+                                                <div className="flex items-center space-x-1">
+                                                    <p className="font-medium text-slate-900 dark:text-white">{u.name}</p>
+                                                    {u.role === 'admin' && <ShieldCheck className="w-3 h-3 text-purple-500" />}
+                                                </div>
                                                 <p className="text-xs text-slate-500">{u.email}</p>
                                             </div>
                                         </div>
@@ -208,7 +245,15 @@ export const AdminStaff = () => {
                                         )}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">Active</span>
+                                        {isPending ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                                <Clock className="w-3 h-3 mr-1" /> Pending
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                                Active
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <button 
@@ -238,10 +283,33 @@ export const AdminStaff = () => {
                     </div>
 
                     <div className="space-y-4 mb-8">
-                        <div>
-                            <p className="text-sm font-medium text-slate-500">Employee</p>
-                            <p className="font-bold text-lg text-slate-900 dark:text-white">{editingUser.name}</p>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-slate-500">Employee</p>
+                                <p className="font-bold text-lg text-slate-900 dark:text-white">{editingUser.name}</p>
+                            </div>
+                            {editingUser.role !== 'admin' && (
+                                <button 
+                                    onClick={handlePromote}
+                                    className="text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition flex items-center space-x-1"
+                                >
+                                    <ShieldCheck className="w-3 h-3" />
+                                    <span>Make Admin</span>
+                                </button>
+                            )}
                         </div>
+
+                        {editingUser.isApproved === false && (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl flex items-center justify-between">
+                                <div className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">Account Pending</div>
+                                <button 
+                                    onClick={handleApprove}
+                                    className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-yellow-200 dark:hover:bg-yellow-700 transition"
+                                >
+                                    Approve Now
+                                </button>
+                            </div>
+                        )}
                         
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Position / Title</label>

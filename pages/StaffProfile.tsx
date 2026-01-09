@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { User, Mail, Building, LogOut, Shield, Moon, Sun, Edit2, Key, Trash2, ArrowRightLeft, X, Save, AlertTriangle } from 'lucide-react';
-import { updateUserProfile, deleteUser, switchUserCompany } from '../services/api';
+import { updateUserProfile, deleteUser, switchUserCompany, getCompany } from '../services/api';
 import { auth } from '../lib/firebase';
 import { sendPasswordResetEmail, deleteUser as deleteAuthUser } from 'firebase/auth';
 
@@ -20,6 +20,24 @@ export const StaffProfile = () => {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  
+  const [companyName, setCompanyName] = useState('Loading...');
+
+  useEffect(() => {
+    const fetchCompany = async () => {
+        if (user?.currentCompanyId) {
+            try {
+                const c = await getCompany(user.currentCompanyId);
+                setCompanyName(c.name);
+            } catch (e) {
+                setCompanyName('Unknown Company');
+            }
+        } else {
+            setCompanyName('No Company');
+        }
+    };
+    fetchCompany();
+  }, [user]);
 
   const handleEditProfile = async () => {
       if (!user) return;
@@ -133,8 +151,8 @@ export const StaffProfile = () => {
                     <Building className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
-                    <p className="text-xs text-slate-400 font-medium uppercase">Company ID</p>
-                    <p className="text-slate-700 dark:text-slate-200 font-medium">{user?.currentCompanyId}</p>
+                    <p className="text-xs text-slate-400 font-medium uppercase">Company</p>
+                    <p className="text-slate-700 dark:text-slate-200 font-medium">{companyName}</p>
                 </div>
                 <button 
                     onClick={() => setIsJoinOpen(true)}

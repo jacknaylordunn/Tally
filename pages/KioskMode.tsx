@@ -96,7 +96,6 @@ export const KioskMode = () => {
     }
   };
 
-  const circumference = 138;
   const brandColor = company?.settings.primaryColor || '#0ea5e9';
 
   return (
@@ -131,11 +130,11 @@ export const KioskMode = () => {
             
             {/* Branding */}
              <div className="mb-10 text-center flex flex-col items-center">
-                 <div className="relative">
+                 <div className="relative mb-6">
                     {company?.settings.logoUrl ? (
-                        <img src={company.settings.logoUrl} alt="Logo" className="w-24 h-24 rounded-2xl mb-6 shadow-2xl object-cover bg-white p-1" />
+                        <img src={company.settings.logoUrl} alt="Logo" className="w-40 h-40 rounded-3xl shadow-2xl object-cover bg-white p-2" />
                     ) : (
-                        <img src={LOGO_URL} alt="Logo" className="w-24 h-24 rounded-2xl mb-6 shadow-2xl object-contain bg-white p-4" />
+                        <img src={LOGO_URL} alt="Logo" className="w-20 h-20 rounded-xl shadow-xl object-contain bg-white p-3 opacity-90" />
                     )}
                  </div>
                 <h1 className="text-4xl font-bold tracking-tight mb-2 text-white">Scan to Clock In</h1>
