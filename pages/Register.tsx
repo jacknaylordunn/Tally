@@ -7,7 +7,7 @@ import { Building, User, ArrowRight, Check, AlertCircle, Loader2 } from 'lucide-
 import { createUserProfile, createCompany, getCompanyByCode } from '../services/api';
 import { Company, User as UserType } from '../types';
 import { auth } from '../lib/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 
 export const Register = () => {
   const navigate = useNavigate();
@@ -29,31 +29,32 @@ export const Register = () => {
     setIsSubmitting(true);
     setError('');
     
+    let userCredential;
+
     try {
+        // 1. Create Authentication User FIRST
+        // This ensures we are authenticated when we try to query the database
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const uid = userCredential.user.uid;
         let companyId = '';
 
-        // 1. Validate / Prepare Company Logic First
+        // 2. Validate / Prepare Company Logic
         if (activeTab === UserRole.STAFF) {
             if (!companyCode) {
                  throw new Error("Please enter a Company Invite Code.");
             }
+            // Now we are authenticated, this query works against Firestore rules
             const company = await getCompanyByCode(companyCode);
             if (!company) throw new Error("Invalid Company Invite Code.");
             companyId = company.id;
-        }
-
-        // 2. Create Authentication User
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const uid = userCredential.user.uid;
-        
-        // 3. Create Company if Admin
-        if (activeTab === UserRole.ADMIN) {
+        } 
+        else if (activeTab === UserRole.ADMIN) {
             // Generate a code like "AMS-999"
             const initials = companyName.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
             const randomNum = Math.floor(100 + Math.random() * 900);
             const inviteCode = `${initials}-${randomNum}`;
             
-            companyId = `comp_${Date.now()}`; // Use timestamp ID for simplicity or UUID
+            companyId = `comp_${Date.now()}`; 
             
             const newCompany: Company = {
                 id: companyId,
@@ -71,7 +72,7 @@ export const Register = () => {
             await createCompany(newCompany);
         }
 
-        // 4. Create User Profile
+        // 3. Create User Profile
         const newUser: UserType = {
             id: uid,
             email,
@@ -82,13 +83,20 @@ export const Register = () => {
         };
         await createUserProfile(newUser);
         
-        // 5. Force Refresh Session to grab new profile and Redirect
+        // 4. Force Refresh Session to grab new profile and Redirect
         await refreshSession();
         navigate('/onboarding');
 
     } catch (err: any) {
         console.error("Registration Error:", err);
         
+        // Cleanup: If we created an auth user but failed to link profile/company, delete the auth user
+        if (userCredential && userCredential.user) {
+            await deleteUser(userCredential.user).catch(cleanupErr => 
+                console.error("Failed to cleanup orphaned user", cleanupErr)
+            );
+        }
+
         let msg = "Registration failed. Please try again.";
         
         if (err.code === 'auth/email-already-in-use') {
@@ -97,6 +105,8 @@ export const Register = () => {
             msg = "Password should be at least 6 characters.";
         } else if (err.code === 'permission-denied' || err.message.includes('permission')) {
              msg = "Database permission denied. Please ensure your internet is connected or contact support.";
+        } else if (err.message === "Invalid Company Invite Code.") {
+            msg = "The Company Invite Code is invalid. Please check with your manager.";
         } else if (err.message) {
             msg = err.message;
         }
