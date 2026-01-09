@@ -1,0 +1,96 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- Helper Functions ---
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the current user is the owner of the company resource being accessed
+    function isCompanyOwner() {
+      return isAuthenticated() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Get the current user's profile data
+    function getUserProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Check if the user is an admin of the target company
+    // This requires the user profile to exist and link to the company
+    function isCompanyAdmin(targetCompanyId) {
+      let profile = getUserProfile();
+      return isAuthenticated() && profile.role == 'admin' && profile.currentCompanyId == targetCompanyId;
+    }
+
+    // --- USERS ---
+    match /users/{userId} {
+      // 1. User can read their own profile
+      // 2. Admins of the same company can read staff profiles
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        (resource.data.currentCompanyId != null && isCompanyAdmin(resource.data.currentCompanyId))
+      );
+      
+      // User can create their own profile during signup
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // User can update own profile (e.g. settings)
+      // Admin of the company can update staff profiles (e.g. set rates, positions)
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isCompanyAdmin(resource.data.currentCompanyId)
+      );
+
+      // Admin can delete staff
+      allow delete: if isAuthenticated() && isCompanyAdmin(resource.data.currentCompanyId);
+    }
+
+    // --- COMPANIES ---
+    match /companies/{companyId} {
+      // Allow authenticated users to read company info (needed for joining by code)
+      allow read: if isAuthenticated();
+      
+      // Allow any authenticated user to create a new company (Registration flow)
+      allow create: if isAuthenticated();
+      
+      // Only the owner can update company settings
+      allow update: if isCompanyOwner();
+    }
+
+    // --- LOCATIONS ---
+    match /locations/{locationId} {
+      // Staff need to read locations to validate static GPS
+      allow read: if isAuthenticated();
+      
+      // Only Admins can create locations
+      allow create: if isAuthenticated() && isCompanyAdmin(request.resource.data.companyId);
+      
+      // Only Admins can update/delete locations
+      allow update, delete: if isAuthenticated() && isCompanyAdmin(resource.data.companyId);
+    }
+
+    // --- SHIFTS ---
+    match /shifts/{shiftId} {
+      // Staff can read their own shifts
+      // Admins can read company shifts
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isCompanyAdmin(resource.data.companyId)
+      );
+      
+      // Staff can create their own shift (Clock In)
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Staff can update their own shift (Clock Out - update endTime)
+      // Admins can update shifts (Timesheet edits)
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isCompanyAdmin(resource.data.companyId)
+      );
+    }
+  }
+}
