@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { downloadShiftsCSV } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
 
-type DateRange = '7' | '14' | '30' | 'custom';
+type DateRange = 'today' | '7' | '14' | '30' | 'custom';
 
 export const AdminTimesheets = () => {
   const { user } = useAuth();
@@ -58,24 +58,51 @@ export const AdminTimesheets = () => {
   // Date Filtering Logic
   const getFilteredShifts = () => {
       const now = new Date();
-      let startFilterDate: Date;
+      let startFilterDate: number;
+      let endFilterDate: number = now.getTime();
 
       if (dateRange === 'custom') {
+          // If custom, we use the specific times provided
           if (!customStart) return shifts;
-          startFilterDate = new Date(customStart);
+          startFilterDate = new Date(customStart).getTime();
+          endFilterDate = customEnd ? new Date(customEnd).getTime() : now.getTime();
+      } else if (dateRange === 'today') {
+          // Today: 00:00 to 23:59:59
+          const start = new Date();
+          start.setHours(0, 0, 0, 0);
+          startFilterDate = start.getTime();
+          
+          const end = new Date();
+          end.setHours(23, 59, 59, 999);
+          endFilterDate = end.getTime();
       } else {
-          startFilterDate = new Date();
-          startFilterDate.setDate(now.getDate() - parseInt(dateRange));
-          startFilterDate.setHours(0, 0, 0, 0);
+          // Past X Days: Start of X days ago to Now
+          const start = new Date();
+          start.setDate(now.getDate() - parseInt(dateRange));
+          start.setHours(0, 0, 0, 0);
+          startFilterDate = start.getTime();
       }
 
-      const endFilterDate = dateRange === 'custom' && customEnd ? new Date(customEnd) : now;
-
       return shifts.filter(s => {
-          const shiftDate = new Date(s.startTime);
+          const shiftStart = s.startTime;
+          // For active shifts, we consider them effectively "ending now" for overlap checks, 
+          // or we just check if they started in range.
+          const shiftEnd = s.endTime || Date.now(); 
+
           const nameMatch = s.userName.toLowerCase().includes(searchTerm.toLowerCase());
-          const dateMatch = shiftDate >= startFilterDate && shiftDate <= endFilterDate;
-          return nameMatch && dateMatch;
+          
+          if (dateRange === 'custom') {
+              // Strict Check: Shift must start AFTER filter start AND end BEFORE filter end
+              // (or be active and start within range, if end filter is future)
+              const isWithinStart = shiftStart >= startFilterDate;
+              // If shift is active (s.endTime is null), we only check start time
+              const isWithinEnd = s.endTime ? s.endTime <= endFilterDate : shiftStart <= endFilterDate;
+              
+              return nameMatch && isWithinStart && isWithinEnd;
+          } else {
+              // Standard Check: Just check if the shift started within the period
+              return nameMatch && shiftStart >= startFilterDate && shiftStart <= endFilterDate;
+          }
       });
   };
 
@@ -97,10 +124,12 @@ export const AdminTimesheets = () => {
 
   const handleExport = (groupByStaff: boolean) => {
     let rangeLabel = 'Custom Range';
-    if (dateRange !== 'custom') {
+    if (dateRange === 'today') {
+        rangeLabel = 'Today';
+    } else if (dateRange !== 'custom') {
         rangeLabel = `Last ${dateRange} Days`;
     } else if (customStart) {
-        rangeLabel = `${new Date(customStart).toLocaleDateString()} - ${customEnd ? new Date(customEnd).toLocaleDateString() : 'Now'}`;
+        rangeLabel = `${new Date(customStart).toLocaleString()} - ${customEnd ? new Date(customEnd).toLocaleString() : 'Now'}`;
     }
 
     downloadShiftsCSV(filteredShifts, {
@@ -254,6 +283,7 @@ export const AdminTimesheets = () => {
                         onChange={(e) => setDateRange(e.target.value as DateRange)}
                         className="pl-10 pr-8 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm appearance-none cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                     >
+                        <option value="today">Today</option>
                         <option value="7">Past 7 Days</option>
                         <option value="14">Past 14 Days</option>
                         <option value="30">Past 30 Days</option>
@@ -263,19 +293,19 @@ export const AdminTimesheets = () => {
                 </div>
 
                 {dateRange === 'custom' && (
-                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                    <div className="flex flex-col sm:flex-row items-center gap-2 animate-in fade-in slide-in-from-left-2">
                         <input 
-                            type="date" 
+                            type="datetime-local" 
                             value={customStart}
                             onChange={(e) => setCustomStart(e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm"
+                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm w-full sm:w-auto"
                         />
-                        <span className="text-slate-400">-</span>
+                        <span className="text-slate-400 hidden sm:inline">-</span>
                         <input 
-                            type="date" 
+                            type="datetime-local" 
                             value={customEnd}
                             onChange={(e) => setCustomEnd(e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm"
+                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm w-full sm:w-auto"
                         />
                     </div>
                 )}
