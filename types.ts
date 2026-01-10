@@ -24,14 +24,17 @@ export interface Company {
   settings: {
     geofenceRadius: number;
     adminSecret: string;
-    allowManualClockIn: boolean;
-    requireApproval: boolean; // New field
+    allowManualClockIn: boolean; // Kept for DB compatibility, but UI control removed
+    requireApproval: boolean;
     // Branding
     logoUrl?: string;
     primaryColor?: string;
     // Payroll
     defaultHourlyRate?: number;
     currency?: string;
+    // Holiday Pay
+    holidayPayEnabled?: boolean;
+    holidayPayRate?: number; // Percentage (e.g. 12.07)
   };
 }
 
@@ -42,7 +45,7 @@ export interface Shift {
   companyId: string;
   startTime: number; // Timestamp
   endTime: number | null; // Timestamp
-  startMethod: 'dynamic_qr' | 'static_gps' | 'manual';
+  startMethod: 'dynamic_qr' | 'static_gps' | 'manual' | 'manual_entry'; // Added manual_entry for admin creation
   hourlyRate: number;
 }
 

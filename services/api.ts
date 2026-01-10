@@ -62,16 +62,11 @@ export const removeUserFromCompany = async (userId: string): Promise<void> => {
 };
 
 export const getCompanyStaff = async (companyId: string): Promise<User[]> => {
-    // Fetch all users in company, filter by role on client side or via separate queries if needed.
-    // To support "Promote to Admin", we should fetch all users in the company regardless of role,
-    // or specifically fetch both admins and staff.
-    // For simplicity, we'll fetch where currentCompanyId matches.
     const q = query(
         collection(db, USERS_REF), 
         where("currentCompanyId", "==", companyId)
     );
     const querySnapshot = await getDocs(q);
-    // Filter out the owner/admins if the UI expects specific lists, but AdminStaff.tsx handles it.
     return querySnapshot.docs.map(doc => doc.data() as User);
 };
 
@@ -83,15 +78,12 @@ export const switchUserCompany = async (userId: string, inviteCode: string): Pro
 
     const isApproved = !company.settings.requireApproval;
 
-    // Update user profile to point to new company
-    // We intentionally reset activeShiftId to null to prevent "ghost" shifts in new company
     await updateUserProfile(userId, { 
         currentCompanyId: company.id,
         activeShiftId: null,
-        // Reset specific role overrides when joining new company
         position: undefined,
         customHourlyRate: undefined,
-        role: UserRole.STAFF, // Default to staff
+        role: UserRole.STAFF, 
         isApproved: isApproved
     });
 
@@ -130,19 +122,11 @@ export const updateCompanySettings = async (companyId: string, settings: Partial
 
 export const deleteCompanyFull = async (companyId: string): Promise<void> => {
     const batch = writeBatch(db);
-
-    // 1. Delete Company Doc
     const compRef = doc(db, COMPANIES_REF, companyId);
     batch.delete(compRef);
-
-    // 2. Delete Locations
     const locQ = query(collection(db, LOCATIONS_REF), where("companyId", "==", companyId));
     const locSnaps = await getDocs(locQ);
     locSnaps.forEach(d => batch.delete(d.ref));
-
-    // 3. (Optional) We could delete shifts, but usually better to keep them or let them be orphaned.
-    // For specific requirement "Delete Company", we proceed with removing structure.
-    
     await batch.commit();
 };
 
@@ -170,12 +154,11 @@ export const getShifts = async (companyId: string): Promise<Shift[]> => {
             collection(db, SHIFTS_REF), 
             where("companyId", "==", companyId), 
             orderBy("startTime", "desc"), 
-            limit(100)
+            limit(500) // Increased limit for reports
         );
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => doc.data() as Shift);
     } catch (error: any) {
-        // Fallback to client-side sorting if index is missing
         if (error.code === 'failed-precondition') {
              console.info("Info: Firestore index not yet built. Falling back to client-side sort.", error.message);
         } else {
@@ -221,6 +204,28 @@ export const deleteShift = async (shiftId: string): Promise<void> => {
     await deleteDoc(doc(db, SHIFTS_REF, shiftId));
 };
 
+export const createManualShift = async (
+    companyId: string, 
+    userId: string, 
+    userName: string, 
+    startTime: number, 
+    endTime: number,
+    hourlyRate: number
+): Promise<void> => {
+    const shiftId = `shift_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const newShift: Shift = {
+        id: shiftId,
+        userId,
+        userName,
+        companyId,
+        startTime,
+        endTime,
+        startMethod: 'manual_entry',
+        hourlyRate
+    };
+    await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
+};
+
 export const toggleManualShift = async (userId: string, companyId: string): Promise<Shift | null> => {
     const user = await getUserProfile(userId);
     const company = await getCompany(companyId);
@@ -228,7 +233,6 @@ export const toggleManualShift = async (userId: string, companyId: string): Prom
     
     await performClockInOut(user, company, 'manual');
     
-    // Return latest shift state (active)
     const q = query(
         collection(db, SHIFTS_REF), 
         where("userId", "==", userId), 
@@ -250,22 +254,18 @@ export const verifyToken = async (
   locationData?: { lat: number; lng: number; locationId: string }
 ): Promise<ValidationResult> => {
     
-    // 1. Fetch User & Company
     const user = await getUserProfile(userId);
     if (!user || !user.currentCompanyId) return { success: false, message: 'User not associated with company' };
     
-    // Approval Check
     if (user.isApproved === false) {
         return { success: false, message: 'Account pending admin approval.' };
     }
 
     const company = await getCompany(user.currentCompanyId);
 
-    // 2. Validate Token Type
     if (type === 'kiosk') {
         const timestamp = parseInt(token);
         const now = Date.now();
-        // 60s validity window to allow for clock drift between devices
         if (isNaN(timestamp) || now - timestamp > 60000 || now - timestamp < -60000) {
             return { success: false, message: 'QR Code Expired. Please scan again.' };
         }
@@ -274,15 +274,11 @@ export const verifyToken = async (
 
     if (type === 'static') {
         if (!locationData) return { success: false, message: 'Location data missing.' };
-        
-        // Fetch locations list
         const locations = await getLocations(company.id);
         const targetLoc = locations.find(l => l.id === locationData.locationId);
-        
         if (!targetLoc) return { success: false, message: 'Invalid Location ID.' };
         
-        // Haversine Distance Calculation
-        const R = 6371e3; // Earth radius in meters
+        const R = 6371e3;
         const φ1 = locationData.lat * Math.PI/180;
         const φ2 = targetLoc.lat * Math.PI/180;
         const Δφ = (targetLoc.lat - locationData.lat) * Math.PI/180;
@@ -303,9 +299,7 @@ export const verifyToken = async (
     return { success: false, message: 'Invalid scan type' };
 };
 
-// Helper: Handles the actual DB writes for clocking in/out
 const performClockInOut = async (user: User, company: Company, method: 'dynamic_qr' | 'static_gps' | 'manual'): Promise<ValidationResult> => {
-    // Check for active shift
     const q = query(
         collection(db, SHIFTS_REF), 
         where("userId", "==", user.id), 
@@ -316,17 +310,12 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
     const activeShiftDoc = !snap.empty ? snap.docs[0] : null;
 
     if (activeShiftDoc) {
-        // --- CLOCK OUT ---
         const shiftData = activeShiftDoc.data() as Shift;
         const docRef = doc(db, SHIFTS_REF, activeShiftDoc.id);
         await updateDoc(docRef, { endTime: Date.now() });
-        
-        // Update user state
         await updateUserProfile(user.id, { activeShiftId: null });
-        
         return { success: true, message: 'Clocked Out Successfully.', shift: { ...shiftData, endTime: Date.now() } };
     } else {
-        // --- CLOCK IN ---
         const shiftId = `shift_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const newShift: Shift = {
             id: shiftId,
@@ -338,12 +327,8 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
             startMethod: method,
             hourlyRate: user.customHourlyRate || company.settings.defaultHourlyRate || 15
         };
-        
         await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
-        
-        // Update user state
         await updateUserProfile(user.id, { activeShiftId: shiftId });
-        
         return { success: true, message: 'Clocked In Successfully.', shift: newShift };
     }
 };

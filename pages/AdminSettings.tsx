@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getCompany, updateCompanySettings, deleteCompanyFull } from '../services/api';
 import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2 } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { APP_NAME } from '../constants';
@@ -17,12 +17,16 @@ export const AdminSettings = () => {
 
   // Form State
   const [radius, setRadius] = useState(200);
-  const [manualClockIn, setManualClockIn] = useState(true);
+  // const [manualClockIn, setManualClockIn] = useState(true); // Deprecated in UI
   const [requireApproval, setRequireApproval] = useState(false);
   const [defaultRate, setDefaultRate] = useState(15);
   const [currency, setCurrency] = useState('£');
   const [primaryColor, setPrimaryColor] = useState('#0ea5e9');
   const [logoUrl, setLogoUrl] = useState('');
+  
+  // Holiday Pay
+  const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
+  const [holidayPayRate, setHolidayPayRate] = useState(12.07); // Standard UK rate
 
   useEffect(() => {
     const loadData = async () => {
@@ -30,12 +34,14 @@ export const AdminSettings = () => {
         const data = await getCompany(user.currentCompanyId);
         setCompany(data);
         setRadius(data.settings.geofenceRadius);
-        setManualClockIn(data.settings.allowManualClockIn);
+        // setManualClockIn(data.settings.allowManualClockIn);
         setRequireApproval(data.settings.requireApproval || false);
         setDefaultRate(data.settings.defaultHourlyRate || 15);
         setCurrency(data.settings.currency || '£');
         setPrimaryColor(data.settings.primaryColor || '#0ea5e9');
         setLogoUrl(data.settings.logoUrl || '');
+        setHolidayPayEnabled(data.settings.holidayPayEnabled || false);
+        setHolidayPayRate(data.settings.holidayPayRate || 12.07);
         setLoading(false);
     };
     loadData();
@@ -73,12 +79,14 @@ export const AdminSettings = () => {
       setSaving(true);
       await updateCompanySettings(user.currentCompanyId, {
           geofenceRadius: radius,
-          allowManualClockIn: manualClockIn,
+          // allowManualClockIn: manualClockIn, // Persist current val or ignore
           requireApproval,
           defaultHourlyRate: defaultRate,
           currency: currency,
           primaryColor,
-          logoUrl
+          logoUrl,
+          holidayPayEnabled,
+          holidayPayRate
       });
       setSaving(false);
   };
@@ -90,8 +98,6 @@ export const AdminSettings = () => {
           try {
               await deleteCompanyFull(user.currentCompanyId);
               alert("Company deleted successfully.");
-              // Reload page will trigger auth checks which might need to handle orphaned admin
-              // Ideally, direct them to profile or logout
               window.location.reload();
           } catch (e) {
               console.error(e);
@@ -180,21 +186,6 @@ export const AdminSettings = () => {
                         </div>
                         <div className="flex items-center justify-between pt-2">
                             <div>
-                                <h4 className="font-medium text-slate-900 dark:text-white text-sm">Allow Manual Clock-In</h4>
-                                <p className="text-xs text-slate-500">Enable button for staff to clock in without QR.</p>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input 
-                                    type="checkbox" 
-                                    checked={manualClockIn} 
-                                    onChange={(e) => setManualClockIn(e.target.checked)}
-                                    className="sr-only peer" 
-                                />
-                                <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                            </label>
-                        </div>
-                        <div className="flex items-center justify-between pt-2">
-                            <div>
                                 <h4 className="font-medium text-slate-900 dark:text-white text-sm">Require Admin Approval</h4>
                                 <p className="text-xs text-slate-500">New staff must be approved before they can clock in.</p>
                             </div>
@@ -256,6 +247,42 @@ export const AdminSettings = () => {
                             </div>
                             <p className="text-xs text-slate-500 mt-1">Applied to new staff automatically.</p>
                         </div>
+                    </div>
+
+                    <div className="mt-6 border-t border-slate-100 dark:border-slate-700 pt-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h4 className="font-medium text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
+                                <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={holidayPayEnabled} 
+                                    onChange={(e) => setHolidayPayEnabled(e.target.checked)}
+                                    className="sr-only peer" 
+                                />
+                                <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            </label>
+                        </div>
+                        {holidayPayEnabled && (
+                            <div className="animate-in fade-in slide-in-from-top-2">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Holiday Pay Rate (%)
+                                </label>
+                                <div className="relative">
+                                    <input 
+                                        type="number"
+                                        step="0.01"
+                                        value={holidayPayRate}
+                                        onChange={(e) => setHolidayPayRate(parseFloat(e.target.value))}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                                    />
+                                    <Percent className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">12.07% is standard for UK casual workers.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 

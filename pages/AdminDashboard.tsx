@@ -4,7 +4,6 @@ import { getShifts, getLocations } from '../services/api';
 import { Shift, Location } from '../types';
 import { Users, Clock, AlertCircle, Search, Filter, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { downloadShiftsCSV } from '../utils/csv';
 import { Link } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import { APP_NAME } from '../constants';
@@ -51,10 +50,6 @@ export const AdminDashboard = () => {
 
   const lateCheckouts = shifts.filter(s => !s.endTime && (Date.now() - s.startTime > 43200000)).length;
 
-  const handleExport = () => {
-      downloadShiftsCSV(filteredShifts, 'tally_full_report');
-  };
-
   const getStaticQrUrl = (locId: string) => {
     return `${window.location.protocol}//${window.location.host}/#/action?type=static&lid=${locId}`;
   };
@@ -80,15 +75,6 @@ export const AdminDashboard = () => {
             <div>
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
                 <p className="text-slate-500 mt-1">Overview for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-            </div>
-            <div className="flex space-x-3">
-                 <button 
-                    onClick={handleExport}
-                    className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center space-x-2"
-                 >
-                    <Download className="w-4 h-4" />
-                    <span>Export</span>
-                 </button>
             </div>
         </header>
 

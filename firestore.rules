@@ -88,7 +88,11 @@ service cloud.firestore {
       );
       
       // Staff can create their own shift (Clock In)
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Admin can create shifts for staff (Manual Entry)
+      allow create: if isAuthenticated() && (
+        request.resource.data.userId == request.auth.uid ||
+        isCompanyAdmin(request.resource.data.companyId)
+      );
       
       // Staff can update their own shift (Clock Out - update endTime)
       // Admins can update/delete shifts (Timesheet edits)
