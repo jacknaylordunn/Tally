@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import { getShifts, getLocations } from '../services/api';
-import { Shift, Location } from '../types';
-import { Users, Clock, AlertCircle, Search, Filter, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap } from 'lucide-react';
+import { getShifts, getLocations, getCompany, getSchedule } from '../services/api';
+import { Shift, Location, Company } from '../types';
+import { Users, Clock, AlertCircle, Search, Filter, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import QRCode from 'react-qr-code';
@@ -12,6 +12,8 @@ export const AdminDashboard = () => {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [todaysScheduleCount, setTodaysScheduleCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'active'>('all');
@@ -23,12 +25,31 @@ export const AdminDashboard = () => {
   useEffect(() => {
     const loadData = async () => {
         if (!user || !user.currentCompanyId) return;
-        const [shiftsData, locationsData] = await Promise.all([
+        
+        // Parallel data fetch
+        const [shiftsData, locationsData, companyData] = await Promise.all([
             getShifts(user.currentCompanyId),
-            getLocations(user.currentCompanyId)
+            getLocations(user.currentCompanyId),
+            getCompany(user.currentCompanyId)
         ]);
+        
         setShifts(shiftsData);
         setLocations(locationsData);
+        setCompany(companyData);
+
+        // If Rota is enabled, fetch today's count
+        if (companyData.settings.rotaEnabled) {
+            try {
+                const now = new Date();
+                const startOfDay = new Date(now.setHours(0,0,0,0)).getTime();
+                const endOfDay = new Date(now.setHours(23,59,59,999)).getTime();
+                const todayRota = await getSchedule(user.currentCompanyId, startOfDay, endOfDay);
+                setTodaysScheduleCount(todayRota.filter(s => s.userId).length); // Only count assigned shifts
+            } catch (e) {
+                console.error("Error fetching rota stats", e);
+            }
+        }
+
         setLoading(false);
     };
     loadData();
@@ -48,7 +69,15 @@ export const AdminDashboard = () => {
   const minutes = Math.floor((totalMs % 3600000) / 60000);
   const totalDurationDisplay = `${hours}h ${minutes}m`;
 
-  const lateCheckouts = shifts.filter(s => !s.endTime && (Date.now() - s.startTime > 43200000)).length;
+  // Enhanced Alert Logic:
+  // 1. Forgotten Clock Out (> 14h)
+  // 2. Short Shift (< 5m) if finished
+  const alertCount = shifts.filter(s => {
+      const duration = (s.endTime || Date.now()) - s.startTime;
+      const isTooLong = duration > (14 * 60 * 60 * 1000);
+      const isTooShort = s.endTime && duration < (5 * 60 * 1000); // 5 mins
+      return isTooLong || isTooShort;
+  }).length;
 
   const getStaticQrUrl = (locId: string) => {
     return `${window.location.protocol}//${window.location.host}/#/action?type=static&lid=${locId}`;
@@ -115,7 +144,16 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className={`grid grid-cols-1 ${company?.settings.rotaEnabled ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-6`}>
+            {company?.settings.rotaEnabled && (
+                <StatCard 
+                    label="Today's Schedule" 
+                    value={`${activeShiftsCount}/${todaysScheduleCount}`} 
+                    subtext="Staff clocked in vs scheduled"
+                    icon={Calendar}
+                    colorClass="bg-purple-500 text-purple-600"
+                />
+            )}
             <StatCard 
                 label="Active Staff" 
                 value={activeShiftsCount} 
@@ -132,8 +170,8 @@ export const AdminDashboard = () => {
             />
             <StatCard 
                 label="Alerts" 
-                value={lateCheckouts} 
-                subtext="Shifts exceeding 12h"
+                value={alertCount} 
+                subtext="Short/Long shifts found"
                 icon={AlertCircle}
                 colorClass="bg-rose-500 text-rose-600"
             />
@@ -199,7 +237,16 @@ export const AdminDashboard = () => {
                                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
                                                     {shift.userName.charAt(0)}
                                                 </div>
-                                                <span className="font-medium text-slate-900 dark:text-white">{shift.userName}</span>
+                                                <div>
+                                                    <div className="font-medium text-slate-900 dark:text-white flex items-center space-x-1">
+                                                        <span>{shift.userName}</span>
+                                                        {shift.scheduleShiftId && (
+                                                            <span title="Planned Shift" className="flex items-center">
+                                                                <CheckCircle2 className="w-3 h-3 text-purple-500" />
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">

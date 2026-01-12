@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getStaffActivity, getCompany } from '../services/api';
-import { Shift, Company } from '../types';
-import { Clock, Scan, X, Camera } from 'lucide-react';
+import { getStaffActivity, getCompany, getSchedule } from '../services/api';
+import { Shift, Company, ScheduleShift } from '../types';
+import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle } from 'lucide-react';
 import jsQR from 'jsqr';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,10 +13,12 @@ export const StaffDashboard = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const [nextScheduledShift, setNextScheduledShift] = useState<ScheduleShift | null>(null);
   const [greeting, setGreeting] = useState('Hello');
   
   // Scanning State
   const [isScanning, setIsScanning] = useState(false);
+  const [cameraError, setCameraError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -38,6 +40,28 @@ export const StaffDashboard = () => {
       
       const current = shiftsData.find(s => !s.endTime);
       setActiveShift(current || null);
+
+      // Check for next scheduled shift if Rota is enabled
+      if (companyData?.settings.rotaEnabled && user.currentCompanyId) {
+          try {
+              const now = new Date();
+              const endOfDay = new Date(); endOfDay.setHours(23, 59, 59);
+              
+              // Get schedules for today
+              const todayShifts = await getSchedule(user.currentCompanyId, now.getTime(), endOfDay.getTime());
+              
+              // Filter for user and future time today
+              const upcoming = todayShifts
+                  .filter(s => s.userId === user.id && s.startTime > Date.now())
+                  .sort((a,b) => a.startTime - b.startTime);
+              
+              if (upcoming.length > 0) {
+                  setNextScheduledShift(upcoming[0]);
+              }
+          } catch (e) {
+              console.error("Error fetching next shift", e);
+          }
+      }
   };
 
   useEffect(() => {
@@ -51,6 +75,7 @@ export const StaffDashboard = () => {
 
     const startScan = async () => {
         if (!isScanning) return;
+        setCameraError('');
         try {
             stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             if (videoRef.current) {
@@ -60,10 +85,15 @@ export const StaffDashboard = () => {
                 videoRef.current.play();
                 requestAnimationFrame(tick);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Camera error", err);
-            alert("Unable to access camera. Please ensure permissions are granted.");
-            setIsScanning(false);
+            if (err.name === 'NotAllowedError') {
+                setCameraError("Camera access denied. Please enable permissions in your browser settings.");
+            } else if (err.name === 'NotFoundError') {
+                setCameraError("No camera found on this device.");
+            } else {
+                setCameraError("Unable to access camera. Please try again.");
+            }
         }
     };
 
@@ -136,6 +166,13 @@ export const StaffDashboard = () => {
       return `${hours}h ${minutes}m`;
   };
 
+  const handleRetryCamera = () => {
+      setCameraError('');
+      // Trigger effect re-run by toggling
+      setIsScanning(false);
+      setTimeout(() => setIsScanning(true), 100);
+  };
+
   return (
     <div className="max-w-xl mx-auto space-y-8 animate-fade-in relative">
        <header className="flex items-center justify-between">
@@ -171,6 +208,15 @@ export const StaffDashboard = () => {
                </div>
            ) : (
                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] p-8 shadow-soft text-center">
+                   
+                   {/* Next Shift Indicator */}
+                   {nextScheduledShift && (
+                       <div className="mb-6 p-3 bg-brand-50 dark:bg-brand-900/20 rounded-xl flex items-center justify-center space-x-2 text-brand-700 dark:text-brand-300 animate-in slide-in-from-top-2">
+                           <Calendar className="w-4 h-4" />
+                           <span className="text-sm font-bold">Next Shift: {new Date(nextScheduledShift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} ({nextScheduledShift.role})</span>
+                       </div>
+                   )}
+
                    <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
                        <Clock className="w-8 h-8" />
                    </div>
@@ -193,29 +239,48 @@ export const StaffDashboard = () => {
             <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center animate-in fade-in duration-200">
                 <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-20">
                     <div className="text-white font-bold text-lg drop-shadow-md">Scan Code</div>
-                    <button onClick={() => setIsScanning(false)} className="p-2 bg-white/20 rounded-full backdrop-blur-md text-white hover:bg-white/30 transition">
+                    <button onClick={() => { setIsScanning(false); setCameraError(''); }} className="p-2 bg-white/20 rounded-full backdrop-blur-md text-white hover:bg-white/30 transition">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
 
-                <video ref={videoRef} className="w-full h-full object-cover absolute inset-0 z-10" />
-                
-                <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-                     <div className="w-72 h-72 border-2 border-brand-500 rounded-3xl relative shadow-[0_0_0_100vh_rgba(0,0,0,0.6)]">
-                         <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-500 rounded-tl-xl -mt-1 -ml-1"></div>
-                         <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-500 rounded-tr-xl -mt-1 -mr-1"></div>
-                         <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-500 rounded-bl-xl -mb-1 -ml-1"></div>
-                         <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-500 rounded-br-xl -mb-1 -mr-1"></div>
-                         
-                         <div className="absolute inset-0 flex items-center justify-center">
-                             <Scan className="w-12 h-12 text-brand-500/50 animate-pulse" />
-                         </div>
-                     </div>
-                </div>
-                
-                <div className="absolute bottom-12 z-20 text-white/80 text-sm font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm">
-                    Point camera at Tally QR Code
-                </div>
+                {cameraError ? (
+                    <div className="z-20 text-center px-6">
+                        <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <AlertCircle className="w-8 h-8" />
+                        </div>
+                        <p className="text-white text-lg font-bold mb-2">Camera Error</p>
+                        <p className="text-white/70 mb-6">{cameraError}</p>
+                        <button 
+                            onClick={handleRetryCamera}
+                            className="px-6 py-3 bg-white text-black rounded-xl font-bold flex items-center justify-center space-x-2 mx-auto hover:bg-slate-200 transition"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                            <span>Retry Camera</span>
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <video ref={videoRef} className="w-full h-full object-cover absolute inset-0 z-10" />
+                        
+                        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+                             <div className="w-72 h-72 border-2 border-brand-500 rounded-3xl relative shadow-[0_0_0_100vh_rgba(0,0,0,0.6)]">
+                                 <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-500 rounded-tl-xl -mt-1 -ml-1"></div>
+                                 <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-500 rounded-tr-xl -mt-1 -mr-1"></div>
+                                 <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-500 rounded-bl-xl -mb-1 -ml-1"></div>
+                                 <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-500 rounded-br-xl -mb-1 -mr-1"></div>
+                                 
+                                 <div className="absolute inset-0 flex items-center justify-center">
+                                     <Scan className="w-12 h-12 text-brand-500/50 animate-pulse" />
+                                 </div>
+                             </div>
+                        </div>
+                        
+                        <div className="absolute bottom-12 z-20 text-white/80 text-sm font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm">
+                            Point camera at Tally QR Code
+                        </div>
+                    </>
+                )}
             </div>
        )}
 
@@ -236,7 +301,7 @@ export const StaffDashboard = () => {
                            <div>
                                <p className="font-semibold text-slate-900 dark:text-white text-sm">
                                    {shift.endTime ? `${((shift.endTime - shift.startTime) / 3600000).toFixed(1)} hrs` : 'In Progress'}
-                               </p>
+                                </p>
                                <p className="text-xs text-slate-400 capitalize">{shift.startMethod.replace('_', ' ')}</p>
                            </div>
                        </div>

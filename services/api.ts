@@ -12,16 +12,20 @@ import {
     orderBy, 
     limit,
     writeBatch,
-    deleteField
+    deleteField,
+    arrayUnion,
+    arrayRemove
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Shift, Company, User, Location, ValidationResult, UserRole } from '../types';
+import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest } from '../types';
 
 // Collection References
 const USERS_REF = 'users';
 const COMPANIES_REF = 'companies';
 const LOCATIONS_REF = 'locations';
 const SHIFTS_REF = 'shifts';
+const SCHEDULE_REF = 'schedule_shifts';
+const TIMEOFF_REF = 'time_off_requests';
 
 // --- USER ---
 
@@ -146,7 +150,146 @@ export const deleteLocation = async (locationId: string): Promise<void> => {
     await deleteDoc(doc(db, LOCATIONS_REF, locationId));
 };
 
-// --- SHIFTS & VALIDATION ---
+// --- ROTA / SCHEDULE SYSTEM ---
+
+export const createScheduleShift = async (shift: ScheduleShift): Promise<void> => {
+    await setDoc(doc(db, SCHEDULE_REF, shift.id), shift);
+};
+
+export const createBatchScheduleShifts = async (shifts: ScheduleShift[]): Promise<void> => {
+    const batch = writeBatch(db);
+    shifts.forEach(shift => {
+        const ref = doc(db, SCHEDULE_REF, shift.id);
+        batch.set(ref, shift);
+    });
+    await batch.commit();
+};
+
+export const updateScheduleShift = async (shiftId: string, updates: Partial<ScheduleShift>): Promise<void> => {
+    await updateDoc(doc(db, SCHEDULE_REF, shiftId), updates);
+};
+
+export const deleteScheduleShift = async (shiftId: string): Promise<void> => {
+    await deleteDoc(doc(db, SCHEDULE_REF, shiftId));
+};
+
+export const getSchedule = async (companyId: string, startTime: number, endTime: number): Promise<ScheduleShift[]> => {
+    const q = query(
+        collection(db, SCHEDULE_REF), 
+        where("companyId", "==", companyId),
+        where("startTime", ">=", startTime),
+        where("startTime", "<=", endTime)
+    );
+    
+    try {
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as ScheduleShift);
+    } catch (e: any) {
+        if (e.code === 'failed-precondition') {
+             console.warn("Index missing. Falling back to fetch.");
+             const fallbackQ = query(
+                 collection(db, SCHEDULE_REF), 
+                 where("companyId", "==", companyId),
+                 limit(1000) 
+             );
+             const snap = await getDocs(fallbackQ);
+             return snap.docs
+                 .map(d => d.data() as ScheduleShift)
+                 .filter(s => s.startTime >= startTime && s.startTime <= endTime);
+        }
+        throw e;
+    }
+};
+
+export const copyScheduleWeek = async (companyId: string, sourceWeekStart: number, targetWeekStart: number): Promise<void> => {
+    // 1. Get Source Week Shifts
+    const sourceEnd = sourceWeekStart + (7 * 24 * 60 * 60 * 1000) - 1;
+    const sourceShifts = await getSchedule(companyId, sourceWeekStart, sourceEnd);
+    
+    if (sourceShifts.length === 0) return;
+
+    // 2. Prepare Target Shifts
+    const timeDiff = targetWeekStart - sourceWeekStart;
+    const newShifts: ScheduleShift[] = sourceShifts.map(s => {
+        const newStart = s.startTime + timeDiff;
+        const newEnd = s.endTime + timeDiff;
+        return {
+            ...s,
+            id: `sch_${Date.now()}_cp_${Math.random().toString(36).substr(2,5)}`,
+            startTime: newStart,
+            endTime: newEnd,
+            userId: null, // Reset assignment on copy? Usually safer to reset.
+            userName: undefined,
+            bids: [],
+            status: 'draft' // Copy as draft
+        };
+    });
+
+    // 3. Batch Create
+    await createBatchScheduleShifts(newShifts);
+};
+
+export const bidOnShift = async (shiftId: string, userId: string): Promise<void> => {
+    const ref = doc(db, SCHEDULE_REF, shiftId);
+    await updateDoc(ref, {
+        bids: arrayUnion(userId)
+    });
+};
+
+export const assignShiftToUser = async (shiftId: string, userId: string, userName: string): Promise<void> => {
+    const ref = doc(db, SCHEDULE_REF, shiftId);
+    await updateDoc(ref, {
+        userId: userId,
+        userName: userName,
+        bids: [] 
+    });
+};
+
+export const publishAllDrafts = async (companyId: string): Promise<void> => {
+    const q = query(
+        collection(db, SCHEDULE_REF), 
+        where("companyId", "==", companyId),
+        where("status", "==", "draft")
+    );
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => {
+        batch.update(d.ref, { status: 'published' });
+    });
+    await batch.commit();
+};
+
+// --- TIME OFF ---
+
+export const createTimeOffRequest = async (request: TimeOffRequest): Promise<void> => {
+    await setDoc(doc(db, TIMEOFF_REF, request.id), request);
+};
+
+export const updateTimeOffStatus = async (requestId: string, status: 'approved' | 'rejected'): Promise<void> => {
+    await updateDoc(doc(db, TIMEOFF_REF, requestId), { status });
+};
+
+export const getTimeOffRequests = async (companyId: string): Promise<TimeOffRequest[]> => {
+    const q = query(
+        collection(db, TIMEOFF_REF), 
+        where("companyId", "==", companyId),
+        orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data() as TimeOffRequest);
+};
+
+export const getMyTimeOff = async (userId: string): Promise<TimeOffRequest[]> => {
+    const q = query(
+        collection(db, TIMEOFF_REF), 
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data() as TimeOffRequest);
+};
+
+// --- ACTUAL SHIFTS (Time Tracking) ---
 
 export const getShifts = async (companyId: string): Promise<Shift[]> => {
     try {
@@ -154,17 +297,12 @@ export const getShifts = async (companyId: string): Promise<Shift[]> => {
             collection(db, SHIFTS_REF), 
             where("companyId", "==", companyId), 
             orderBy("startTime", "desc"), 
-            limit(500) // Increased limit for reports
+            limit(500) 
         );
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => doc.data() as Shift);
     } catch (error: any) {
-        if (error.code === 'failed-precondition') {
-             console.info("Info: Firestore index not yet built. Falling back to client-side sort.", error.message);
-        } else {
-             console.error("Error fetching shifts:", error);
-        }
-        
+        // Fallback if index missing
         const q = query(collection(db, SHIFTS_REF), where("companyId", "==", companyId));
         const snap = await getDocs(q);
         const data = snap.docs.map(doc => doc.data() as Shift);
@@ -183,12 +321,6 @@ export const getStaffActivity = async (userId: string): Promise<Shift[]> => {
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => doc.data() as Shift);
     } catch (error: any) {
-         if (error.code === 'failed-precondition') {
-             console.info("Info: Firestore index not yet built. Falling back to client-side sort.", error.message);
-        } else {
-             console.error("Error fetching staff activity:", error);
-        }
-
         const q = query(collection(db, SHIFTS_REF), where("userId", "==", userId));
         const snap = await getDocs(q);
         return snap.docs.map(doc => doc.data() as Shift).sort((a, b) => b.startTime - a.startTime);
@@ -224,26 +356,6 @@ export const createManualShift = async (
         hourlyRate
     };
     await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
-};
-
-export const toggleManualShift = async (userId: string, companyId: string): Promise<Shift | null> => {
-    const user = await getUserProfile(userId);
-    const company = await getCompany(companyId);
-    if (!user || !company) throw new Error("Invalid Context");
-    
-    await performClockInOut(user, company, 'manual');
-    
-    const q = query(
-        collection(db, SHIFTS_REF), 
-        where("userId", "==", userId), 
-        where("endTime", "==", null)
-    );
-    const snap = await getDocs(q);
-        
-    if (!snap.empty) {
-        return snap.docs[0].data() as Shift;
-    }
-    return null;
 };
 
 // Core Clock-In Logic
@@ -316,6 +428,41 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
         await updateUserProfile(user.id, { activeShiftId: null });
         return { success: true, message: 'Clocked Out Successfully.', shift: { ...shiftData, endTime: Date.now() } };
     } else {
+        // --- ROTA INTEGRATION START ---
+        // Look for a scheduled shift for this user around this time (+/- 2 hours)
+        const now = Date.now();
+        const twoHours = 2 * 60 * 60 * 1000;
+        let scheduleShiftId = undefined;
+        let scheduledStartTime = undefined;
+        let scheduledEndTime = undefined;
+
+        try {
+            // NOTE: Firestore requires composite index for complex queries. 
+            // We'll do a basic query and filter in memory for robustness without forcing index deployment immediately.
+            const schedQ = query(
+                collection(db, SCHEDULE_REF), 
+                where("companyId", "==", company.id),
+                where("userId", "==", user.id),
+                where("startTime", ">=", now - twoHours) 
+            );
+            const schedSnap = await getDocs(schedQ);
+            
+            // Find the closest scheduled shift that hasn't passed more than 2 hours ago
+            // and is roughly now.
+            const matchingShift = schedSnap.docs
+                .map(d => ({ data: d.data() as ScheduleShift, id: d.id }))
+                .find(s => Math.abs(s.data.startTime - now) < twoHours); // Within 2 hour window of start time
+
+            if (matchingShift) {
+                scheduleShiftId = matchingShift.id;
+                scheduledStartTime = matchingShift.data.startTime;
+                scheduledEndTime = matchingShift.data.endTime;
+            }
+        } catch (e) {
+            console.warn("Rota integration check failed (likely missing index), proceeding with standard clock in.");
+        }
+        // --- ROTA INTEGRATION END ---
+
         const shiftId = `shift_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const newShift: Shift = {
             id: shiftId,
@@ -325,7 +472,10 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
             startTime: Date.now(),
             endTime: null,
             startMethod: method,
-            hourlyRate: user.customHourlyRate || company.settings.defaultHourlyRate || 15
+            hourlyRate: user.customHourlyRate || company.settings.defaultHourlyRate || 15,
+            scheduleShiftId: scheduleShiftId, // Link added here
+            scheduledStartTime,
+            scheduledEndTime
         };
         await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
         await updateUserProfile(user.id, { activeShiftId: shiftId });

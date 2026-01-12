@@ -14,9 +14,11 @@ import { AdminTimesheets } from './pages/AdminTimesheets';
 import { AdminLocations } from './pages/AdminLocations';
 import { AdminSettings } from './pages/AdminSettings';
 import { AdminStaff } from './pages/AdminStaff';
+import { AdminRota } from './pages/AdminRota'; // Added
 import { StaffDashboard } from './pages/StaffDashboard';
 import { StaffActivity } from './pages/StaffActivity';
 import { StaffProfile } from './pages/StaffProfile';
+import { StaffRota } from './pages/StaffRota'; // Added
 import { KioskMode } from './pages/KioskMode';
 import { UserRole } from './types';
 
@@ -69,6 +71,11 @@ const AppRoutes = () => {
           <AdminTimesheets />
         </ProtectedRoute>
       } />
+      <Route path="/admin/rota" element={
+        <ProtectedRoute role={UserRole.ADMIN}>
+          <AdminRota />
+        </ProtectedRoute>
+      } />
       <Route path="/admin/staff" element={
         <ProtectedRoute role={UserRole.ADMIN}>
           <AdminStaff />
@@ -94,6 +101,11 @@ const AppRoutes = () => {
       <Route path="/staff" element={
         <ProtectedRoute role={UserRole.STAFF}>
           <StaffDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/staff/rota" element={
+        <ProtectedRoute role={UserRole.STAFF}>
+          <StaffRota />
         </ProtectedRoute>
       } />
       <Route path="/staff/activity" element={

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getShifts, updateShift, deleteShift, getCompany, getCompanyStaff, createManualShift } from '../services/api';
 import { Shift, Company, User } from '../types';
-import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, FileText } from 'lucide-react';
+import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadShiftsCSV } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -62,12 +62,10 @@ export const AdminTimesheets = () => {
       let endFilterDate: number = now.getTime();
 
       if (dateRange === 'custom') {
-          // If custom, we use the specific times provided
           if (!customStart) return shifts;
           startFilterDate = new Date(customStart).getTime();
           endFilterDate = customEnd ? new Date(customEnd).getTime() : now.getTime();
       } else if (dateRange === 'today') {
-          // Today: 00:00 to 23:59:59
           const start = new Date();
           start.setHours(0, 0, 0, 0);
           startFilterDate = start.getTime();
@@ -76,7 +74,6 @@ export const AdminTimesheets = () => {
           end.setHours(23, 59, 59, 999);
           endFilterDate = end.getTime();
       } else {
-          // Past X Days: Start of X days ago to Now
           const start = new Date();
           start.setDate(now.getDate() - parseInt(dateRange));
           start.setHours(0, 0, 0, 0);
@@ -85,22 +82,13 @@ export const AdminTimesheets = () => {
 
       return shifts.filter(s => {
           const shiftStart = s.startTime;
-          // For active shifts, we consider them effectively "ending now" for overlap checks, 
-          // or we just check if they started in range.
-          const shiftEnd = s.endTime || Date.now(); 
-
           const nameMatch = s.userName.toLowerCase().includes(searchTerm.toLowerCase());
           
           if (dateRange === 'custom') {
-              // Strict Check: Shift must start AFTER filter start AND end BEFORE filter end
-              // (or be active and start within range, if end filter is future)
               const isWithinStart = shiftStart >= startFilterDate;
-              // If shift is active (s.endTime is null), we only check start time
               const isWithinEnd = s.endTime ? s.endTime <= endFilterDate : shiftStart <= endFilterDate;
-              
               return nameMatch && isWithinStart && isWithinEnd;
           } else {
-              // Standard Check: Just check if the shift started within the period
               return nameMatch && shiftStart >= startFilterDate && shiftStart <= endFilterDate;
           }
       });
@@ -120,6 +108,58 @@ export const AdminTimesheets = () => {
       if (!end) return '-';
       const hours = (end - start) / 3600000;
       return `${currency}${(hours * rate).toFixed(2)}`;
+  };
+
+  // --- Audit Logic ---
+  const getAuditFlags = (shift: Shift) => {
+      if (!company) return [];
+      
+      const flags = [];
+      const auditLateIn = company.settings.auditLateInThreshold || 15;
+      const auditEarlyOut = company.settings.auditEarlyOutThreshold || 15;
+      const auditLateOut = company.settings.auditLateOutThreshold || 15;
+      const auditShortShift = company.settings.auditShortShiftThreshold || 5;
+      const auditLongShift = company.settings.auditLongShiftThreshold || 14;
+
+      // 1. Check Late In
+      if (shift.scheduledStartTime) {
+          const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
+          if (diffMins > auditLateIn) {
+              flags.push({ type: 'amber', label: `Late In (+${Math.round(diffMins)}m)` });
+          }
+      }
+
+      // 2. Check Early Out / Late Out
+      if (shift.scheduledEndTime && shift.endTime) {
+          const diffMins = (shift.endTime - shift.scheduledEndTime) / 60000;
+          if (diffMins < -auditEarlyOut) {
+              flags.push({ type: 'amber', label: `Early Out (${Math.round(diffMins)}m)` });
+          } else if (diffMins > auditLateOut) {
+              flags.push({ type: 'amber', label: `Late Out (+${Math.round(diffMins)}m)` });
+          }
+      }
+
+      // 3. Short Shift (Accidental)
+      if (shift.endTime) {
+          const durationMins = (shift.endTime - shift.startTime) / 60000;
+          if (durationMins < auditShortShift) {
+              flags.push({ type: 'red', label: 'Short Shift' });
+          }
+          
+          // 4. Long Shift (Forgotten)
+          const durationHours = durationMins / 60;
+          if (durationHours > auditLongShift) {
+              flags.push({ type: 'red', label: `Over ${auditLongShift}h` });
+          } else if (shift.scheduledEndTime && shift.scheduledStartTime) {
+              // Check if significantly longer than planned (e.g. +4 hours)
+              const plannedDuration = (shift.scheduledEndTime - shift.scheduledStartTime) / 3600000;
+              if (durationHours > plannedDuration + 4) {
+                  flags.push({ type: 'red', label: 'Overtime Check' });
+              }
+          }
+      }
+
+      return flags;
   };
 
   const handleExport = (groupByStaff: boolean) => {
@@ -155,8 +195,6 @@ export const AdminTimesheets = () => {
       }
   };
 
-  // --- EDIT LOGIC ---
-
   const toLocalISO = (ts: number) => {
       const d = new Date(ts);
       d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -190,8 +228,6 @@ export const AdminTimesheets = () => {
           setSaving(false);
       }
   };
-
-  // --- ADD LOGIC ---
 
   const handleAddShift = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -281,7 +317,7 @@ export const AdminTimesheets = () => {
                     <select 
                         value={dateRange}
                         onChange={(e) => setDateRange(e.target.value as DateRange)}
-                        className="pl-10 pr-8 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm appearance-none cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                        className="pl-10 pr-8 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm appearance-none cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                     >
                         <option value="today">Today</option>
                         <option value="7">Past 7 Days</option>
@@ -298,14 +334,14 @@ export const AdminTimesheets = () => {
                             type="datetime-local" 
                             value={customStart}
                             onChange={(e) => setCustomStart(e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm w-full sm:w-auto"
+                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm w-full sm:w-auto"
                         />
                         <span className="text-slate-400 hidden sm:inline">-</span>
                         <input 
                             type="datetime-local" 
                             value={customEnd}
                             onChange={(e) => setCustomEnd(e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm w-full sm:w-auto"
+                            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm w-full sm:w-auto"
                         />
                     </div>
                 )}
@@ -318,7 +354,7 @@ export const AdminTimesheets = () => {
                     placeholder="Search staff..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                 />
             </div>
         </div>
@@ -347,44 +383,78 @@ export const AdminTimesheets = () => {
                             </>
                         ) : filteredShifts.length === 0 ? (
                             <tr><td colSpan={7} className="p-8 text-center">No shifts found for this period.</td></tr>
-                        ) : filteredShifts.map((shift) => (
-                            <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition group">
-                                <td className="px-6 py-4">
-                                    {new Date(shift.startTime).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
-                                    {shift.userName}
-                                </td>
-                                <td className="px-6 py-4 text-emerald-600 dark:text-emerald-400 font-mono">
-                                    {new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                </td>
-                                <td className="px-6 py-4 text-slate-500 font-mono">
-                                    {shift.endTime ? new Date(shift.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
-                                </td>
-                                <td className="px-6 py-4 font-semibold">
-                                    {calculateDuration(shift.startTime, shift.endTime)}
-                                </td>
-                                <td className="px-6 py-4">
-                                    {calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
-                                </td>
-                                <td className="px-6 py-4 text-right flex justify-end space-x-1">
-                                    <button 
-                                        onClick={() => openEditModal(shift)}
-                                        className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition opacity-0 group-hover:opacity-100"
-                                        title="Edit"
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                    </button>
-                                     <button 
-                                        onClick={() => handleDelete(shift.id)}
-                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
-                                        title="Delete"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                        ) : filteredShifts.map((shift) => {
+                            const flags = getAuditFlags(shift);
+                            
+                            return (
+                                <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition group">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center space-x-2">
+                                            <span>{new Date(shift.startTime).toLocaleDateString()}</span>
+                                            {/* Visual Link for Rota Integration */}
+                                            {shift.scheduleShiftId && (
+                                                <div className="group/tooltip relative">
+                                                    <CalendarCheck className="w-3.5 h-3.5 text-blue-500 cursor-help" />
+                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-slate-900 rounded opacity-0 group-hover/tooltip:opacity-100 transition whitespace-nowrap pointer-events-none z-10">
+                                                        Matched to Rota
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                                        {shift.userName}
+                                        {flags.map((f, i) => (
+                                            <span key={i} className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${f.type === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {f.label}
+                                            </span>
+                                        ))}
+                                    </td>
+                                    <td className="px-6 py-4 font-mono">
+                                        <div className="text-emerald-600 dark:text-emerald-400">
+                                            {new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                        </div>
+                                        {shift.scheduledStartTime && (
+                                            <div className="text-[10px] text-slate-400">
+                                                Plan: {new Date(shift.scheduledStartTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 font-mono">
+                                        <div className="text-slate-500">
+                                            {shift.endTime ? new Date(shift.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
+                                        </div>
+                                        {shift.scheduledEndTime && (
+                                            <div className="text-[10px] text-slate-400">
+                                                Plan: {new Date(shift.scheduledEndTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 font-semibold">
+                                        {calculateDuration(shift.startTime, shift.endTime)}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
+                                    </td>
+                                    <td className="px-6 py-4 text-right flex justify-end space-x-1">
+                                        <button 
+                                            onClick={() => openEditModal(shift)}
+                                            className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                            title="Edit"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                         <button 
+                                            onClick={() => handleDelete(shift.id)}
+                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -414,7 +484,7 @@ export const AdminTimesheets = () => {
                                     type="datetime-local"
                                     value={editStartTime}
                                     onChange={(e) => setEditStartTime(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
                                 />
                             </div>
                             <div>
@@ -423,7 +493,7 @@ export const AdminTimesheets = () => {
                                     type="datetime-local"
                                     value={editEndTime}
                                     onChange={(e) => setEditEndTime(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
                                 />
                             </div>
                         </div>
@@ -471,7 +541,7 @@ export const AdminTimesheets = () => {
                                 required
                                 value={newShiftUser} 
                                 onChange={(e) => setNewShiftUser(e.target.value)}
-                                className="w-full px-3 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-3 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                             >
                                 <option value="">Select an employee...</option>
                                 {staffList.map(u => (
@@ -488,7 +558,7 @@ export const AdminTimesheets = () => {
                                     required
                                     value={newShiftStart}
                                     onChange={(e) => setNewShiftStart(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
                                 />
                             </div>
                             <div>
@@ -498,7 +568,7 @@ export const AdminTimesheets = () => {
                                     required
                                     value={newShiftEnd}
                                     onChange={(e) => setNewShiftEnd(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
                                 />
                             </div>
                         </div>

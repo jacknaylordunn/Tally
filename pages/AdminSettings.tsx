@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getCompany, updateCompanySettings, deleteCompanyFull } from '../services/api';
 import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { APP_NAME } from '../constants';
@@ -17,7 +17,6 @@ export const AdminSettings = () => {
 
   // Form State
   const [radius, setRadius] = useState(200);
-  // const [manualClockIn, setManualClockIn] = useState(true); // Deprecated in UI
   const [requireApproval, setRequireApproval] = useState(false);
   const [defaultRate, setDefaultRate] = useState(15);
   const [currency, setCurrency] = useState('£');
@@ -26,7 +25,19 @@ export const AdminSettings = () => {
   
   // Holiday Pay
   const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
-  const [holidayPayRate, setHolidayPayRate] = useState(12.07); // Standard UK rate
+  const [holidayPayRate, setHolidayPayRate] = useState(12.07);
+
+  // Rota Settings
+  const [rotaEnabled, setRotaEnabled] = useState(false);
+  const [allowShiftBidding, setAllowShiftBidding] = useState(true);
+  const [requireTimeOffApproval, setRequireTimeOffApproval] = useState(true);
+
+  // Audit Settings
+  const [auditLateIn, setAuditLateIn] = useState(15);
+  const [auditEarlyOut, setAuditEarlyOut] = useState(15);
+  const [auditLateOut, setAuditLateOut] = useState(15);
+  const [auditShortShift, setAuditShortShift] = useState(5);
+  const [auditLongShift, setAuditLongShift] = useState(14);
 
   useEffect(() => {
     const loadData = async () => {
@@ -34,7 +45,6 @@ export const AdminSettings = () => {
         const data = await getCompany(user.currentCompanyId);
         setCompany(data);
         setRadius(data.settings.geofenceRadius);
-        // setManualClockIn(data.settings.allowManualClockIn);
         setRequireApproval(data.settings.requireApproval || false);
         setDefaultRate(data.settings.defaultHourlyRate || 15);
         setCurrency(data.settings.currency || '£');
@@ -42,6 +52,19 @@ export const AdminSettings = () => {
         setLogoUrl(data.settings.logoUrl || '');
         setHolidayPayEnabled(data.settings.holidayPayEnabled || false);
         setHolidayPayRate(data.settings.holidayPayRate || 12.07);
+        
+        // Rota
+        setRotaEnabled(data.settings.rotaEnabled || false);
+        setAllowShiftBidding(data.settings.allowShiftBidding !== undefined ? data.settings.allowShiftBidding : true);
+        setRequireTimeOffApproval(data.settings.requireTimeOffApproval !== undefined ? data.settings.requireTimeOffApproval : true);
+        
+        // Audit
+        setAuditLateIn(data.settings.auditLateInThreshold || 15);
+        setAuditEarlyOut(data.settings.auditEarlyOutThreshold || 15);
+        setAuditLateOut(data.settings.auditLateOutThreshold || 15);
+        setAuditShortShift(data.settings.auditShortShiftThreshold || 5);
+        setAuditLongShift(data.settings.auditLongShiftThreshold || 14);
+
         setLoading(false);
     };
     loadData();
@@ -79,16 +102,24 @@ export const AdminSettings = () => {
       setSaving(true);
       await updateCompanySettings(user.currentCompanyId, {
           geofenceRadius: radius,
-          // allowManualClockIn: manualClockIn, // Persist current val or ignore
           requireApproval,
           defaultHourlyRate: defaultRate,
           currency: currency,
           primaryColor,
           logoUrl,
           holidayPayEnabled,
-          holidayPayRate
+          holidayPayRate,
+          rotaEnabled,
+          allowShiftBidding,
+          requireTimeOffApproval,
+          auditLateInThreshold: auditLateIn,
+          auditEarlyOutThreshold: auditEarlyOut,
+          auditLateOutThreshold: auditLateOut,
+          auditShortShiftThreshold: auditShortShift,
+          auditLongShiftThreshold: auditLongShift
       });
       setSaving(false);
+      window.location.reload(); // Reload to update navigation state
   };
 
   const handleDeleteCompany = async () => {
@@ -179,9 +210,10 @@ export const AdminSettings = () => {
                             </label>
                             <input 
                                 type="number"
+                                min="20"
                                 value={radius}
                                 onChange={(e) => setRadius(parseInt(e.target.value))}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                             />
                         </div>
                         <div className="flex items-center justify-between pt-2">
@@ -202,6 +234,129 @@ export const AdminSettings = () => {
                     </div>
                 </div>
 
+                {/* Audit Settings */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-100 dark:border-slate-700 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded-lg text-slate-500">
+                            <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Attendance Auditing</h3>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-6">Configure when to flag shifts for review.</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Late In Threshold (mins)</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                value={auditLateIn}
+                                onChange={(e) => setAuditLateIn(parseInt(e.target.value))}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Early Out Threshold (mins)</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                value={auditEarlyOut}
+                                onChange={(e) => setAuditEarlyOut(parseInt(e.target.value))}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Late Out Threshold (mins)</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                value={auditLateOut}
+                                onChange={(e) => setAuditLateOut(parseInt(e.target.value))}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Short Shift (mins)</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                value={auditShortShift}
+                                onChange={(e) => setAuditShortShift(parseInt(e.target.value))}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Long Shift / Forgotten Clock-out (hours)</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                value={auditLongShift}
+                                onChange={(e) => setAuditLongShift(parseInt(e.target.value))}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Rota System Settings */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700 mb-4">
+                        <div className="flex items-center space-x-3">
+                             <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded-lg text-slate-500">
+                                <CalendarDays className="w-5 h-5" />
+                            </div>
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Rota System</h3>
+                        </div>
+                         <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={rotaEnabled} 
+                                onChange={(e) => setRotaEnabled(e.target.checked)}
+                                className="sr-only peer" 
+                            />
+                            <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                    </div>
+                    
+                    {rotaEnabled ? (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                             <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-medium text-slate-900 dark:text-white text-sm">Allow Shift Bidding</h4>
+                                    <p className="text-xs text-slate-500">Staff can request to take Open shifts.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={allowShiftBidding} 
+                                        onChange={(e) => setAllowShiftBidding(e.target.checked)}
+                                        className="sr-only peer" 
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+
+                             <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-medium text-slate-900 dark:text-white text-sm">Require Time Off Approval</h4>
+                                    <p className="text-xs text-slate-500">Requests need admin review.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={requireTimeOffApproval} 
+                                        onChange={(e) => setRequireTimeOffApproval(e.target.checked)}
+                                        className="sr-only peer" 
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+                        </div>
+                    ) : (
+                         <div className="text-sm text-slate-500 italic">Enable the Rota System to see more options.</div>
+                    )}
+                </div>
+
                 {/* Payroll & Localization */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
                     <div className="flex items-center space-x-3 pb-4 border-b border-slate-100 dark:border-slate-700 mb-4">
@@ -220,7 +375,7 @@ export const AdminSettings = () => {
                                 <select 
                                     value={currency}
                                     onChange={(e) => setCurrency(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none appearance-none bg-transparent"
+                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
                                 >
                                     <option value="£">GBP (£)</option>
                                     <option value="$">USD ($)</option>
@@ -239,10 +394,11 @@ export const AdminSettings = () => {
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{currency}</span>
                                 <input 
                                     type="number"
+                                    min="0"
                                     step="0.01"
                                     value={defaultRate}
                                     onChange={(e) => setDefaultRate(parseFloat(e.target.value))}
-                                    className="w-full pl-8 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                                    className="w-full pl-8 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                                 />
                             </div>
                             <p className="text-xs text-slate-500 mt-1">Applied to new staff automatically.</p>
@@ -273,10 +429,11 @@ export const AdminSettings = () => {
                                 <div className="relative">
                                     <input 
                                         type="number"
+                                        min="0"
                                         step="0.01"
                                         value={holidayPayRate}
                                         onChange={(e) => setHolidayPayRate(parseFloat(e.target.value))}
-                                        className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                                     />
                                     <Percent className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                                 </div>
@@ -313,7 +470,7 @@ export const AdminSettings = () => {
                                         type="text" 
                                         value={primaryColor}
                                         onChange={(e) => setPrimaryColor(e.target.value)}
-                                        className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none font-mono text-sm"
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none font-mono text-sm"
                                         placeholder="#000000"
                                     />
                                 </div>
@@ -331,7 +488,7 @@ export const AdminSettings = () => {
                                         value={logoUrl}
                                         onChange={(e) => setLogoUrl(e.target.value)}
                                         placeholder="https://example.com/logo.png"
-                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                                     />
                                 </div>
                                 {logoUrl && <img src={logoUrl} alt="Preview" className="h-10 w-10 object-contain rounded bg-slate-50" />}

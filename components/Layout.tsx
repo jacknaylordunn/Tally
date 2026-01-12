@@ -1,10 +1,11 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { NAVIGATION_ITEMS, APP_NAME, LOGO_URL } from '../constants';
 import { LogOut, Menu, X, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { getCompany } from '../services/api';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,15 +15,37 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [rotaEnabled, setRotaEnabled] = useState(false);
+
+  // Fetch company settings to determine if Rota is enabled
+  useEffect(() => {
+    const checkSettings = async () => {
+        if (user?.currentCompanyId) {
+            try {
+                const company = await getCompany(user.currentCompanyId);
+                setRotaEnabled(!!company.settings.rotaEnabled);
+            } catch (e) {
+                console.error("Error fetching settings", e);
+            }
+        }
+    };
+    checkSettings();
+  }, [user]);
 
   // If kiosk mode, don't show layout chrome
   if (location.pathname.includes('/kiosk')) {
     return <>{children}</>;
   }
 
-  const navItems = user?.role === UserRole.ADMIN 
+  const baseNavItems = user?.role === UserRole.ADMIN 
     ? NAVIGATION_ITEMS.ADMIN 
     : NAVIGATION_ITEMS.STAFF;
+
+  // Filter items based on Rota setting
+  const navItems = baseNavItems.filter(item => {
+      if (item.name.includes('Rota') && !rotaEnabled) return false;
+      return true;
+  });
 
   return (
     <div className="min-h-screen flex bg-[#f8fafc] dark:bg-[#0b1120]">

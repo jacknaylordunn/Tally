@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Company, Location } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { Building, ArrowRight, User, MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Globe, Loader2, Navigation, Share2 } from 'lucide-react';
+import { Building, ArrowRight, User, MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Globe, Loader2, Navigation, Share2, CalendarDays, Calendar } from 'lucide-react';
 import { updateCompanySettings, getCompany, createLocation } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
 import { APP_NAME } from '../constants';
@@ -28,8 +28,13 @@ export const Onboarding = () => {
   const [currency, setCurrency] = useState('£');
   const [hourlyRate, setHourlyRate] = useState('15.00');
 
-  // Step 3: Security
+  // Step 3: Security & Features
   const [requireApproval, setRequireApproval] = useState(false);
+  
+  // Rota Settings (Sub-settings of Step 3)
+  const [enableRota, setEnableRota] = useState(false);
+  const [allowBidding, setAllowBidding] = useState(true);
+  const [requireTimeOffApproval, setRequireTimeOffApproval] = useState(true);
   
   // Step 4: Invite
   const [copied, setCopied] = useState(false);
@@ -135,7 +140,10 @@ export const Onboarding = () => {
        setLoading(true);
        try {
            await updateCompanySettings(user.currentCompanyId, {
-               requireApproval: requireApproval
+               requireApproval: requireApproval,
+               rotaEnabled: enableRota,
+               allowShiftBidding: enableRota ? allowBidding : undefined,
+               requireTimeOffApproval: enableRota ? requireTimeOffApproval : undefined
            });
            setStep(4);
        } catch (e) {
@@ -324,28 +332,70 @@ export const Onboarding = () => {
             </div>
         )}
 
-        {/* STEP 3: SECURITY */}
+        {/* STEP 3: SECURITY & FEATURES (With Rota Config) */}
         {step === 3 && (
             <div className="space-y-6">
                 <div className="text-center">
                     <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Lock className="w-8 h-8" />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Final Security Checks</h2>
-                    <p className="text-slate-500">Configure how your team accesses Tally.</p>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Features & Security</h2>
+                    <p className="text-slate-500">Configure how your team uses Tally.</p>
                 </div>
 
                 <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 space-y-6">
+                    
+                    {/* Approval Toggle */}
                     <div className="flex items-center justify-between">
                          <div>
                             <h4 className="font-bold text-slate-900 dark:text-white">Require Admin Approval</h4>
-                            <p className="text-xs text-slate-500">OPTIONAL: New staff must be approved before they can clock in.</p>
+                            <p className="text-xs text-slate-500">New staff must be approved before they can clock in.</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} className="sr-only peer" />
                             <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                         </label>
                     </div>
+
+                    <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
+
+                    {/* Rota Toggle */}
+                     <div className="flex items-center justify-between">
+                         <div className="flex items-start space-x-3">
+                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                                <CalendarDays className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white">Enable Rota System</h4>
+                                <p className="text-xs text-slate-500">Plan shifts and manage staff time off.</p>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked={enableRota} onChange={(e) => setEnableRota(e.target.checked)} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                    </div>
+
+                    {/* Rota Sub-Settings (Conditional) */}
+                    {enableRota && (
+                        <div className="bg-white dark:bg-slate-900 rounded-lg p-4 space-y-4 border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Shift Bidding</span>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={allowBidding} onChange={(e) => setAllowBidding(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Approval for Time Off</span>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={requireTimeOffApproval} onChange={(e) => setRequireTimeOffApproval(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
 
                  <button 
@@ -403,6 +453,14 @@ export const Onboarding = () => {
                 <p className="text-slate-500 text-lg">
                     You have successfully joined <span className="font-bold text-slate-900 dark:text-white">{company?.name}</span>.
                 </p>
+                
+                {company?.settings.rotaEnabled && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
+                        <Calendar className="w-5 h-5" />
+                        <span className="font-medium">Check your Rota for upcoming shifts.</span>
+                    </div>
+                )}
+
                 <button onClick={() => setStep(2)} className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold hover:bg-brand-700 transition mt-8 shadow-lg shadow-brand-500/30">
                     Let's get set up
                 </button>

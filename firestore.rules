@@ -35,18 +35,13 @@ service cloud.firestore {
         (resource.data.currentCompanyId != null && isCompanyAdmin(resource.data.currentCompanyId))
       );
       
-      // User can create their own profile during signup
       allow create: if isAuthenticated() && request.auth.uid == userId;
       
-      // User can update own profile (e.g. settings, joining new company)
-      // Admin of the company can update staff profiles (e.g. set rates, positions)
       allow update: if isAuthenticated() && (
         request.auth.uid == userId ||
         isCompanyAdmin(resource.data.currentCompanyId)
       );
 
-      // User can delete themselves (Account Deletion)
-      // Admin can delete staff (Staff Management)
       allow delete: if isAuthenticated() && (
         request.auth.uid == userId || 
         isCompanyAdmin(resource.data.currentCompanyId)
@@ -55,54 +50,63 @@ service cloud.firestore {
 
     // --- COMPANIES ---
     match /companies/{companyId} {
-      // Allow authenticated users to read company info (needed for joining by code)
       allow read: if isAuthenticated();
-      
-      // Allow any authenticated user to create a new company (Registration flow)
       allow create: if isAuthenticated();
-      
-      // Admin can update settings, Owner can delete
       allow update: if isCompanyOwner() || isCompanyAdmin(companyId);
       allow delete: if isCompanyOwner();
     }
 
     // --- LOCATIONS ---
     match /locations/{locationId} {
-      // Staff need to read locations to validate static GPS
       allow read: if isAuthenticated();
-      
-      // Only Admins can create locations
       allow create: if isAuthenticated() && isCompanyAdmin(request.resource.data.companyId);
-      
-      // Only Admins can update/delete locations
       allow update, delete: if isAuthenticated() && isCompanyAdmin(resource.data.companyId);
     }
 
-    // --- SHIFTS ---
+    // --- ACTUAL SHIFTS (Time Tracking) ---
     match /shifts/{shiftId} {
-      // Staff can read their own shifts
-      // Admins can read company shifts
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
         isCompanyAdmin(resource.data.companyId)
       );
       
-      // Staff can create their own shift (Clock In)
-      // Admin can create shifts for staff (Manual Entry)
       allow create: if isAuthenticated() && (
         request.resource.data.userId == request.auth.uid ||
         isCompanyAdmin(request.resource.data.companyId)
       );
       
-      // Staff can update their own shift (Clock Out - update endTime)
-      // Admins can update/delete shifts (Timesheet edits)
       allow update: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
         isCompanyAdmin(resource.data.companyId)
       );
       
-      // Admins can delete shifts
       allow delete: if isAuthenticated() && isCompanyAdmin(resource.data.companyId);
+    }
+
+    // --- ROTA SCHEDULE SHIFTS ---
+    match /schedule_shifts/{docId} {
+      // Staff can read if published and in their company
+      // Admin can read all
+      allow read: if isAuthenticated(); 
+      
+      // Only Admin can create/delete
+      allow create: if isAuthenticated() && isCompanyAdmin(request.resource.data.companyId);
+      allow delete: if isAuthenticated() && isCompanyAdmin(resource.data.companyId);
+
+      // Updates: 
+      // Admin can update everything.
+      // Staff can update specific fields (e.g. 'bids') if the shift is in their company
+      allow update: if isAuthenticated();
+    }
+
+    // --- TIME OFF REQUESTS ---
+    match /time_off_requests/{requestId} {
+      // Staff can read/write their own
+      // Admin can read/write all
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isCompanyAdmin(resource.data.companyId));
     }
   }
 }
