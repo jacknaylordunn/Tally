@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Company, Location } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User } from 'lucide-react';
+import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent } from 'lucide-react';
 import { updateCompanySettings, getCompany, createLocation } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
 import { APP_NAME } from '../constants';
@@ -27,6 +27,8 @@ export const Onboarding = () => {
   // Step 2: Payroll
   const [currency, setCurrency] = useState('£');
   const [hourlyRate, setHourlyRate] = useState('15.00');
+  const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
+  const [holidayPayRate, setHolidayPayRate] = useState('12.07');
 
   // Step 3: Security & Features
   const [requireApproval, setRequireApproval] = useState(false);
@@ -131,7 +133,9 @@ export const Onboarding = () => {
       try {
           await updateCompanySettings(user.currentCompanyId, {
               defaultHourlyRate: parseFloat(hourlyRate),
-              currency: currency
+              currency: currency,
+              holidayPayEnabled,
+              holidayPayRate: parseFloat(holidayPayRate)
           });
           setStep(3);
       } catch (e) {
@@ -329,6 +333,39 @@ export const Onboarding = () => {
                             </div>
                         </div>
                     </div>
+
+                    <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
+
+                    {/* Holiday Pay Toggle */}
+                    <div className="flex items-center justify-between text-left">
+                         <div>
+                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
+                            <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked={holidayPayEnabled} onChange={(e) => setHolidayPayEnabled(e.target.checked)} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                    </div>
+
+                    {/* Holiday Pay Rate Input (Conditional) */}
+                    {holidayPayEnabled && (
+                        <div className="text-left animate-in fade-in slide-in-from-top-2">
+                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Holiday Pay Rate (%)</label>
+                             <div className="relative">
+                                <input 
+                                    type="number"
+                                    step="0.01"
+                                    value={holidayPayRate}
+                                    onChange={(e) => setHolidayPayRate(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
+                                    placeholder="12.07"
+                                />
+                                <Percent className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                            </div>
+                            <p className="text-xs text-slate-400 mt-2">12.07% is standard for UK casual workers.</p>
+                        </div>
+                    )}
                 </div>
                 
                 <button 
