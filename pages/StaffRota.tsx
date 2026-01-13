@@ -99,6 +99,7 @@ export const StaffRota = () => {
   const ShiftCard: React.FC<{ shift: ScheduleShift; isOpenBoard?: boolean }> = ({ shift, isOpenBoard = false }) => {
       const isBidded = user && shift.bids?.includes(user.id);
       const allowBidding = company?.settings.allowShiftBidding !== false; 
+      const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
       
       // Robust Overnight Check
       const startD = new Date(shift.startTime);
@@ -111,8 +112,15 @@ export const StaffRota = () => {
                 <div>
                     <div className="font-bold text-lg text-slate-900 dark:text-white">{new Date(shift.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
                     <div className="text-sm text-slate-500 flex items-center">
-                        {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                        {isOvernight && <span className="ml-1 text-[9px] font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/50 px-1 rounded">+1</span>}
+                        {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                        {showFinishTimes ? (
+                            <>
+                                - {new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                {isOvernight && <span className="ml-1 text-[9px] font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/50 px-1 rounded">+1</span>}
+                            </>
+                        ) : (
+                            <span className="ml-2 font-medium text-slate-400">Till Finish</span>
+                        )}
                     </div>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${isOpenBoard ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'}`}>

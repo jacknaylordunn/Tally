@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Company, Location } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent } from 'lucide-react';
+import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent, Clock } from 'lucide-react';
 import { updateCompanySettings, getCompany, createLocation } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
 import { APP_NAME } from '../constants';
@@ -37,6 +37,7 @@ export const Onboarding = () => {
   const [enableRota, setEnableRota] = useState(false);
   const [allowBidding, setAllowBidding] = useState(true);
   const [requireTimeOffApproval, setRequireTimeOffApproval] = useState(true);
+  const [rotaShowFinishTimes, setRotaShowFinishTimes] = useState(true);
   
   // Step 4: Invite
   const [copied, setCopied] = useState(false);
@@ -152,6 +153,7 @@ export const Onboarding = () => {
            await updateCompanySettings(user.currentCompanyId, {
                requireApproval: requireApproval,
                rotaEnabled: enableRota,
+               rotaShowFinishTimes: enableRota ? rotaShowFinishTimes : undefined,
                allowShiftBidding: enableRota ? allowBidding : undefined,
                requireTimeOffApproval: enableRota ? requireTimeOffApproval : undefined
            });
@@ -342,7 +344,7 @@ export const Onboarding = () => {
                             <h4 className="font-bold text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
                             <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input type="checkbox" checked={holidayPayEnabled} onChange={(e) => setHolidayPayEnabled(e.target.checked)} className="sr-only peer" />
                             <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                         </label>
@@ -397,7 +399,7 @@ export const Onboarding = () => {
                             <h4 className="font-bold text-slate-900 dark:text-white">Require Admin Approval</h4>
                             <p className="text-xs text-slate-500">New staff must be approved before they can clock in.</p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} className="sr-only peer" />
                             <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                         </label>
@@ -416,7 +418,7 @@ export const Onboarding = () => {
                                 <p className="text-xs text-slate-500">Plan shifts and manage staff time off.</p>
                             </div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input type="checkbox" checked={enableRota} onChange={(e) => setEnableRota(e.target.checked)} className="sr-only peer" />
                             <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                         </label>
@@ -426,15 +428,23 @@ export const Onboarding = () => {
                     {enableRota && (
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-4 space-y-4 border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
                             <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Finish Times</span>
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                    <input type="checkbox" checked={rotaShowFinishTimes} onChange={(e) => setRotaShowFinishTimes(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+                            {rotaShowFinishTimes === false && <p className="text-xs text-slate-500 italic">Useful for zero-hour contracts.</p>}
+                            <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Shift Bidding</span>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                     <input type="checkbox" checked={allowBidding} onChange={(e) => setAllowBidding(e.target.checked)} className="sr-only peer" />
                                     <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
                             <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Approval for Time Off</span>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                     <input type="checkbox" checked={requireTimeOffApproval} onChange={(e) => setRequireTimeOffApproval(e.target.checked)} className="sr-only peer" />
                                     <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
@@ -465,24 +475,47 @@ export const Onboarding = () => {
                     <p className="text-slate-500">Share this code with your staff to get them started.</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 p-8 rounded-2xl relative overflow-hidden group hover:border-brand-500 transition-colors">
-                    <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Company Invite Code</p>
-                    <div className="text-5xl font-black tracking-wider flex items-center justify-center space-x-3 text-slate-900 dark:text-white">
-                        <span>{company?.code}</span>
-                    </div>
-                    <div className="absolute top-4 right-4 flex space-x-2">
-                        <button onClick={copyCode} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition" title="Copy">
-                            {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
-                        </button>
-                        <button onClick={shareCode} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition" title="Share">
-                            <Share2 className="w-5 h-5" />
-                        </button>
+                {/* Improved Code Card Layout for Mobile */}
+                <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 p-6 md:p-8 rounded-2xl relative overflow-hidden group hover:border-brand-500 transition-colors flex flex-col md:block">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 md:mb-2 text-center md:text-left">Company Invite Code</p>
+                    
+                    <div className="flex flex-col md:flex-row items-center justify-center md:justify-start space-y-4 md:space-y-0">
+                        <div className="text-5xl font-black tracking-wider text-slate-900 dark:text-white text-center md:text-left flex-1">
+                            {company?.code}
+                        </div>
+                        
+                        {/* Buttons now flow naturally on mobile, positioned absolute on desktop */}
+                        <div className="flex space-x-3 md:absolute md:top-4 md:right-4 w-full md:w-auto justify-center md:justify-end">
+                            <button 
+                                onClick={copyCode} 
+                                className="flex-1 md:flex-none p-3 md:p-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-500 hover:text-brand-600 rounded-xl transition flex items-center justify-center gap-2" 
+                                title="Copy"
+                            >
+                                {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
+                                <span className="md:hidden text-sm font-bold">Copy</span>
+                            </button>
+                            <button 
+                                onClick={shareCode} 
+                                className="flex-1 md:flex-none p-3 md:p-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-500 hover:text-brand-600 rounded-xl transition flex items-center justify-center gap-2" 
+                                title="Share"
+                            >
+                                <Share2 className="w-5 h-5" />
+                                <span className="md:hidden text-sm font-bold">Share</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <button onClick={handleFinish} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-xl font-bold hover:opacity-90 transition shadow-lg">
-                    Go to Dashboard
-                </button>
+                <div className="space-y-3">
+                    <button onClick={shareCode} className="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 py-4 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center justify-center space-x-2">
+                        <Share2 className="w-5 h-5" />
+                        <span>Share Invite Code</span>
+                    </button>
+                    
+                    <button onClick={handleFinish} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-xl font-bold hover:opacity-90 transition shadow-lg">
+                        Go to Dashboard
+                    </button>
+                </div>
             </div>
         )}
     </div>

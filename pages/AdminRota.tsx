@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishAllDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
 import { ScheduleShift, User, Location, TimeOffRequest, Company, Shift } from '../types';
-import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight } from 'lucide-react';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -154,17 +154,26 @@ export const AdminRota = () => {
       if (!targetDay) return null;
 
       const [sH, sM] = shiftStart.split(':').map(Number);
-      const [eH, eM] = shiftEnd.split(':').map(Number);
-    
+      
       const startTs = new Date(targetDay);
       startTs.setHours(sH, sM, 0, 0);
-    
-      const endTs = new Date(targetDay);
-      endTs.setHours(eH, eM, 0, 0);
       
-      // Auto-adjust for overnight shifts
-      if (endTs <= startTs) {
-          endTs.setDate(endTs.getDate() + 1);
+      let endTs;
+      const showFinish = company?.settings.rotaShowFinishTimes !== false;
+
+      if (showFinish) {
+          const [eH, eM] = shiftEnd.split(':').map(Number);
+          endTs = new Date(targetDay);
+          endTs.setHours(eH, eM, 0, 0);
+          
+          // Auto-adjust for overnight shifts
+          if (endTs <= startTs) {
+              endTs.setDate(endTs.getDate() + 1);
+          }
+      } else {
+          // If finish times are disabled, set end time to 8 hours later purely for the backend validity
+          // This ensures the shift appears on the correct calendar day
+          endTs = new Date(startTs.getTime() + (8 * 60 * 60 * 1000));
       }
 
       const locationName = locations.find(l => l.id === shiftLocation)?.name;
@@ -204,20 +213,26 @@ export const AdminRota = () => {
       const baseShiftData = getShiftDataFromForm();
       if (!baseShiftData) return;
 
+      const showFinish = company?.settings.rotaShowFinishTimes !== false;
       const newShifts: ScheduleShift[] = [];
+      
       for (let i = 1; i <= weeks; i++) {
           const nextDate = new Date(selectedDay);
           nextDate.setDate(nextDate.getDate() + (i * 7));
           
           const [sH, sM] = shiftStart.split(':').map(Number);
-          const [eH, eM] = shiftEnd.split(':').map(Number);
-          
           const startTs = new Date(nextDate);
           startTs.setHours(sH, sM, 0, 0);
           
-          const endTs = new Date(nextDate);
-          endTs.setHours(eH, eM, 0, 0);
-          if (endTs <= startTs) endTs.setDate(endTs.getDate() + 1);
+          let endTs;
+          if (showFinish) {
+              const [eH, eM] = shiftEnd.split(':').map(Number);
+              endTs = new Date(nextDate);
+              endTs.setHours(eH, eM, 0, 0);
+              if (endTs <= startTs) endTs.setDate(endTs.getDate() + 1);
+          } else {
+              endTs = new Date(startTs.getTime() + (8 * 60 * 60 * 1000));
+          }
 
           newShifts.push({
               ...baseShiftData,
@@ -290,6 +305,7 @@ export const AdminRota = () => {
 
   const pendingRequestsCount = timeOffRequests.length;
   const draftCount = schedule.filter(s => s.status === 'draft').length;
+  const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
 
   // --- SUB-COMPONENTS ---
 
@@ -299,9 +315,9 @@ export const AdminRota = () => {
       
       // No Show Logic: 
       // 1. Shift is assigned (not open)
-      // 2. Shift end time is in the past
+      // 2. Shift end time is in the past (Only relevant if finish times are active)
       // 3. No actual shift found that links to this schedule ID
-      const isPast = Date.now() > shift.endTime;
+      const isPast = showFinishTimes && Date.now() > shift.endTime;
       const matchingActual = !isOpen ? actualShifts.find(s => s.scheduleShiftId === shift.id) : null;
       const isNoShow = !isOpen && isPast && !matchingActual;
 
@@ -331,8 +347,15 @@ export const AdminRota = () => {
                 {isNoShow && <span title="No Show"><AlertTriangle className="w-3 h-3 text-red-500" /></span>}
             </div>
             <div className="text-[10px] text-slate-500 mb-1 flex items-center">
-                {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                {isOvernight && <span className="ml-1 text-[9px] font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/50 px-1 rounded">+1</span>}
+                {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                {showFinishTimes ? (
+                    <>
+                        - {new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                        {isOvernight && <span className="ml-1 text-[9px] font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/50 px-1 rounded">+1</span>}
+                    </>
+                ) : (
+                    <span className="ml-1 opacity-50">→</span>
+                )}
             </div>
             
             {isOpen ? (
@@ -547,11 +570,17 @@ export const AdminRota = () => {
                             </div>
                              <div>
                                 <label className="block text-xs font-bold uppercase text-slate-500 mb-1">End Time</label>
-                                <input 
-                                    type="time" required
-                                    value={shiftEnd} onChange={e => setShiftEnd(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-slate-900 dark:text-white"
-                                />
+                                {showFinishTimes ? (
+                                    <input 
+                                        type="time" required
+                                        value={shiftEnd} onChange={e => setShiftEnd(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-slate-900 dark:text-white"
+                                    />
+                                ) : (
+                                    <div className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-400 text-sm flex items-center">
+                                        <ArrowRight className="w-4 h-4 mr-2" /> Till Finish
+                                    </div>
+                                )}
                             </div>
                         </div>
 

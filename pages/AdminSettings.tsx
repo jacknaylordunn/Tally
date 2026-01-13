@@ -4,11 +4,13 @@ import { getCompany, updateCompanySettings, deleteCompanyFull } from '../service
 import { Company } from '../types';
 import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useBlocker } from 'react-router-dom';
 import { APP_NAME } from '../constants';
 
 export const AdminSettings = () => {
   const { user } = useAuth();
+  const { setBrandColor } = useTheme();
   const navigate = useNavigate();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,7 @@ export const AdminSettings = () => {
 
   // Rota Settings
   const [rotaEnabled, setRotaEnabled] = useState(false);
+  const [rotaShowFinishTimes, setRotaShowFinishTimes] = useState(true);
   const [allowShiftBidding, setAllowShiftBidding] = useState(true);
   const [requireTimeOffApproval, setRequireTimeOffApproval] = useState(true);
 
@@ -56,6 +59,7 @@ export const AdminSettings = () => {
         
         // Rota
         setRotaEnabled(data.settings.rotaEnabled || false);
+        setRotaShowFinishTimes(data.settings.rotaShowFinishTimes !== undefined ? data.settings.rotaShowFinishTimes : true);
         setAllowShiftBidding(data.settings.allowShiftBidding !== undefined ? data.settings.allowShiftBidding : true);
         setRequireTimeOffApproval(data.settings.requireTimeOffApproval !== undefined ? data.settings.requireTimeOffApproval : true);
         
@@ -87,6 +91,7 @@ export const AdminSettings = () => {
           holidayPayEnabled !== (s.holidayPayEnabled || false) ||
           holidayPayRate !== (s.holidayPayRate || 12.07) ||
           rotaEnabled !== (s.rotaEnabled || false) ||
+          rotaShowFinishTimes !== clean(s.rotaShowFinishTimes, true) ||
           allowShiftBidding !== clean(s.allowShiftBidding, true) ||
           requireTimeOffApproval !== clean(s.requireTimeOffApproval, true) ||
           auditLateIn !== (s.auditLateInThreshold || 15) ||
@@ -97,7 +102,7 @@ export const AdminSettings = () => {
       );
   }, [
       company, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl,
-      holidayPayEnabled, holidayPayRate, rotaEnabled, allowShiftBidding, requireTimeOffApproval,
+      holidayPayEnabled, holidayPayRate, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
       auditLateIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift
   ]);
 
@@ -140,9 +145,6 @@ export const AdminSettings = () => {
 
   const handleShareCode = async () => {
         if (!company?.code) return;
-        
-        // Note: URL is embedded in text to ensure it appears in the body of SMS/WhatsApp
-        // instead of just as a link attachment.
         const text = `Hey, we are now using ${APP_NAME} for our clock-in system... ⏰\n\nPlease create an account at https://tallyd.app/#/register using ${company.code} as your invite code.\n\n#TallydUp`;
         
         if (navigator.share) {
@@ -150,7 +152,6 @@ export const AdminSettings = () => {
                 await navigator.share({
                     title: `Join ${company.name} on ${APP_NAME}`,
                     text: text,
-                    // Leaving out 'url' property intentionally to force text body in native shares
                 });
             } catch (err) {
                 console.error("Share failed", err);
@@ -175,6 +176,7 @@ export const AdminSettings = () => {
           holidayPayEnabled,
           holidayPayRate,
           rotaEnabled,
+          rotaShowFinishTimes,
           allowShiftBidding,
           requireTimeOffApproval,
           auditLateInThreshold: auditLateIn,
@@ -183,6 +185,10 @@ export const AdminSettings = () => {
           auditShortShiftThreshold: auditShortShift,
           auditLongShiftThreshold: auditLongShift
       });
+      
+      // Update global theme immediately
+      setBrandColor(primaryColor);
+      
       setSaving(false);
       window.location.reload(); // Reload to update navigation state
   };
@@ -202,6 +208,12 @@ export const AdminSettings = () => {
               isSavingRef.current = false;
           }
       }
+  };
+
+  const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setPrimaryColor(e.target.value);
+      // Optional: Live preview of color change could be added here by calling setBrandColor(e.target.value)
+      // But standard UX is to apply on save to avoid flashing.
   };
 
   if (loading) return <div className="p-8 text-center flex justify-center"><div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
@@ -291,11 +303,11 @@ export const AdminSettings = () => {
                             />
                         </div>
                         <div className="flex items-center justify-between pt-2">
-                            <div>
+                            <div className="pr-4">
                                 <h4 className="font-medium text-slate-900 dark:text-white text-sm">Require Admin Approval</h4>
                                 <p className="text-xs text-slate-500">New staff must be approved before they can clock in.</p>
                             </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
+                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                 <input 
                                     type="checkbox" 
                                     checked={requireApproval} 
@@ -381,7 +393,7 @@ export const AdminSettings = () => {
                             </div>
                             <h3 className="font-bold text-lg text-slate-900 dark:text-white">Rota System</h3>
                         </div>
-                         <label className="relative inline-flex items-center cursor-pointer">
+                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input 
                                 type="checkbox" 
                                 checked={rotaEnabled} 
@@ -395,11 +407,27 @@ export const AdminSettings = () => {
                     {rotaEnabled ? (
                         <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                              <div className="flex items-center justify-between">
-                                <div>
+                                <div className="pr-4">
+                                    <h4 className="font-medium text-slate-900 dark:text-white text-sm">Show Finish Times</h4>
+                                    <p className="text-xs text-slate-500">Display shift end times on rota. Useful for fixed shifts.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={rotaShowFinishTimes} 
+                                        onChange={(e) => setRotaShowFinishTimes(e.target.checked)}
+                                        className="sr-only peer" 
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-700 peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+
+                             <div className="flex items-center justify-between">
+                                <div className="pr-4">
                                     <h4 className="font-medium text-slate-900 dark:text-white text-sm">Allow Shift Bidding</h4>
                                     <p className="text-xs text-slate-500">Staff can request to take Open shifts.</p>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                     <input 
                                         type="checkbox" 
                                         checked={allowShiftBidding} 
@@ -411,11 +439,11 @@ export const AdminSettings = () => {
                             </div>
 
                              <div className="flex items-center justify-between">
-                                <div>
+                                <div className="pr-4">
                                     <h4 className="font-medium text-slate-900 dark:text-white text-sm">Require Time Off Approval</h4>
                                     <p className="text-xs text-slate-500">Requests need admin review.</p>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                     <input 
                                         type="checkbox" 
                                         checked={requireTimeOffApproval} 
@@ -481,11 +509,11 @@ export const AdminSettings = () => {
 
                     <div className="mt-6 border-t border-slate-100 dark:border-slate-700 pt-4">
                         <div className="flex items-center justify-between mb-4">
-                            <div>
+                            <div className="pr-4">
                                 <h4 className="font-medium text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
                                 <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
                             </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
+                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                 <input 
                                     type="checkbox" 
                                     checked={holidayPayEnabled} 
@@ -535,7 +563,7 @@ export const AdminSettings = () => {
                                     <input 
                                         type="color"
                                         value={primaryColor}
-                                        onChange={(e) => setPrimaryColor(e.target.value)}
+                                        onChange={handleColorChange}
                                         className="h-12 w-12 rounded-lg border-0 cursor-pointer overflow-hidden p-0"
                                     />
                                 </div>
@@ -543,7 +571,7 @@ export const AdminSettings = () => {
                                     <input 
                                         type="text" 
                                         value={primaryColor}
-                                        onChange={(e) => setPrimaryColor(e.target.value)}
+                                        onChange={handleColorChange}
                                         className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none font-mono text-sm"
                                         placeholder="#000000"
                                     />

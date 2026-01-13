@@ -37,6 +37,7 @@ export interface Company {
     holidayPayRate?: number; // Percentage (e.g. 12.07)
     // Rota Settings
     rotaEnabled?: boolean;
+    rotaShowFinishTimes?: boolean; // New: Toggle end times on/off
     allowShiftBidding?: boolean;
     requireTimeOffApproval?: boolean;
     // Audit Settings
