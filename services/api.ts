@@ -432,34 +432,37 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
         // Look for a scheduled shift for this user around this time (+/- 2 hours)
         const now = Date.now();
         const twoHours = 2 * 60 * 60 * 1000;
-        let scheduleShiftId = undefined;
-        let scheduledStartTime = undefined;
-        let scheduledEndTime = undefined;
+        
+        // Container for potential rota data
+        let rotaData: Partial<Shift> = {};
 
-        try {
-            // NOTE: Firestore requires composite index for complex queries. 
-            // We'll do a basic query and filter in memory for robustness without forcing index deployment immediately.
-            const schedQ = query(
-                collection(db, SCHEDULE_REF), 
-                where("companyId", "==", company.id),
-                where("userId", "==", user.id),
-                where("startTime", ">=", now - twoHours) 
-            );
-            const schedSnap = await getDocs(schedQ);
-            
-            // Find the closest scheduled shift that hasn't passed more than 2 hours ago
-            // and is roughly now.
-            const matchingShift = schedSnap.docs
-                .map(d => ({ data: d.data() as ScheduleShift, id: d.id }))
-                .find(s => Math.abs(s.data.startTime - now) < twoHours); // Within 2 hour window of start time
+        if (company.settings.rotaEnabled) {
+            try {
+                // NOTE: Firestore requires composite index for complex queries. 
+                // We'll do a basic query and filter in memory for robustness without forcing index deployment immediately.
+                const schedQ = query(
+                    collection(db, SCHEDULE_REF), 
+                    where("companyId", "==", company.id),
+                    where("userId", "==", user.id),
+                    where("startTime", ">=", now - twoHours) 
+                );
+                const schedSnap = await getDocs(schedQ);
+                
+                // Find the closest scheduled shift that hasn't passed more than 2 hours ago
+                // and is roughly now.
+                const matchingShift = schedSnap.docs
+                    .map(d => ({ data: d.data() as ScheduleShift, id: d.id }))
+                    .find(s => Math.abs(s.data.startTime - now) < twoHours); // Within 2 hour window of start time
 
-            if (matchingShift) {
-                scheduleShiftId = matchingShift.id;
-                scheduledStartTime = matchingShift.data.startTime;
-                scheduledEndTime = matchingShift.data.endTime;
+                if (matchingShift) {
+                    if (matchingShift.id) rotaData.scheduleShiftId = matchingShift.id;
+                    if (matchingShift.data.startTime !== undefined) rotaData.scheduledStartTime = matchingShift.data.startTime;
+                    if (matchingShift.data.endTime !== undefined) rotaData.scheduledEndTime = matchingShift.data.endTime;
+                }
+            } catch (e) {
+                console.error("Rota integration check failed. If this is a 'failed-precondition' (missing index) error, follow the link in the console to create it:", e);
+                // Proceeding is safe, we just lose the rota link for this specific punch
             }
-        } catch (e) {
-            console.warn("Rota integration check failed (likely missing index), proceeding with standard clock in.");
         }
         // --- ROTA INTEGRATION END ---
 
@@ -473,10 +476,16 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
             endTime: null,
             startMethod: method,
             hourlyRate: user.customHourlyRate || company.settings.defaultHourlyRate || 15,
-            scheduleShiftId: scheduleShiftId, // Link added here
-            scheduledStartTime,
-            scheduledEndTime
+            ...rotaData 
         };
+
+        // Sanitize object to remove undefined values
+        Object.keys(newShift).forEach(key => {
+            if ((newShift as any)[key] === undefined) {
+                delete (newShift as any)[key];
+            }
+        });
+
         await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
         await updateUserProfile(user.id, { activeShiftId: shiftId });
         return { success: true, message: 'Clocked In Successfully.', shift: newShift };

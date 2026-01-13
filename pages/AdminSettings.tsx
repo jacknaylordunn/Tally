@@ -1,10 +1,10 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { getCompany, updateCompanySettings, deleteCompanyFull } from '../services/api';
 import { Company } from '../types';
 import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useBlocker } from 'react-router-dom';
 import { APP_NAME } from '../constants';
 
 export const AdminSettings = () => {
@@ -14,6 +14,7 @@ export const AdminSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const isSavingRef = useRef(false);
 
   // Form State
   const [radius, setRadius] = useState(200);
@@ -70,6 +71,65 @@ export const AdminSettings = () => {
     loadData();
   }, [user]);
 
+  // Dirty Check Logic
+  const isDirty = useMemo(() => {
+      if (!company) return false;
+      const s = company.settings;
+      const clean = (val: any, def: any) => val ?? def;
+
+      return (
+          radius !== s.geofenceRadius ||
+          requireApproval !== (s.requireApproval || false) ||
+          defaultRate !== (s.defaultHourlyRate || 15) ||
+          currency !== (s.currency || '£') ||
+          primaryColor !== (s.primaryColor || '#0ea5e9') ||
+          logoUrl !== (s.logoUrl || '') ||
+          holidayPayEnabled !== (s.holidayPayEnabled || false) ||
+          holidayPayRate !== (s.holidayPayRate || 12.07) ||
+          rotaEnabled !== (s.rotaEnabled || false) ||
+          allowShiftBidding !== clean(s.allowShiftBidding, true) ||
+          requireTimeOffApproval !== clean(s.requireTimeOffApproval, true) ||
+          auditLateIn !== (s.auditLateInThreshold || 15) ||
+          auditEarlyOut !== (s.auditEarlyOutThreshold || 15) ||
+          auditLateOut !== (s.auditLateOutThreshold || 15) ||
+          auditShortShift !== (s.auditShortShiftThreshold || 5) ||
+          auditLongShift !== (s.auditLongShiftThreshold || 14)
+      );
+  }, [
+      company, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl,
+      holidayPayEnabled, holidayPayRate, rotaEnabled, allowShiftBidding, requireTimeOffApproval,
+      auditLateIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift
+  ]);
+
+  // Prevent Navigation if Dirty
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty && currentLocation.pathname !== nextLocation.pathname && !isSavingRef.current
+  );
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+        const proceed = window.confirm("You have unsaved changes. Do you really want to leave?");
+        if (proceed) {
+            blocker.proceed();
+        } else {
+            blocker.reset();
+        }
+    }
+  }, [blocker]);
+
+  // Prevent Browser Tab Close/Refresh if Dirty
+  useEffect(() => {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+          if (isDirty && !isSavingRef.current) {
+              e.preventDefault();
+              e.returnValue = ''; // Legacy standard
+          }
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
   const handleCopyCode = () => {
       if (company?.code) {
           navigator.clipboard.writeText(company.code);
@@ -80,16 +140,20 @@ export const AdminSettings = () => {
 
   const handleShareCode = async () => {
         if (!company?.code) return;
-        const text = `Hey, we are now using ${APP_NAME} for our clock-in system. Please create an account at tallyd.app. Use ${company.code} as invite code.`;
+        
+        // Note: URL is embedded in text to ensure it appears in the body of SMS/WhatsApp
+        // instead of just as a link attachment.
+        const text = `Hey, we are now using ${APP_NAME} for our clock-in system... ⏰\n\nPlease create an account at https://tallyd.app/#/register using ${company.code} as your invite code.\n\n#TallydUp`;
+        
         if (navigator.share) {
             try {
                 await navigator.share({
                     title: `Join ${company.name} on ${APP_NAME}`,
                     text: text,
-                    url: 'https://tallyd.app'
+                    // Leaving out 'url' property intentionally to force text body in native shares
                 });
             } catch (err) {
-                // User cancelled or not supported
+                console.error("Share failed", err);
             }
         } else {
             handleCopyCode();
@@ -99,6 +163,7 @@ export const AdminSettings = () => {
 
   const handleSave = async () => {
       if (!user?.currentCompanyId) return;
+      isSavingRef.current = true; // Bypass blockers
       setSaving(true);
       await updateCompanySettings(user.currentCompanyId, {
           geofenceRadius: radius,
@@ -127,12 +192,14 @@ export const AdminSettings = () => {
       const confirmName = prompt(`To confirm deletion, please type the company name: ${company?.name}`);
       if (confirmName === company?.name) {
           try {
+              isSavingRef.current = true; // Bypass blockers
               await deleteCompanyFull(user.currentCompanyId);
               alert("Company deleted successfully.");
               window.location.reload();
           } catch (e) {
               console.error(e);
               alert("Failed to delete company.");
+              isSavingRef.current = false;
           }
       }
   };
@@ -182,14 +249,21 @@ export const AdminSettings = () => {
                     <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-20 rounded-full -translate-y-1/2 translate-x-1/4"></div>
                 </div>
 
-                <button 
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="w-full flex items-center justify-center space-x-2 bg-slate-900 dark:bg-slate-700 text-white px-6 py-4 rounded-xl font-bold hover:bg-slate-800 transition disabled:opacity-70 shadow-lg"
-                >
-                    <Save className="w-5 h-5" />
-                    <span>{saving ? 'Saving...' : 'Save All Changes'}</span>
-                </button>
+                <div className="space-y-2">
+                    {isDirty && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-lg text-sm font-medium text-center animate-in fade-in slide-in-from-bottom-2">
+                            Unsaved changes
+                        </div>
+                    )}
+                    <button 
+                        onClick={handleSave}
+                        disabled={saving}
+                        className={`w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-bold transition disabled:opacity-70 shadow-lg ${isDirty ? 'bg-brand-600 hover:bg-brand-700 text-white animate-pulse' : 'bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800'}`}
+                    >
+                        <Save className="w-5 h-5" />
+                        <span>{saving ? 'Saving...' : (isDirty ? 'Save Changes' : 'Save All Changes')}</span>
+                    </button>
+                </div>
             </div>
 
             {/* Right Column: Settings Forms */}

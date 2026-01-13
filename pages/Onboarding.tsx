@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Company, Location } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { Building, ArrowRight, User, MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Globe, Loader2, Navigation, Share2, CalendarDays, Calendar } from 'lucide-react';
+import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User } from 'lucide-react';
 import { updateCompanySettings, getCompany, createLocation } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
 import { APP_NAME } from '../constants';
@@ -66,6 +66,12 @@ export const Onboarding = () => {
     };
     init();
   }, [user]);
+
+  // Optimize map updates to prevent re-renders when typing
+  const handleLocationSelect = useCallback((newLat: number, newLng: number) => {
+      setLat(newLat);
+      setLng(newLng);
+  }, []);
 
   if (!user) {
       navigate('/login');
@@ -182,16 +188,20 @@ export const Onboarding = () => {
 
   const shareCode = async () => {
         if (!company?.code) return;
-        const text = `Hey, we are now using ${APP_NAME} for our clock-in system. Please create an account at tallyd.app. Use ${company.code} as invite code.`;
+        
+        // Note: URL is embedded in text to ensure it appears in the body of SMS/WhatsApp
+        // instead of just as a link attachment.
+        const text = `Hey, we are now using ${APP_NAME} for our clock-in system... ⏰\n\nPlease create an account at https://tallyd.app/#/register using ${company.code} as your invite code.\n\n#TallydUp`;
+        
         if (navigator.share) {
             try {
                 await navigator.share({
                     title: `Join ${company.name} on ${APP_NAME}`,
                     text: text,
-                    url: 'https://tallyd.app'
+                    // Leaving out 'url' property intentionally to force text body in native shares
                 });
             } catch (err) {
-                // User cancelled or not supported
+                console.error("Share failed", err);
             }
         } else {
             copyCode();
@@ -199,7 +209,9 @@ export const Onboarding = () => {
         }
   };
 
-  const AdminFlow = () => (
+  // --- RENDER HELPERS (Replaced Component Definitions) ---
+
+  const renderAdminFlow = () => (
     <div className="max-w-lg mx-auto animate-fade-in pb-8">
         {/* Step Indicator */}
         <div className="flex justify-center space-x-2 mb-8">
@@ -249,10 +261,7 @@ export const Onboarding = () => {
                                 lat={lat}
                                 lng={lng}
                                 radius={radius}
-                                onLocationSelect={(newLat, newLng) => {
-                                    setLat(newLat);
-                                    setLng(newLng);
-                                }}
+                                onLocationSelect={handleLocationSelect}
                             />
                         </div>
                         <div className="flex items-center space-x-3">
@@ -442,7 +451,7 @@ export const Onboarding = () => {
     </div>
   );
 
-  const StaffFlow = () => (
+  const renderStaffFlow = () => (
      <div className="max-w-lg mx-auto animate-fade-in">
         {step === 1 && (
             <div className="space-y-6 text-center">
@@ -535,7 +544,7 @@ export const Onboarding = () => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
         <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl w-full max-w-2xl p-8 md:p-12 relative overflow-hidden border border-slate-100 dark:border-slate-700">
-             {user.role === UserRole.ADMIN ? <AdminFlow /> : <StaffFlow />}
+             {user.role === UserRole.ADMIN ? renderAdminFlow() : renderStaffFlow()}
         </div>
     </div>
   );
