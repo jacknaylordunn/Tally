@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getSchedule, bidOnShift, createTimeOffRequest, getMyTimeOff, getCompany } from '../services/api';
+import { getSchedule, bidOnShift, cancelBid, createTimeOffRequest, getMyTimeOff, getCompany, setShiftOfferStatus, deleteTimeOffRequest } from '../services/api';
 import { ScheduleShift, TimeOffRequest, Company } from '../types';
-import { Calendar, MapPin, Clock, AlertCircle, CheckCircle, Plus, X, User, Lock } from 'lucide-react';
+import { Calendar, MapPin, Clock, AlertCircle, CheckCircle, Plus, X, User, Lock, RotateCcw, ArrowRightLeft, Trash2 } from 'lucide-react';
 
 export const StaffRota = () => {
   const { user } = useAuth();
@@ -62,6 +62,25 @@ export const StaffRota = () => {
       loadData();
   };
 
+  const handleCancelBid = async (shiftId: string) => {
+      if (!user) return;
+      if (!confirm("Cancel your request for this shift?")) return;
+      await cancelBid(shiftId, user.id);
+      loadData();
+  };
+
+  const handleOfferShift = async (shiftId: string, offer: boolean) => {
+      if (!confirm(offer ? "Put this shift up for grabs? You are still responsible for it until someone else is assigned." : "Retract offer?")) return;
+      await setShiftOfferStatus(shiftId, offer);
+      loadData();
+  };
+
+  const handleDeleteTimeOff = async (requestId: string) => {
+      if (!confirm("Are you sure you want to delete this time off request?")) return;
+      await deleteTimeOffRequest(requestId);
+      loadData();
+  };
+
   const handleSubmitTimeOff = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user?.currentCompanyId) return;
@@ -86,7 +105,9 @@ export const StaffRota = () => {
   };
 
   const myShifts = schedule.filter(s => s.userId === user?.id).sort((a,b) => a.startTime - b.startTime);
-  const openShifts = schedule.filter(s => s.userId === null).sort((a,b) => a.startTime - b.startTime);
+  
+  // Open shifts include Unassigned OR Assigned-but-Offered shifts (Swap)
+  const openShifts = schedule.filter(s => s.userId === null || (s.userId !== user?.id && s.isOffered)).sort((a,b) => a.startTime - b.startTime);
 
   // Group open shifts by date string for better organization
   const groupedOpenShifts: Record<string, ScheduleShift[]> = {};
@@ -100,13 +121,14 @@ export const StaffRota = () => {
       const isBidded = user && shift.bids?.includes(user.id);
       const allowBidding = company?.settings.allowShiftBidding !== false; 
       const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
+      const isSwap = !!shift.userId; // If on OpenBoard and has UserID, it's a swap request
       
       const startD = new Date(shift.startTime);
       const endD = new Date(shift.endTime);
       const isOvernight = startD.toDateString() !== endD.toDateString();
 
       return (
-        <div className={`glass-panel p-5 rounded-2xl border ${isOpenBoard ? 'border-amber-900/30 bg-amber-900/5' : 'border-white/10'} shadow-sm mb-4`}>
+        <div className={`glass-panel p-5 rounded-2xl border ${isOpenBoard ? (isSwap ? 'border-purple-900/30 bg-purple-900/5' : 'border-amber-900/30 bg-amber-900/5') : 'border-white/10'} shadow-sm mb-4 transition`}>
             <div className="flex justify-between items-start mb-3">
                 <div>
                     <div className="font-bold text-lg text-white">{new Date(shift.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
@@ -122,9 +144,14 @@ export const StaffRota = () => {
                         )}
                     </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${isOpenBoard ? 'bg-amber-900/30 text-amber-400' : 'bg-brand-900/30 text-brand-400'}`}>
-                    {shift.role}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${isOpenBoard ? (isSwap ? 'bg-purple-900/30 text-purple-400' : 'bg-amber-900/30 text-amber-400') : 'bg-brand-900/30 text-brand-400'}`}>
+                        {shift.role}
+                    </span>
+                    {isOpenBoard && isSwap && (
+                        <span className="text-[10px] text-purple-300 font-medium">Cover: {shift.userName?.split(' ')[0]}</span>
+                    )}
+                </div>
             </div>
             
             <div className="flex items-center space-x-2 text-sm text-slate-400 mb-4">
@@ -132,26 +159,48 @@ export const StaffRota = () => {
                 <span>{shift.locationName || 'General Location'}</span>
             </div>
 
+            {/* Actions for My Shifts */}
+            {!isOpenBoard && (
+                <div className="pt-2 border-t border-white/5">
+                    {shift.isOffered ? (
+                        <button 
+                            onClick={() => handleOfferShift(shift.id, false)}
+                            className="w-full py-2 bg-purple-900/20 text-purple-300 border border-purple-500/30 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-purple-900/40 transition"
+                        >
+                            <RotateCcw className="w-4 h-4" /> Retract Offer
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => handleOfferShift(shift.id, true)}
+                            className="w-full py-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition hover:bg-slate-700"
+                        >
+                            <ArrowRightLeft className="w-4 h-4" /> Offer Swap
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* Actions for Open Board */}
             {isOpenBoard && (
                 allowBidding ? (
-                    <button 
-                        onClick={() => !isBidded && handleBid(shift.id)}
-                        disabled={!!isBidded}
-                        className={`w-full py-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition ${
-                            isBidded 
-                            ? 'bg-amber-900/20 text-amber-500 cursor-default' 
-                            : 'bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-500/20'
-                        }`}
-                    >
-                        {isBidded ? (
-                            <>
-                                <CheckCircle className="w-5 h-5" />
-                                <span>Request Sent</span>
-                            </>
-                        ) : (
-                            <span>Bid for Shift</span>
-                        )}
-                    </button>
+                    isBidded ? (
+                        <button 
+                            onClick={() => handleCancelBid(shift.id)}
+                            className="w-full py-3 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-xl font-bold flex items-center justify-center space-x-2 transition border border-slate-700 hover:border-slate-500"
+                        >
+                            <X className="w-5 h-5" />
+                            <span>Cancel Request</span>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => handleBid(shift.id)}
+                            className={`w-full py-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition ${
+                                isSwap ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/20'
+                            }`}
+                        >
+                            <span>{isSwap ? 'Offer to Cover' : 'Bid for Shift'}</span>
+                        </button>
+                    )
                 ) : (
                     <div className="w-full py-3 bg-slate-800 text-slate-500 rounded-xl font-medium text-center text-sm">
                         Bidding Disabled
@@ -237,15 +286,23 @@ export const StaffRota = () => {
                     {activeTab === 'time-off' && (
                         <div className="space-y-4">
                             {myRequests.map(req => (
-                                <div key={req.id} className="glass-panel p-4 rounded-xl border border-white/10 flex justify-between items-center">
+                                <div key={req.id} className="glass-panel p-4 rounded-xl border border-white/10 flex justify-between items-center group">
                                     <div>
                                         <div className="font-bold text-white capitalize">{req.type}</div>
                                         <div className="text-sm text-slate-400">{new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}</div>
                                     </div>
-                                    <div>
+                                    <div className="flex items-center gap-3">
                                         {req.status === 'pending' && <span className="px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-bold border border-yellow-700/50">Pending</span>}
                                         {req.status === 'approved' && <span className="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-bold border border-green-700/50">Approved</span>}
                                         {req.status === 'rejected' && <span className="px-3 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-bold border border-red-700/50">Rejected</span>}
+                                        
+                                        <button 
+                                            onClick={() => handleDeleteTimeOff(req.id)}
+                                            className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                            title="Delete Request"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 </div>
                             ))}

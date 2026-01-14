@@ -236,7 +236,8 @@ export const copyScheduleWeek = async (companyId: string, sourceWeekStart: numbe
             endTime: newEnd,
             // Keep the user assignment, but reset status to draft so admin can review
             status: 'draft', 
-            bids: [] // Clear bids as it's a fresh week
+            bids: [], // Clear bids as it's a fresh week
+            isOffered: false // Reset offered status
         };
     });
 
@@ -252,12 +253,25 @@ export const bidOnShift = async (shiftId: string, userId: string): Promise<void>
     });
 };
 
+export const cancelBid = async (shiftId: string, userId: string): Promise<void> => {
+    const ref = doc(db, SCHEDULE_REF, shiftId);
+    await updateDoc(ref, {
+        bids: arrayRemove(userId)
+    });
+};
+
+export const setShiftOfferStatus = async (shiftId: string, isOffered: boolean): Promise<void> => {
+    const ref = doc(db, SCHEDULE_REF, shiftId);
+    await updateDoc(ref, { isOffered });
+};
+
 export const assignShiftToUser = async (shiftId: string, userId: string, userName: string): Promise<void> => {
     const ref = doc(db, SCHEDULE_REF, shiftId);
     await updateDoc(ref, {
         userId: userId,
         userName: userName,
-        bids: [] 
+        bids: [],
+        isOffered: false // Reset offer status once assigned/swapped
     });
 };
 
@@ -283,6 +297,10 @@ export const createTimeOffRequest = async (request: TimeOffRequest): Promise<voi
 
 export const updateTimeOffStatus = async (requestId: string, status: 'approved' | 'rejected'): Promise<void> => {
     await updateDoc(doc(db, TIMEOFF_REF, requestId), { status });
+};
+
+export const deleteTimeOffRequest = async (requestId: string): Promise<void> => {
+    await deleteDoc(doc(db, TIMEOFF_REF, requestId));
 };
 
 export const getTimeOffRequests = async (companyId: string): Promise<TimeOffRequest[]> => {

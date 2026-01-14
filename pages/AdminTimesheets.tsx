@@ -125,7 +125,7 @@ export const AdminTimesheets = () => {
       if (shift.scheduledStartTime) {
           const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
           if (diffMins > auditLateIn) {
-              flags.push({ type: 'amber', label: `Late In (+${Math.round(diffMins)}m)` });
+              flags.push({ type: 'red', label: `Late In (+${Math.round(diffMins)}m)` });
           }
       }
 
@@ -150,16 +150,51 @@ export const AdminTimesheets = () => {
           const durationHours = durationMins / 60;
           if (durationHours > auditLongShift) {
               flags.push({ type: 'red', label: `Over ${auditLongShift}h` });
-          } else if (shift.scheduledEndTime && shift.scheduledStartTime) {
-              // Check if significantly longer than planned (e.g. +4 hours)
-              const plannedDuration = (shift.scheduledEndTime - shift.scheduledStartTime) / 3600000;
-              if (durationHours > plannedDuration + 4) {
-                  flags.push({ type: 'red', label: 'Overtime Check' });
-              }
           }
       }
 
       return flags;
+  };
+
+  const getTimeInColorClass = (shift: Shift) => {
+      if (!shift.scheduledStartTime) return 'text-slate-300'; // Manual / Unmatched
+
+      const auditLateIn = company?.settings.auditLateInThreshold || 15;
+      const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
+
+      if (diffMins <= 5) {
+          // On Time (or early, or slightly late within 5 mins "grace")
+          return 'text-emerald-400';
+      } else if (diffMins > 5 && diffMins <= auditLateIn) {
+          // Late but within audit threshold
+          return 'text-amber-400';
+      } else {
+          // Very Late (flagged) - Matches LATE IN (Red)
+          return 'text-red-400 font-bold';
+      }
+  };
+
+  const getTimeOutColorClass = (shift: Shift) => {
+      if (!shift.scheduledEndTime || !shift.endTime) return 'text-slate-400';
+
+      const diffMins = (shift.endTime - shift.scheduledEndTime) / 60000;
+
+      // On time (within 5 mins either side)
+      if (Math.abs(diffMins) <= 5) return 'text-emerald-400';
+
+      // Early Out (Negative diff)
+      if (diffMins < -5) {
+          // Matches EARLY OUT flag (Amber)
+          return 'text-amber-400 font-bold';
+      }
+
+      // Late Out (Positive diff)
+      if (diffMins > 5) {
+          // Matches LATE OUT flag (Amber)
+          return 'text-amber-400 font-bold';
+      }
+      
+      return 'text-slate-400';
   };
 
   const handleExport = (groupByStaff: boolean) => {
@@ -385,6 +420,8 @@ export const AdminTimesheets = () => {
                             <tr><td colSpan={7} className="p-8 text-center text-slate-500">No shifts found for this period.</td></tr>
                         ) : filteredShifts.map((shift) => {
                             const flags = getAuditFlags(shift);
+                            const timeInColor = getTimeInColorClass(shift);
+                            const timeOutColor = getTimeOutColorClass(shift);
                             
                             return (
                                 <tr key={shift.id} className="hover:bg-white/5 transition group">
@@ -403,15 +440,19 @@ export const AdminTimesheets = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 font-medium text-white">
-                                        {shift.userName}
-                                        {flags.map((f, i) => (
-                                            <span key={i} className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${f.type === 'red' ? 'bg-red-900/30 text-red-400' : 'bg-amber-900/30 text-amber-400'}`}>
-                                                {f.label}
-                                            </span>
-                                        ))}
+                                        <div className="flex flex-col">
+                                            <span>{shift.userName}</span>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {flags.map((f, i) => (
+                                                    <span key={i} className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${f.type === 'red' ? 'bg-red-900/30 text-red-400' : 'bg-amber-900/30 text-amber-400'}`}>
+                                                        {f.label}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 font-mono">
-                                        <div className="text-emerald-400">
+                                        <div className={timeInColor}>
                                             {new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                         </div>
                                         {shift.scheduledStartTime && (
@@ -421,7 +462,7 @@ export const AdminTimesheets = () => {
                                         )}
                                     </td>
                                     <td className="px-6 py-4 font-mono">
-                                        <div className="text-slate-400">
+                                        <div className={timeOutColor}>
                                             {shift.endTime ? new Date(shift.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
                                         </div>
                                         {shift.scheduledEndTime && (

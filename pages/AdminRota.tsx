@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishAllDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
 import { ScheduleShift, User, Location, TimeOffRequest, Company, Shift } from '../types';
-import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft } from 'lucide-react';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -227,6 +227,7 @@ export const AdminRota = () => {
           endTime: newEndTime.getTime(),
           status: 'draft',
           bids: [], // Reset bids
+          isOffered: false // Reset offers
           // Keep user assignment? Generally when copying to a new day, we might keep it or reset it.
           // Let's keep it for now as "Repeated Shift".
       };
@@ -277,7 +278,8 @@ export const AdminRota = () => {
               startTime: newStart.getTime(),
               endTime: newEnd.getTime(),
               status: 'draft',
-              bids: []
+              bids: [],
+              isOffered: false
           };
           setSchedule([...schedule, newShift]);
           await createScheduleShift(newShift);
@@ -451,7 +453,8 @@ export const AdminRota = () => {
       const hasBids = shift.bids && shift.bids.length > 0;
       const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
       const isNoShow = !isOpen && showFinishTimes && Date.now() > shift.endTime && !actualShifts.find(s => s.scheduleShiftId === shift.id);
-      
+      const isOffered = shift.isOffered;
+
       return (
         <div 
             draggable
@@ -463,9 +466,11 @@ export const AdminRota = () => {
                     ? 'bg-slate-800/40 border-slate-700 border-dashed opacity-80 hover:opacity-100' 
                     : isOpen 
                         ? 'bg-amber-900/10 border-amber-800/30 hover:bg-amber-900/20' 
-                        : isNoShow
-                            ? 'bg-red-900/10 border-red-800/30'
-                            : 'bg-slate-800 hover:bg-slate-700 border-l-4 border-l-brand-500 border-t-0 border-r-0 border-b-0'
+                        : isOffered
+                            ? 'bg-purple-900/10 border-purple-800/30 hover:bg-purple-900/20'
+                            : isNoShow
+                                ? 'bg-red-900/10 border-red-800/30'
+                                : 'bg-slate-800 hover:bg-slate-700 border-l-4 border-l-brand-500 border-t-0 border-r-0 border-b-0'
                 }
             `}
         >
@@ -473,7 +478,8 @@ export const AdminRota = () => {
                 <span className="text-[11px] font-bold text-slate-200 truncate uppercase tracking-wider">{shift.role}</span>
                 {/* Status Indicator */}
                 {shift.status === 'draft' && <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>}
-                {isNoShow && <span title="No Show"><AlertTriangle className="w-3 h-3 text-red-500" /></span>}
+                {isNoShow && !isOffered && <span title="No Show"><AlertTriangle className="w-3 h-3 text-red-500" /></span>}
+                {isOffered && <span title="Up for Grabs"><ArrowRightLeft className="w-3 h-3 text-purple-400" /></span>}
                 
                 {/* Hover Actions */}
                 <div className="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 rounded p-0.5 backdrop-blur-sm">
@@ -499,10 +505,16 @@ export const AdminRota = () => {
                 ) : <span className="ml-1 opacity-50">→</span>}
             </div>
             
-            {isOpen ? (
+            {/* Show Bids badge if there are any bids, regardless of assigned status (allows swaps) */}
+            {hasBids ? (
+                <div className={`flex items-center space-x-1 text-[10px] font-medium ${isOpen ? 'text-amber-400' : 'text-purple-400'}`}>
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{shift.bids?.length} Bids {isOpen ? '' : '(Swap)'}</span>
+                </div>
+            ) : isOpen ? (
                 <div className="flex items-center space-x-1 text-[10px] font-medium text-amber-400">
                     <AlertCircle className="w-3 h-3" />
-                    <span>{hasBids ? `${shift.bids?.length} Bids` : 'Open'}</span>
+                    <span>Open</span>
                 </div>
             ) : (
                 <div className="flex items-center space-x-2 text-xs text-white">
@@ -806,9 +818,12 @@ export const AdminRota = () => {
                             </select>
                         </div>
                         
-                        {editingShift && !editingShift.userId && editingShift.bids && editingShift.bids.length > 0 && (
-                            <div className="bg-amber-900/20 p-4 rounded-lg border border-amber-900/30">
-                                <h4 className="text-sm font-bold text-amber-400 mb-2">Staff Bids ({editingShift.bids.length})</h4>
+                        {/* Bids Section: Show for both Unassigned AND Assigned (for swaps) */}
+                        {editingShift && editingShift.bids && editingShift.bids.length > 0 && (
+                            <div className="bg-amber-900/20 p-4 rounded-lg border border-amber-900/30 animate-fade-in">
+                                <h4 className="text-sm font-bold text-amber-400 mb-2">
+                                    {editingShift.userId ? 'Swap Requests' : 'Staff Bids'} ({editingShift.bids.length})
+                                </h4>
                                 <div className="space-y-2">
                                     {editingShift.bids.map(bidderId => {
                                         const b = staff.find(s => s.id === bidderId);
@@ -819,9 +834,9 @@ export const AdminRota = () => {
                                                 <button 
                                                     type="button"
                                                     onClick={() => handleAssignBidder(editingShift, bidderId)}
-                                                    className="text-xs bg-amber-600 text-white px-2 py-1 rounded font-bold hover:bg-amber-500"
+                                                    className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded font-bold hover:bg-amber-500 transition"
                                                 >
-                                                    Assign
+                                                    {editingShift.userId ? 'Approve Swap' : 'Assign'}
                                                 </button>
                                             </div>
                                         )

@@ -78,6 +78,7 @@ export interface ScheduleShift {
   notes?: string;
   status: 'draft' | 'published';
   bids?: string[]; // Array of User IDs who want this shift
+  isOffered?: boolean; // If true, the current assignee is offering this shift for swap/cover
 }
 
 export interface TimeOffRequest {
