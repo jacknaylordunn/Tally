@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishAllDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
@@ -320,15 +321,20 @@ export const AdminRota = () => {
           endTs = new Date(startTs.getTime() + (8 * 60 * 60 * 1000));
       }
 
-      const locationName = locations.find(l => l.id === shiftLocation)?.name;
-      const userName = shiftUser === 'open' ? undefined : staff.find(u => u.id === shiftUser)?.name;
+      const locationName = locations.find(l => l.id === shiftLocation)?.name || null;
+      
+      let userName: string | null = null;
+      if (shiftUser !== 'open') {
+          const u = staff.find(s => s.id === shiftUser);
+          if (u) userName = u.name;
+      }
 
       return {
           companyId: user.currentCompanyId,
-          locationId: shiftLocation,
+          locationId: shiftLocation || null,
           locationName,
           userId: shiftUser === 'open' ? null : shiftUser,
-          userName,
+          userName: userName, // Explicitly passed as null or string, never undefined
           role: shiftRole,
           startTime: startTs.getTime(),
           endTime: endTs.getTime(),
@@ -341,11 +347,14 @@ export const AdminRota = () => {
     const shiftData = getShiftDataFromForm();
     if (!shiftData) return;
 
+    // Sanitize to remove undefined if any crept in (redundant safety)
+    const sanitizedShift = JSON.parse(JSON.stringify(shiftData));
+
     if (editingShift) {
-        await updateScheduleShift(editingShift.id, shiftData);
+        await updateScheduleShift(editingShift.id, sanitizedShift);
     } else {
-        shiftData.id = `sch_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
-        await createScheduleShift(shiftData as ScheduleShift);
+        sanitizedShift.id = `sch_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+        await createScheduleShift(sanitizedShift as ScheduleShift);
     }
 
     setIsShiftModalOpen(false);
@@ -378,8 +387,9 @@ export const AdminRota = () => {
               endTs = new Date(startTs.getTime() + (8 * 60 * 60 * 1000));
           }
 
+          const shiftCopy = JSON.parse(JSON.stringify(baseShiftData)); // deep copy & sanitize
           newShifts.push({
-              ...baseShiftData,
+              ...shiftCopy,
               id: `sch_${Date.now()}_${i}_${Math.random().toString(36).substr(2,5)}`,
               startTime: startTs.getTime(),
               endTime: endTs.getTime(),
@@ -388,11 +398,12 @@ export const AdminRota = () => {
 
       await createBatchScheduleShifts(newShifts);
       
+      const sanitizedBase = JSON.parse(JSON.stringify(baseShiftData));
       if (!editingShift) {
-          baseShiftData.id = `sch_${Date.now()}_0`;
-          await createScheduleShift(baseShiftData);
+          sanitizedBase.id = `sch_${Date.now()}_0`;
+          await createScheduleShift(sanitizedBase);
       } else {
-          await updateScheduleShift(editingShift.id, baseShiftData);
+          await updateScheduleShift(editingShift.id, sanitizedBase);
       }
 
       setIsRepeatModalOpen(false);
