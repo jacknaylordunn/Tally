@@ -326,7 +326,7 @@ export const AdminRota = () => {
       let userName: string | null = null;
       if (shiftUser !== 'open') {
           const u = staff.find(s => s.id === shiftUser);
-          if (u) userName = u.name;
+          if (u) userName = u.name || 'Staff'; // Ensure never undefined
       }
 
       return {
@@ -334,7 +334,7 @@ export const AdminRota = () => {
           locationId: shiftLocation || null,
           locationName,
           userId: shiftUser === 'open' ? null : shiftUser,
-          userName: userName, // Explicitly passed as null or string, never undefined
+          userName: userName, 
           role: shiftRole,
           startTime: startTs.getTime(),
           endTime: endTs.getTime(),
@@ -431,7 +431,15 @@ export const AdminRota = () => {
   const handleAssignBidder = async (shift: ScheduleShift, bidderId: string) => {
       const bidder = staff.find(s => s.id === bidderId);
       if (bidder) {
-          await assignShiftToUser(shift.id, bidder.id, bidder.name);
+          // Confirm assignment
+          if(!confirm(`Assign ${bidder.name} to this shift?`)) return;
+
+          const safeUserName = bidder.name || 'Staff';
+          await assignShiftToUser(shift.id, bidder.id, safeUserName);
+          
+          // Close modal to prevent state conflicts
+          setIsShiftModalOpen(false);
+          setEditingShift(null);
           loadData();
       }
   };
