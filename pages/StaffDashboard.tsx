@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getStaffActivity, getCompany, getSchedule } from '../services/api';
 import { Shift, Company, ScheduleShift } from '../types';
-import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle } from 'lucide-react';
+import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle, Play, StopCircle, MapPin, ChevronRight } from 'lucide-react';
 import jsQR from 'jsqr';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,7 +28,6 @@ export const StaffDashboard = () => {
     else setGreeting('Good Evening');
   }, []);
 
-  // Fetch Data
   const loadData = async () => {
       if (!user) return;
       const [shiftsData, companyData] = await Promise.all([
@@ -41,16 +40,11 @@ export const StaffDashboard = () => {
       const current = shiftsData.find(s => !s.endTime);
       setActiveShift(current || null);
 
-      // Check for next scheduled shift if Rota is enabled
       if (companyData?.settings.rotaEnabled && user.currentCompanyId) {
           try {
               const now = new Date();
               const endOfDay = new Date(); endOfDay.setHours(23, 59, 59);
-              
-              // Get schedules for today
               const todayShifts = await getSchedule(user.currentCompanyId, now.getTime(), endOfDay.getTime());
-              
-              // Filter for user and future time today
               const upcoming = todayShifts
                   .filter(s => s.userId === user.id && s.startTime > Date.now())
                   .sort((a,b) => a.startTime - b.startTime);
@@ -68,7 +62,7 @@ export const StaffDashboard = () => {
     loadData();
   }, [user]);
 
-  // Scanner Logic
+  // Scanner Logic (Same logic, new UI hook triggers)
   useEffect(() => {
     let stream: MediaStream | null = null;
     let animationFrame: number;
@@ -80,26 +74,20 @@ export const StaffDashboard = () => {
             stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                // Wait for video to be ready
                 videoRef.current.setAttribute("playsinline", "true"); 
                 videoRef.current.play();
                 requestAnimationFrame(tick);
             }
         } catch (err: any) {
             console.error("Camera error", err);
-            if (err.name === 'NotAllowedError') {
-                setCameraError("Camera access denied. Please enable permissions in your browser settings.");
-            } else if (err.name === 'NotFoundError') {
-                setCameraError("No camera found on this device.");
-            } else {
-                setCameraError("Unable to access camera. Please try again.");
-            }
+            if (err.name === 'NotAllowedError') setCameraError("Camera permission denied.");
+            else if (err.name === 'NotFoundError') setCameraError("No camera found.");
+            else setCameraError("Unable to access camera.");
         }
     };
 
     const tick = () => {
         if (!videoRef.current || !isScanning) return;
-        
         if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
              const canvas = document.createElement("canvas");
              canvas.width = videoRef.current.videoWidth;
@@ -110,38 +98,21 @@ export const StaffDashboard = () => {
                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                  const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
                  
-                 if (code) {
-                     // Found QR!
-                     console.log("Found QR", code.data);
-                     
-                     // Detect if it's a Tally URL (either full URL or partial)
-                     if (code.data.includes('action')) {
-                         try {
-                             let targetPath = '';
-                             // Check if full URL
-                             if (code.data.startsWith('http')) {
-                                 const url = new URL(code.data);
-                                 // Handle HashRouter URLs: example.com/#/action?t=...
-                                 if (url.hash && url.hash.includes('action')) {
-                                     targetPath = url.hash.substring(1); // removes #
-                                 } else {
-                                     // Standard URL
-                                     targetPath = url.pathname + url.search;
-                                 }
-                             } else {
-                                 // Might be relative path
-                                 targetPath = code.data;
-                             }
-                             
-                             setIsScanning(false);
-                             if (stream) stream.getTracks().forEach(t => t.stop());
-                             
-                             // Navigate to the action handler
-                             navigate(targetPath);
-                             return; 
-                         } catch (e) {
-                             console.error("Parse error", e);
+                 if (code && code.data.includes('action')) {
+                     try {
+                         let targetPath = '';
+                         if (code.data.startsWith('http')) {
+                             const url = new URL(code.data);
+                             targetPath = url.hash ? url.hash.substring(1) : (url.pathname + url.search);
+                         } else {
+                             targetPath = code.data;
                          }
+                         setIsScanning(false);
+                         if (stream) stream.getTracks().forEach(t => t.stop());
+                         navigate(targetPath);
+                         return; 
+                     } catch (e) {
+                         console.error("Parse error", e);
                      }
                  }
              }
@@ -149,10 +120,7 @@ export const StaffDashboard = () => {
         animationFrame = requestAnimationFrame(tick);
     };
 
-    if (isScanning) {
-        startScan();
-    }
-
+    if (isScanning) startScan();
     return () => {
         if (stream) stream.getTracks().forEach(t => t.stop());
         cancelAnimationFrame(animationFrame);
@@ -163,163 +131,129 @@ export const StaffDashboard = () => {
       const diff = Date.now() - startTime;
       const hours = Math.floor(diff / 3600000);
       const minutes = Math.floor((diff % 3600000) / 60000);
-      return `${hours}h ${minutes}m`;
+      return { h: hours, m: minutes };
   };
 
-  const handleRetryCamera = () => {
-      setCameraError('');
-      // Trigger effect re-run by toggling
-      setIsScanning(false);
-      setTimeout(() => setIsScanning(true), 100);
-  };
+  const duration = activeShift ? calculateDuration(activeShift.startTime) : {h:0, m:0};
 
   return (
-    <div className="max-w-xl mx-auto space-y-8 animate-fade-in relative">
-       <header className="flex items-center justify-between">
+    <div className="max-w-md mx-auto space-y-8 animate-fade-in relative pb-20">
+       
+       <header className="flex items-center justify-between glass-panel p-6 rounded-3xl">
           <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{greeting}, {user?.name.split(' ')[0]}</h1>
-              <p className="text-slate-500">Ready for your shift?</p>
+              <h1 className="text-xl font-bold text-white">{greeting}, {user?.name.split(' ')[0]}</h1>
+              <p className="text-slate-400 text-sm">Ready to work?</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold">
+          <div className="w-12 h-12 rounded-2xl bg-brand-500/20 border border-brand-500/50 flex items-center justify-center text-brand-300 font-bold text-lg shadow-glow">
               {user?.name.charAt(0)}
           </div>
        </header>
 
-       {/* Status Card */}
-       <div className="relative">
+       {/* HERO CLOCK UI */}
+       <div className="relative flex justify-center py-4">
            {activeShift ? (
-               <div className="bg-gradient-to-b from-slate-900 to-slate-800 text-white rounded-[2rem] p-8 shadow-2xl text-center relative overflow-hidden">
-                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-blue-500"></div>
-                   <div className="absolute -right-10 -top-10 w-40 h-40 bg-green-500/20 rounded-full blur-3xl"></div>
+               <div className="relative group cursor-pointer" onClick={() => setIsScanning(true)}>
+                   {/* Background Glow */}
+                   <div className="absolute inset-0 bg-green-500 rounded-full blur-[60px] opacity-20 animate-pulse-slow"></div>
                    
-                   <p className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-2">Current Status</p>
-                   <h2 className="text-4xl font-bold mb-1">Clocked In</h2>
-                   <p className="text-green-400 font-mono mb-8 animate-pulse">
-                       {calculateDuration(activeShift.startTime)}
-                   </p>
-
-                   <button 
-                        onClick={() => setIsScanning(true)}
-                        className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white py-4 rounded-xl font-semibold transition flex items-center justify-center space-x-2"
-                   >
-                        <Scan className="w-5 h-5" />
-                        <span>Scan to Clock Out</span>
-                   </button>
+                   {/* Main Circle */}
+                   <div className="w-64 h-64 rounded-full glass-panel border-2 border-green-500/50 flex flex-col items-center justify-center relative z-10 shadow-2xl transition-transform hover:scale-105">
+                       <div className="text-xs font-bold uppercase tracking-[0.2em] text-green-400 mb-2">Active Shift</div>
+                       <div className="text-6xl font-mono font-bold text-white tracking-tighter tabular-nums">
+                           {duration.h}:{duration.m.toString().padStart(2, '0')}
+                       </div>
+                       <div className="text-slate-400 mt-1 font-medium">hrs</div>
+                       
+                       <div className="absolute bottom-8 flex items-center gap-2 text-white/80 bg-white/10 px-4 py-2 rounded-full backdrop-blur-md">
+                           <StopCircle className="w-4 h-4 fill-current text-red-400" />
+                           <span className="text-sm font-bold">Tap to End</span>
+                       </div>
+                   </div>
                </div>
            ) : (
-               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] p-8 shadow-soft text-center">
-                   
-                   {/* Next Shift Indicator */}
-                   {nextScheduledShift && (
-                       <div className="mb-6 p-3 bg-brand-50 dark:bg-brand-900/20 rounded-xl flex items-center justify-center space-x-2 text-brand-700 dark:text-brand-300 animate-in slide-in-from-top-2">
-                           <Calendar className="w-4 h-4" />
-                           <span className="text-sm font-bold">Next Shift: {new Date(nextScheduledShift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} ({nextScheduledShift.role})</span>
-                       </div>
-                   )}
-
-                   <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
-                       <Clock className="w-8 h-8" />
+               <div className="relative group cursor-pointer" onClick={() => setIsScanning(true)}>
+                   <div className="absolute inset-0 bg-brand-600 rounded-full blur-[60px] opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                   <div className="w-64 h-64 rounded-full bg-gradient-to-br from-brand-600 to-indigo-700 flex flex-col items-center justify-center relative z-10 shadow-2xl shadow-brand-900/50 border-4 border-white/5 transition-all hover:scale-105 hover:rotate-3 active:scale-95">
+                       <Play className="w-16 h-16 text-white ml-2 mb-2 fill-current" />
+                       <span className="text-2xl font-bold text-white tracking-tight">Clock In</span>
+                       
+                       {nextScheduledShift && (
+                           <div className="absolute -bottom-6 bg-slate-800 border border-slate-700 text-slate-300 px-4 py-2 rounded-xl text-xs font-medium flex items-center gap-2 shadow-lg">
+                               <Calendar className="w-3 h-3 text-brand-400" />
+                               {new Date(nextScheduledShift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                           </div>
+                       )}
                    </div>
-                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Off Duty</h2>
-                   <p className="text-slate-500 mb-8">Scan a Tally QR code to start tracking.</p>
-
-                   <button 
-                        onClick={() => setIsScanning(true)}
-                        className="w-full bg-brand-600 hover:bg-brand-700 text-white py-4 rounded-xl font-semibold transition flex items-center justify-center space-x-2 shadow-lg shadow-brand-500/20"
-                   >
-                        <Scan className="w-5 h-5" />
-                        <span>Scan QR to Clock In</span>
-                   </button>
                </div>
            )}
        </div>
 
-       {/* Scanner Overlay */}
+       {/* SCANNER MODAL */}
        {isScanning && (
-            <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center animate-in fade-in duration-200">
+            <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-fade-in">
                 <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-20">
-                    <div className="text-white font-bold text-lg drop-shadow-md">Scan Code</div>
-                    <button onClick={() => { setIsScanning(false); setCameraError(''); }} className="p-2 bg-white/20 rounded-full backdrop-blur-md text-white hover:bg-white/30 transition">
+                    <div className="text-white font-bold text-lg drop-shadow-md">Scanner</div>
+                    <button onClick={() => { setIsScanning(false); setCameraError(''); }} className="p-3 bg-white/10 rounded-full backdrop-blur-md text-white hover:bg-white/20 transition">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
 
                 {cameraError ? (
-                    <div className="z-20 text-center px-6">
-                        <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <AlertCircle className="w-8 h-8" />
-                        </div>
-                        <p className="text-white text-lg font-bold mb-2">Camera Error</p>
-                        <p className="text-white/70 mb-6">{cameraError}</p>
-                        <button 
-                            onClick={handleRetryCamera}
-                            className="px-6 py-3 bg-white text-black rounded-xl font-bold flex items-center justify-center space-x-2 mx-auto hover:bg-slate-200 transition"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                            <span>Retry Camera</span>
-                        </button>
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                        <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+                        <h3 className="text-xl font-bold text-white mb-2">Camera Issue</h3>
+                        <p className="text-slate-400 mb-6">{cameraError}</p>
+                        <button onClick={() => {setIsScanning(false); setTimeout(() => setIsScanning(true), 100)}} className="px-6 py-3 bg-white text-black rounded-xl font-bold">Retry</button>
                     </div>
                 ) : (
                     <>
-                        <video ref={videoRef} className="w-full h-full object-cover absolute inset-0 z-10" />
-                        
-                        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-                             <div className="w-72 h-72 border-2 border-brand-500 rounded-3xl relative shadow-[0_0_0_100vh_rgba(0,0,0,0.6)]">
-                                 <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-500 rounded-tl-xl -mt-1 -ml-1"></div>
-                                 <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-500 rounded-tr-xl -mt-1 -mr-1"></div>
-                                 <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-500 rounded-bl-xl -mb-1 -ml-1"></div>
-                                 <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-500 rounded-br-xl -mb-1 -mr-1"></div>
-                                 
-                                 <div className="absolute inset-0 flex items-center justify-center">
-                                     <Scan className="w-12 h-12 text-brand-500/50 animate-pulse" />
-                                 </div>
+                        <video ref={videoRef} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                             <div className="w-72 h-72 border-2 border-brand-500 rounded-[2rem] relative shadow-[0_0_0_100vh_rgba(0,0,0,0.7)]">
+                                 <div className="absolute inset-0 border-4 border-white/20 rounded-[2rem] animate-pulse"></div>
+                                 <Scan className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 text-white/50" />
                              </div>
                         </div>
-                        
-                        <div className="absolute bottom-12 z-20 text-white/80 text-sm font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm">
-                            Point camera at Tally QR Code
+                        <div className="absolute bottom-12 w-full text-center z-20">
+                            <span className="bg-black/60 text-white px-6 py-3 rounded-full text-sm font-medium backdrop-blur-md border border-white/10">
+                                Scan Code to {activeShift ? 'Clock Out' : 'Clock In'}
+                            </span>
                         </div>
                     </>
                 )}
             </div>
        )}
 
-       {/* Recent Activity */}
-       <div>
+       {/* Activity List */}
+       <div className="glass-panel rounded-3xl p-6">
            <div className="flex items-center justify-between mb-4">
-               <h3 className="font-bold text-lg text-slate-900 dark:text-white">Recent Activity</h3>
+               <h3 className="font-bold text-white text-lg">Recent History</h3>
+               <button onClick={() => navigate('/staff/activity')} className="text-brand-400 text-sm font-semibold hover:text-brand-300">View All</button>
            </div>
            
            <div className="space-y-3">
-               {shifts.slice(0, 4).map(shift => (
-                   <div key={shift.id} className="group bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-brand-200 dark:hover:border-brand-800 transition-colors flex items-center justify-between">
-                       <div className="flex items-center space-x-4">
-                           <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-bold ${shift.endTime ? 'bg-slate-50 dark:bg-slate-800 text-slate-500' : 'bg-green-50 text-green-600'}`}>
+               {shifts.slice(0, 3).map(shift => (
+                   <div key={shift.id} className="group bg-white/5 p-4 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors flex items-center justify-between">
+                       <div className="flex items-center gap-4">
+                           <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-bold ${shift.endTime ? 'bg-slate-800 text-slate-400' : 'bg-green-500/20 text-green-400'}`}>
                                <span>{new Date(shift.startTime).getDate()}</span>
-                               <span className="uppercase text-[0.6rem] opacity-70">{new Date(shift.startTime).toLocaleString('default', { month: 'short' })}</span>
+                               <span className="uppercase opacity-60 text-[10px]">{new Date(shift.startTime).toLocaleString('default', { month: 'short' })}</span>
                            </div>
                            <div>
-                               <p className="font-semibold text-slate-900 dark:text-white text-sm">
-                                   {shift.endTime ? `${((shift.endTime - shift.startTime) / 3600000).toFixed(1)} hrs` : 'In Progress'}
+                               <p className="font-semibold text-white text-sm">
+                                   {shift.endTime ? `${((shift.endTime - shift.startTime) / 3600000).toFixed(1)} hrs` : 'Active Now'}
                                 </p>
-                               <p className="text-xs text-slate-400 capitalize">{shift.startMethod.replace('_', ' ')}</p>
+                               <div className="flex items-center gap-1 text-xs text-slate-500">
+                                   <MapPin className="w-3 h-3" />
+                                   <span>{shift.companyId ? 'Office' : 'Remote'}</span>
+                               </div>
                            </div>
                        </div>
-                       <div className="text-right">
-                           <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                               {new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                           </p>
-                           <p className="text-xs text-slate-400">
-                               {shift.endTime ? new Date(shift.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
-                           </p>
-                       </div>
+                       <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-white transition" />
                    </div>
                ))}
                {shifts.length === 0 && (
-                   <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
-                       <p className="text-slate-500 text-sm">No activity recorded yet.</p>
-                       <p className="text-slate-400 text-xs mt-1">Clock in to start your streak!</p>
-                   </div>
+                   <div className="text-center py-8 text-slate-500 text-sm">No activity recorded yet.</div>
                )}
            </div>
        </div>

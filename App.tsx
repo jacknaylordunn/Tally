@@ -20,6 +20,7 @@ import { StaffActivity } from './pages/StaffActivity';
 import { StaffProfile } from './pages/StaffProfile';
 import { StaffRota } from './pages/StaffRota';
 import { KioskMode } from './pages/KioskMode';
+import { Help } from './pages/Help';
 import { UserRole } from './types';
 
 // Wrapper to handle global auth loading state
@@ -40,7 +41,7 @@ const AuthWrapper = () => {
     return <Outlet />;
 };
 
-const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: UserRole }) => {
+const ProtectedRoute = ({ children, role }: { children?: React.ReactNode, role?: UserRole }) => {
   const { user, isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
@@ -85,6 +86,9 @@ const router = createHashRouter(createRoutesFromElements(
         <Route path="/staff/rota" element={<ProtectedRoute role={UserRole.STAFF}><StaffRota /></ProtectedRoute>} />
         <Route path="/staff/activity" element={<ProtectedRoute role={UserRole.STAFF}><StaffActivity /></ProtectedRoute>} />
         <Route path="/staff/profile" element={<ProtectedRoute role={UserRole.STAFF}><StaffProfile /></ProtectedRoute>} />
+
+        {/* Shared Routes */}
+        <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
     </Route>

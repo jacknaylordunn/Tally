@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import { getShifts, getLocations, getCompany, getSchedule } from '../services/api';
+import { getShifts, getLocations, getCompany, getSchedule, updateShift, deleteShift } from '../services/api';
 import { Shift, Location, Company } from '../types';
-import { Users, Clock, AlertCircle, Search, Filter, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2 } from 'lucide-react';
+import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import QRCode from 'react-qr-code';
@@ -18,38 +18,39 @@ export const AdminDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'active'>('all');
 
-  // Modal States
   const [isLocationSelectorOpen, setIsLocationSelectorOpen] = useState(false);
   const [selectedLocationForPoster, setSelectedLocationForPoster] = useState<Location | null>(null);
+
+  // Action Menu State
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  
+  // Edit Modal State
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
         if (!user || !user.currentCompanyId) return;
-        
-        // Parallel data fetch
         const [shiftsData, locationsData, companyData] = await Promise.all([
             getShifts(user.currentCompanyId),
             getLocations(user.currentCompanyId),
             getCompany(user.currentCompanyId)
         ]);
-        
         setShifts(shiftsData);
         setLocations(locationsData);
         setCompany(companyData);
 
-        // If Rota is enabled, fetch today's count
         if (companyData.settings.rotaEnabled) {
             try {
                 const now = new Date();
                 const startOfDay = new Date(now.setHours(0,0,0,0)).getTime();
                 const endOfDay = new Date(now.setHours(23,59,59,999)).getTime();
                 const todayRota = await getSchedule(user.currentCompanyId, startOfDay, endOfDay);
-                setTodaysScheduleCount(todayRota.filter(s => s.userId).length); // Only count assigned shifts
-            } catch (e) {
-                console.error("Error fetching rota stats", e);
-            }
+                setTodaysScheduleCount(todayRota.filter(s => s.userId).length);
+            } catch (e) { console.error(e); }
         }
-
         setLoading(false);
     };
     loadData();
@@ -63,305 +64,381 @@ export const AdminDashboard = () => {
 
   const activeShiftsCount = shifts.filter(s => !s.endTime).length;
   
-  // Calculate Total Hours & Minutes
   const totalMs = shifts.reduce((acc, s) => acc + (s.endTime ? s.endTime - s.startTime : Date.now() - s.startTime), 0);
   const hours = Math.floor(totalMs / 3600000);
   const minutes = Math.floor((totalMs % 3600000) / 60000);
   const totalDurationDisplay = `${hours}h ${minutes}m`;
 
-  // Enhanced Alert Logic:
-  // 1. Forgotten Clock Out (> 14h)
-  // 2. Short Shift (< 5m) if finished
   const alertCount = shifts.filter(s => {
       const duration = (s.endTime || Date.now()) - s.startTime;
-      const isTooLong = duration > (14 * 60 * 60 * 1000);
-      const isTooShort = s.endTime && duration < (5 * 60 * 1000); // 5 mins
-      return isTooLong || isTooShort;
+      return duration > (14 * 3600000) || (s.endTime && duration < (5 * 60000));
   }).length;
 
-  const getStaticQrUrl = (locId: string) => {
-    return `${window.location.protocol}//${window.location.host}/#/action?type=static&lid=${locId}`;
+  const getStaticQrUrl = (locId: string) => `${window.location.protocol}//${window.location.host}/#/action?type=static&lid=${locId}`;
+
+  // --- Handlers ---
+
+  const toLocalISO = (ts: number) => {
+      const d = new Date(ts);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 16);
   };
 
-  const StatCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-soft hover:shadow-lg transition-all duration-300">
-          <div className="flex items-start justify-between mb-4">
-              <div>
-                  <p className="text-sm font-medium text-slate-500 mb-1">{label}</p>
-                  <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{value}</h3>
+  const handleEditClick = (shift: Shift) => {
+      setEditingShift(shift);
+      setEditStartTime(toLocalISO(shift.startTime));
+      setEditEndTime(shift.endTime ? toLocalISO(shift.endTime) : '');
+      setOpenActionMenuId(null);
+  };
+
+  const handleSaveEdit = async () => {
+      if (!editingShift) return;
+      setIsSaving(true);
+      try {
+          const start = new Date(editStartTime).getTime();
+          const end = editEndTime ? new Date(editEndTime).getTime() : null;
+          
+          await updateShift(editingShift.id, { startTime: start, endTime: end });
+          
+          setShifts(prev => prev.map(s => s.id === editingShift.id ? { ...s, startTime: start, endTime: end } : s));
+          setEditingShift(null);
+      } catch (e) {
+          console.error(e);
+          alert('Failed to update shift.');
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleForceClockOut = async (shift: Shift) => {
+      if(!confirm(`Force clock out for ${shift.userName}?`)) return;
+      try {
+          const now = Date.now();
+          await updateShift(shift.id, { endTime: now });
+          setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, endTime: now } : s));
+      } catch (e) {
+          console.error(e);
+          alert('Failed to clock out.');
+      }
+      setOpenActionMenuId(null);
+  };
+
+  const handleDeleteShift = async (shiftId: string) => {
+      if(!confirm('Are you sure you want to delete this record? This cannot be undone.')) return;
+      try {
+          await deleteShift(shiftId);
+          setShifts(prev => prev.filter(s => s.id !== shiftId));
+      } catch (e) {
+          console.error(e);
+          alert('Failed to delete.');
+      }
+      setOpenActionMenuId(null);
+  };
+
+  const StatWidget = ({ label, value, subtext, icon: Icon, color }: any) => (
+      <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group hover:bg-white/5 transition duration-300">
+          <div className={`absolute -right-4 -top-4 w-24 h-24 bg-${color}-500/10 rounded-full blur-2xl group-hover:bg-${color}-500/20 transition`}></div>
+          <div className="relative z-10">
+              <div className="flex justify-between items-start mb-4">
+                  <div className={`p-3 rounded-2xl bg-${color}-500/20 text-${color}-400`}>
+                      <Icon className="w-6 h-6" />
+                  </div>
+                  {subtext && <span className="text-xs font-medium text-slate-500 bg-white/5 px-2 py-1 rounded-lg">{subtext}</span>}
               </div>
-              <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10`}>
-                  <Icon className={`w-5 h-5 ${colorClass.replace('bg-', 'text-')}`} />
-              </div>
+              <h3 className="text-4xl font-bold text-white mb-1 tracking-tight">{value}</h3>
+              <p className="text-slate-400 font-medium text-sm">{label}</p>
           </div>
-          {subtext && <p className="text-xs text-slate-400">{subtext}</p>}
       </div>
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12" onClick={() => setOpenActionMenuId(null)}>
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
-                <p className="text-slate-500 mt-1">Overview for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                <h1 className="text-3xl font-bold text-white tracking-tight">Command Center</h1>
+                <p className="text-slate-400 mt-1">Overview for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <div className="flex gap-3">
+                <Link to="/admin/kiosk" className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-brand-900/50 flex items-center gap-2 transition transform active:scale-95">
+                    <Zap className="w-4 h-4" />
+                    <span>Launch Kiosk</span>
+                </Link>
+                <button onClick={() => setIsLocationSelectorOpen(true)} className="glass-panel hover:bg-white/10 text-white px-5 py-3 rounded-xl font-bold transition flex items-center gap-2">
+                    <Printer className="w-4 h-4" />
+                    <span className="hidden sm:inline">Print QR</span>
+                </button>
             </div>
         </header>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Link to="/admin/kiosk" className="group relative overflow-hidden bg-gradient-to-br from-brand-600 to-brand-700 rounded-3xl p-6 shadow-xl shadow-brand-500/20 text-white flex items-center justify-between hover:scale-[1.01] transition-all duration-300">
-                <div className="relative z-10">
-                    <div className="flex items-center space-x-2 mb-2 text-brand-100 font-medium text-sm uppercase tracking-wider">
-                        <Zap className="w-4 h-4" />
-                        <span>Kiosk Mode</span>
-                    </div>
-                    <h3 className="text-2xl font-bold mb-1">Launch Live Kiosk</h3>
-                    <p className="text-brand-100 text-sm">Open the secure QR scanner for this device.</p>
-                </div>
-                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm group-hover:bg-white/30 transition">
-                    <QrCode className="w-6 h-6" />
-                </div>
-                {/* Decoration */}
-                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-            </Link>
-
-            <button 
-                onClick={() => setIsLocationSelectorOpen(true)}
-                className="group relative overflow-hidden bg-slate-900 dark:bg-slate-800 rounded-3xl p-6 shadow-lg text-white flex items-center justify-between hover:bg-slate-800 dark:hover:bg-slate-700 transition-all duration-300 text-left"
-            >
-                <div className="relative z-10">
-                     <div className="flex items-center space-x-2 mb-2 text-slate-400 font-medium text-sm uppercase tracking-wider">
-                        <Printer className="w-4 h-4" />
-                        <span>Static QR</span>
-                    </div>
-                    <h3 className="text-2xl font-bold mb-1">Print QR Poster</h3>
-                    <p className="text-slate-400 text-sm">Generate a physical scan point for a location.</p>
-                </div>
-                <div className="w-12 h-12 bg-slate-700 dark:bg-slate-600 rounded-full flex items-center justify-center group-hover:bg-slate-600 dark:group-hover:bg-slate-500 transition">
-                    <ArrowUpRight className="w-6 h-6" />
-                </div>
-            </button>
-        </div>
 
         {/* Stats Row */}
         <div className={`grid grid-cols-1 ${company?.settings.rotaEnabled ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-6`}>
             {company?.settings.rotaEnabled && (
-                <StatCard 
+                <StatWidget 
                     label="Today's Schedule" 
                     value={`${activeShiftsCount}/${todaysScheduleCount}`} 
-                    subtext="Staff clocked in vs scheduled"
+                    subtext="Attendance"
                     icon={Calendar}
-                    colorClass="bg-purple-500 text-purple-600"
+                    color="purple"
                 />
             )}
-            <StatCard 
+            <StatWidget 
                 label="Active Staff" 
                 value={activeShiftsCount} 
-                subtext="Currently clocked in"
+                subtext="Live"
                 icon={Users}
-                colorClass="bg-emerald-500 text-emerald-600"
+                color="emerald"
             />
-            <StatCard 
+            <StatWidget 
                 label="Total Time" 
                 value={totalDurationDisplay} 
-                subtext="Tracked this week"
                 icon={Clock}
-                colorClass="bg-brand-500 text-brand-600"
+                color="brand"
             />
-            <StatCard 
+            <StatWidget 
                 label="Alerts" 
                 value={alertCount} 
-                subtext="Short/Long shifts found"
+                subtext="Requires Review"
                 icon={AlertCircle}
-                colorClass="bg-rose-500 text-rose-600"
+                color="rose"
             />
         </div>
 
-        {/* List Section */}
-        <div className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center space-x-2">
+        {/* Main Content Block */}
+        <div className="glass-panel rounded-3xl overflow-hidden border border-white/5">
+            {/* Filters */}
+            <div className="p-6 border-b border-white/5 flex flex-col md:flex-row gap-4 justify-between items-center bg-white/5">
+                <div className="flex bg-slate-900/50 p-1 rounded-xl">
                     <button 
                         onClick={() => setFilter('all')}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition ${filter === 'all' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition ${filter === 'all' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                     >
                         All Activity
                     </button>
                     <button 
                         onClick={() => setFilter('active')}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition ${filter === 'active' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition ${filter === 'active' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                     >
                         Active Now
                     </button>
                 </div>
 
-                <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <div className="relative w-full md:w-72">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 w-4 h-4" />
                     <input 
                         type="text" 
                         placeholder="Search staff..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-transparent border-b border-slate-200 dark:border-slate-700 focus:border-slate-900 dark:focus:border-white outline-none text-sm transition-colors"
+                        className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-white/5 rounded-xl text-white placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition-all"
                     />
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-soft overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50/50 dark:bg-slate-800/50 text-xs uppercase font-semibold text-slate-500">
-                            <tr>
-                                <th className="px-6 py-4 font-medium">Employee</th>
-                                <th className="px-6 py-4 font-medium">Status</th>
-                                <th className="px-6 py-4 font-medium">Clock In</th>
-                                <th className="px-6 py-4 font-medium">Duration</th>
-                                <th className="px-6 py-4 font-medium">Method</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-5 dark:divide-slate-800">
-                            {loading ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-slate-400">Loading data...</td></tr>
-                            ) : filteredShifts.length === 0 ? (
-                                <tr><td colSpan={5} className="p-12 text-center text-slate-400">No activity found matching your criteria.</td></tr>
-                            ) : filteredShifts.map((shift) => {
-                                const isActive = !shift.endTime;
-                                const durationMs = (isActive ? Date.now() : shift.endTime!) - shift.startTime;
-                                const h = Math.floor(durationMs / 3600000);
-                                const m = Math.floor((durationMs % 3600000) / 60000);
-                                
-                                return (
-                                    <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition duration-150">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
-                                                    {shift.userName.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium text-slate-900 dark:text-white flex items-center space-x-1">
-                                                        <span>{shift.userName}</span>
-                                                        {shift.scheduleShiftId && (
-                                                            <span title="Planned Shift" className="flex items-center">
-                                                                <CheckCircle2 className="w-3 h-3 text-purple-500" />
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
+            {/* Table */}
+            <div className="overflow-x-auto min-h-[400px]">
+                <table className="w-full text-left text-sm text-slate-400">
+                    <thead className="bg-slate-900/30 text-xs uppercase font-bold text-slate-500 tracking-wider">
+                        <tr>
+                            <th className="px-6 py-4">Employee</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4">Timing</th>
+                            <th className="px-6 py-4">Method</th>
+                            <th className="px-6 py-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {loading ? (
+                            <tr><td colSpan={5} className="p-12 text-center text-slate-500">Loading live data...</td></tr>
+                        ) : filteredShifts.length === 0 ? (
+                            <tr><td colSpan={5} className="p-12 text-center text-slate-500">No activity found.</td></tr>
+                        ) : filteredShifts.map((shift) => {
+                            const isActive = !shift.endTime;
+                            const durationMs = (isActive ? Date.now() : shift.endTime!) - shift.startTime;
+                            const h = Math.floor(durationMs / 3600000);
+                            const m = Math.floor((durationMs % 3600000) / 60000);
+                            
+                            return (
+                                <tr key={shift.id} className="hover:bg-white/5 transition duration-150 group">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                                {shift.userName.charAt(0)}
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {isActive ? (
-                                                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium border border-emerald-100 dark:border-emerald-800">
-                                                    <span className="relative flex h-2 w-2">
-                                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                                    </span>
-                                                    <span>Active</span>
+                                            <div>
+                                                <div className="font-bold text-white flex items-center gap-2">
+                                                    {shift.userName}
+                                                    {shift.scheduleShiftId && <CheckCircle2 className="w-3 h-3 text-purple-400" />}
                                                 </div>
-                                            ) : (
-                                                <span className="text-slate-400 text-xs font-medium">Completed</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono text-xs">
-                                            {new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                                            {h}h {m}m
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="capitalize text-slate-500 text-xs">{shift.startMethod.replace('_', ' ')}</span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                                <div className="text-xs text-slate-500">{new Date(shift.startTime).toLocaleDateString()}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {isActive ? (
+                                            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                <span>Active</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-500 font-medium text-xs">Completed</span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-mono text-white">{new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                        <div className="text-xs text-slate-500 mt-0.5">{h}h {m}m duration</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="text-xs font-mono text-slate-400 bg-white/5 px-2 py-1 rounded border border-white/5">
+                                            {shift.startMethod === 'dynamic_qr' ? 'KIOSK QR' : shift.startMethod === 'static_gps' ? 'GPS SCAN' : 'MANUAL'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right relative">
+                                        <button 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setOpenActionMenuId(openActionMenuId === shift.id ? null : shift.id); 
+                                            }}
+                                            className={`p-2 rounded-lg transition ${openActionMenuId === shift.id ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            <MoreHorizontal className="w-5 h-5" />
+                                        </button>
+
+                                        {openActionMenuId === shift.id && (
+                                            <div className="absolute right-0 top-12 w-48 bg-slate-900 rounded-xl shadow-xl border border-white/10 z-50 overflow-hidden animate-fade-in">
+                                                <button 
+                                                    onClick={() => handleEditClick(shift)} 
+                                                    className="w-full text-left px-4 py-3 hover:bg-white/5 text-slate-300 text-sm font-medium flex items-center gap-3 transition"
+                                                >
+                                                    <Edit2 className="w-4 h-4 text-blue-400" /> Edit Time
+                                                </button>
+                                                {!shift.endTime && (
+                                                    <button 
+                                                        onClick={() => handleForceClockOut(shift)} 
+                                                        className="w-full text-left px-4 py-3 hover:bg-white/5 text-slate-300 text-sm font-medium flex items-center gap-3 transition border-t border-white/5"
+                                                    >
+                                                        <LogOut className="w-4 h-4 text-amber-400" /> Clock Out
+                                                    </button>
+                                                )}
+                                                <button 
+                                                    onClick={() => handleDeleteShift(shift.id)} 
+                                                    className="w-full text-left px-4 py-3 hover:bg-red-900/20 text-red-400 text-sm font-medium flex items-center gap-3 transition border-t border-white/5"
+                                                >
+                                                    <Trash2 className="w-4 h-4" /> Delete
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        {/* Modal: Select Location for Poster */}
-        {isLocationSelectorOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select Location</h2>
-                        <button onClick={() => setIsLocationSelectorOpen(false)} className="text-slate-400 hover:text-slate-600">
-                            <X className="w-6 h-6" />
-                        </button>
+        {/* --- MODALS --- */}
+        
+        {/* Poster Modal */}
+        {selectedLocationForPoster && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-3xl p-8 max-w-lg w-full text-center relative">
+                    <button onClick={() => setSelectedLocationForPoster(null)} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition text-slate-900">
+                        <X className="w-5 h-5" />
+                    </button>
+                    <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{selectedLocationForPoster.name}</h2>
+                    <p className="text-slate-500 mb-8">Scan to Clock In/Out</p>
+                    <div className="bg-white border-4 border-slate-900 p-6 rounded-3xl inline-block mb-8">
+                         <QRCode value={getStaticQrUrl(selectedLocationForPoster.id)} size={250} />
                     </div>
-                    
-                    {locations.length === 0 ? (
-                        <div className="text-center py-8">
-                             <MapPin className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-                             <p className="text-slate-500 mb-4">No locations found.</p>
-                             <Link to="/admin/locations" className="text-brand-600 font-bold hover:underline">Add a location first</Link>
-                        </div>
-                    ) : (
-                        <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                            {locations.map(loc => (
-                                <button 
-                                    key={loc.id}
-                                    onClick={() => {
-                                        setIsLocationSelectorOpen(false);
-                                        setSelectedLocationForPoster(loc);
-                                    }}
-                                    className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-slate-700 transition group text-left"
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 group-hover:text-brand-600 group-hover:bg-brand-100 dark:group-hover:text-white">
-                                            <MapPin className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900 dark:text-white">{loc.name}</h4>
-                                            <p className="text-xs text-slate-500">Radius: {loc.radius}m</p>
-                                        </div>
-                                    </div>
-                                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-500" />
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                    <button className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition" onClick={() => window.print()}>
+                        Print Poster
+                    </button>
+                </div>
+            </div>
+        )}
+        
+        {/* Location Selector */}
+        {isLocationSelectorOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                <div className="glass-panel border border-white/10 rounded-3xl p-6 max-w-md w-full">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-white">Select Location</h2>
+                        <button onClick={() => setIsLocationSelectorOpen(false)} className="text-slate-400 hover:text-white"><X className="w-6 h-6" /></button>
+                    </div>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {locations.map(loc => (
+                            <button key={loc.id} onClick={() => { setIsLocationSelectorOpen(false); setSelectedLocationForPoster(loc); }}
+                                className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-brand-600 transition group text-left border border-white/5">
+                                <div className="flex items-center gap-3">
+                                    <MapPin className="w-5 h-5 text-slate-400 group-hover:text-white" />
+                                    <span className="font-bold text-white">{loc.name}</span>
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white" />
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         )}
 
-        {/* Modal: Poster Display */}
-        {selectedLocationForPoster && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-none md:rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl print:shadow-none print:w-screen print:h-screen print:max-w-none print:rounded-none print:flex print:flex-col print:items-center print:justify-center">
-                    <button 
-                        onClick={() => setSelectedLocationForPoster(null)}
-                        className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition print:hidden"
-                    >
-                        <X className="w-5 h-5 text-slate-500" />
-                    </button>
+        {/* Edit Modal */}
+        {editingShift && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
+                     <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-white">Edit Shift</h2>
+                        <button onClick={() => setEditingShift(null)} className="text-slate-400 hover:text-white">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
 
-                    <div className="mb-8 space-y-2">
-                        <div className="flex items-center justify-center space-x-2 mb-4 text-slate-400">
-                             <Building className="w-5 h-5" />
-                             <span className="font-semibold uppercase tracking-widest text-sm">{APP_NAME}</span>
+                    <div className="space-y-4 mb-8">
+                        <div>
+                            <p className="text-sm font-medium text-slate-500">Staff Member</p>
+                            <p className="font-bold text-lg text-white">{editingShift.userName}</p>
                         </div>
-                        <h2 className="text-4xl font-extrabold text-slate-900">{selectedLocationForPoster.name}</h2>
-                        <p className="text-slate-500 text-lg">Scan to Clock In or Out</p>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Start Time</label>
+                                <input 
+                                    type="datetime-local"
+                                    value={editStartTime}
+                                    onChange={(e) => setEditStartTime(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">End Time</label>
+                                <input 
+                                    type="datetime-local"
+                                    value={editEndTime}
+                                    onChange={(e) => setEditEndTime(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white text-sm"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-2 text-xs text-brand-400 bg-brand-900/20 p-3 rounded-lg border border-brand-900/30">
+                            <Clock className="w-4 h-4" />
+                            <span>This overrides the logged data.</span>
+                        </div>
                     </div>
 
-                    <div className="bg-white border-4 border-slate-900 p-8 rounded-3xl inline-block mb-8 shadow-xl print:shadow-none">
-                         <QRCode value={getStaticQrUrl(selectedLocationForPoster.id)} size={300} />
-                    </div>
-                    
-                    <div className="text-slate-400 text-sm font-medium mb-8">
-                        <p>1. Open your camera</p>
-                        <p>2. Scan the code</p>
-                        <p>3. Confirm your location</p>
-                    </div>
-
-                    <div className="flex gap-4 print:hidden">
-                        <button 
-                            className="flex-1 bg-brand-500 text-white py-3 rounded-xl font-bold hover:bg-brand-600 transition shadow-lg shadow-brand-500/30"
-                            onClick={() => window.print()}
+                    <div className="flex gap-3">
+                         <button 
+                            onClick={() => setEditingShift(null)}
+                            className="flex-1 py-3 text-slate-400 font-bold hover:bg-white/5 rounded-xl transition"
                         >
-                            Print Poster
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleSaveEdit}
+                            disabled={isSaving}
+                            className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2"
+                        >
+                            <Save className="w-4 h-4" />
+                            <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
                         </button>
                     </div>
                 </div>

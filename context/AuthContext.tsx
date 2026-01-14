@@ -3,12 +3,12 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from '../types';
 import { getUserProfile } from '../services/api';
 import { auth } from '../lib/firebase';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password?: string) => Promise<void>; 
+  login: (email: string, password?: string, remember?: boolean) => Promise<void>; 
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
   isAuthenticated: boolean;
@@ -43,8 +43,12 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password?: string) => {
+  const login = async (email: string, password?: string, remember: boolean = true) => {
     if (!password) throw new Error("Password required");
+    
+    // Set Persistence based on 'Remember Me' choice
+    await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    
     await signInWithEmailAndPassword(auth, email, password);
   };
 

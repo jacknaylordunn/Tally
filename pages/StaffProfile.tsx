@@ -1,15 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
-import { User, Mail, Building, LogOut, Shield, Moon, Sun, Edit2, Key, Trash2, ArrowRightLeft, X, Save, AlertTriangle } from 'lucide-react';
+import { User, Mail, Building, LogOut, Shield, Edit2, Key, Trash2, X, AlertTriangle } from 'lucide-react';
 import { updateUserProfile, deleteUser, switchUserCompany, getCompany } from '../services/api';
 import { auth } from '../lib/firebase';
 import { sendPasswordResetEmail, deleteUser as deleteAuthUser } from 'firebase/auth';
 
 export const StaffProfile = () => {
   const { user, logout, refreshSession } = useAuth();
-  const { theme, toggleTheme } = useTheme();
 
   // Modals State
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -110,98 +108,85 @@ export const StaffProfile = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">My Profile</h1>
+    <div className="max-w-xl mx-auto space-y-6 pb-20">
+      <h1 className="text-2xl font-bold text-white">My Profile</h1>
         
       {msg && (
-          <div className={`p-4 rounded-xl text-sm font-medium ${msg.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          <div className={`p-4 rounded-xl text-sm font-medium border ${msg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
               {msg.text}
           </div>
       )}
 
       {/* Main Profile Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-        <div className="flex flex-col items-center text-center pb-6 border-b border-slate-100 dark:border-slate-700 relative">
+      <div className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10 relative">
+        <div className="flex flex-col items-center text-center pb-6 border-b border-white/5 relative">
             <button 
                 onClick={() => setIsEditOpen(true)}
-                className="absolute top-0 right-0 p-2 text-slate-400 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition"
+                className="absolute top-0 right-0 p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition"
             >
                 <Edit2 className="w-4 h-4" />
             </button>
-            <div className="w-24 h-24 bg-brand-100 dark:bg-slate-700 rounded-full flex items-center justify-center text-3xl font-bold text-brand-600 dark:text-brand-400 mb-4">
+            <div className="w-24 h-24 bg-gradient-to-tr from-brand-600 to-indigo-600 rounded-full flex items-center justify-center text-3xl font-bold text-white mb-4 shadow-lg border-4 border-white/5">
                 {user?.name.charAt(0)}
             </div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{user?.name}</h2>
-            <p className="text-slate-500 capitalize">{user?.role} Member</p>
+            <h2 className="text-xl font-bold text-white">{user?.name}</h2>
+            <p className="text-slate-400 capitalize">{user?.role} Member</p>
         </div>
 
         <div className="pt-6 space-y-4">
-            <div className="flex items-center space-x-4 p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition">
-                <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded-lg text-slate-500">
+            <div className="flex items-center space-x-4 p-3 hover:bg-white/5 rounded-lg transition">
+                <div className="bg-slate-800 p-2 rounded-lg text-slate-400 border border-white/5">
                     <Mail className="w-5 h-5" />
                 </div>
                 <div>
-                    <p className="text-xs text-slate-400 font-medium uppercase">Email</p>
-                    <p className="text-slate-700 dark:text-slate-200 font-medium">{user?.email}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Email</p>
+                    <p className="text-slate-200 font-medium">{user?.email}</p>
                 </div>
             </div>
 
-            <div className="flex items-center space-x-4 p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition">
-                <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded-lg text-slate-500">
+            <div className="flex items-center space-x-4 p-3 hover:bg-white/5 rounded-lg transition">
+                <div className="bg-slate-800 p-2 rounded-lg text-slate-400 border border-white/5">
                     <Building className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
-                    <p className="text-xs text-slate-400 font-medium uppercase">Company</p>
-                    <p className="text-slate-700 dark:text-slate-200 font-medium">{companyName}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Company</p>
+                    <p className="text-slate-200 font-medium">{companyName}</p>
                 </div>
                 <button 
                     onClick={() => setIsJoinOpen(true)}
-                    className="text-xs font-bold text-brand-600 hover:bg-brand-50 px-3 py-1.5 rounded-lg transition border border-brand-200"
+                    className="text-xs font-bold text-brand-400 hover:text-white hover:bg-brand-600 px-3 py-1.5 rounded-lg transition border border-brand-500/30"
                 >
                     Switch Team
                 </button>
             </div>
 
-             <div className="flex items-center space-x-4 p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition">
-                <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded-lg text-slate-500">
+             <div className="flex items-center space-x-4 p-3 hover:bg-white/5 rounded-lg transition">
+                <div className="bg-slate-800 p-2 rounded-lg text-slate-400 border border-white/5">
                     <Shield className="w-5 h-5" />
                 </div>
                 <div>
-                    <p className="text-xs text-slate-400 font-medium uppercase">Access Level</p>
-                    <p className="text-slate-700 dark:text-slate-200 font-medium capitalize">{user?.role}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Access Level</p>
+                    <p className="text-slate-200 font-medium capitalize">{user?.role}</p>
                 </div>
             </div>
         </div>
       </div>
 
       {/* Security & Settings */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700 space-y-2">
+      <div className="glass-panel rounded-2xl p-4 shadow-sm border border-white/10 space-y-2">
            <button 
                 onClick={handleResetPassword}
-                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-white/5 transition group"
             >
-                <Key className="w-5 h-5 text-slate-500" />
-                <span className="font-medium text-slate-700 dark:text-slate-200">Reset Password</span>
-           </button>
-
-           <button 
-                onClick={toggleTheme}
-                className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-            >
-              <div className="flex items-center space-x-3">
-                  {theme === 'dark' ? <Moon className="w-5 h-5 text-slate-500" /> : <Sun className="w-5 h-5 text-slate-500" />}
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
-              </div>
-              <div className={`relative inline-block w-12 h-6 rounded-full transition-colors duration-200 ease-in-out ${theme === 'dark' ? 'bg-brand-600' : 'bg-slate-200'}`}>
-                  <span className={`absolute left-1 top-1 block w-4 h-4 rounded-full bg-white transition-transform duration-200 ease-in-out ${theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`}></span>
-              </div>
+                <Key className="w-5 h-5 text-slate-500 group-hover:text-white transition" />
+                <span className="font-medium text-slate-300 group-hover:text-white">Reset Password</span>
            </button>
            
-           <div className="h-px bg-slate-100 dark:bg-slate-700 my-2"></div>
+           <div className="h-px bg-white/5 my-2"></div>
 
            <button 
                 onClick={logout}
-                className="w-full flex items-center space-x-3 p-3 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition font-medium"
+                className="w-full flex items-center space-x-3 p-3 rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition font-medium"
            >
                 <LogOut className="w-5 h-5" />
                 <span>Sign Out</span>
@@ -209,7 +194,7 @@ export const StaffProfile = () => {
 
            <button 
                 onClick={handleDeleteAccount}
-                className="w-full flex items-center space-x-3 p-3 rounded-lg text-danger hover:bg-red-50 dark:hover:bg-red-900/10 transition font-medium"
+                className="w-full flex items-center space-x-3 p-3 rounded-lg text-red-400 hover:bg-red-500/10 transition font-medium"
            >
                 <Trash2 className="w-5 h-5" />
                 <span>Delete Account</span>
@@ -218,26 +203,26 @@ export const StaffProfile = () => {
 
       {/* Edit Modal */}
       {isEditOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-              <div className="bg-white dark:bg-slate-800 w-full max-w-sm p-6 rounded-2xl shadow-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+              <div className="glass-panel w-full max-w-sm p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
                   <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-lg text-slate-900 dark:text-white">Edit Profile</h3>
-                      <button onClick={() => setIsEditOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
+                      <h3 className="font-bold text-lg text-white">Edit Profile</h3>
+                      <button onClick={() => setIsEditOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-white" /></button>
                   </div>
                   <div className="space-y-4">
                       <div>
-                          <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Full Name</label>
+                          <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Full Name</label>
                           <input 
                             type="text" 
                             value={newName} 
                             onChange={(e) => setNewName(e.target.value)}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900"
+                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none"
                           />
                       </div>
                       <button 
                         onClick={handleEditProfile}
                         disabled={loading}
-                        className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700"
+                        className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition"
                       >
                           {loading ? 'Saving...' : 'Save Changes'}
                       </button>
@@ -248,31 +233,31 @@ export const StaffProfile = () => {
 
       {/* Join Company Modal */}
       {isJoinOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-              <div className="bg-white dark:bg-slate-800 w-full max-w-sm p-6 rounded-2xl shadow-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+              <div className="glass-panel w-full max-w-sm p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
                   <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-lg text-slate-900 dark:text-white">Join New Team</h3>
-                      <button onClick={() => setIsJoinOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
+                      <h3 className="font-bold text-lg text-white">Join New Team</h3>
+                      <button onClick={() => setIsJoinOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-white" /></button>
                   </div>
                   <div className="space-y-4">
-                      <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg flex items-start space-x-2 text-xs text-amber-700 dark:text-amber-400">
+                      <div className="bg-amber-900/20 p-3 rounded-lg flex items-start space-x-2 text-xs text-amber-400 border border-amber-900/30">
                           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                           <p>You will leave your current company. Past shifts will remain in history, but you will no longer be able to clock in for them.</p>
                       </div>
                       <div>
-                          <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Company Invite Code</label>
+                          <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Company Invite Code</label>
                           <input 
                             type="text" 
                             value={inviteCode} 
                             onChange={(e) => setInviteCode(e.target.value)}
                             placeholder="e.g. AMS-999"
-                            className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 uppercase tracking-wider"
+                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none uppercase tracking-wider"
                           />
                       </div>
                       <button 
                         onClick={handleJoinCompany}
                         disabled={loading || !inviteCode}
-                        className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50"
+                        className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50 transition"
                       >
                           {loading ? 'Joining...' : 'Join Team'}
                       </button>

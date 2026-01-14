@@ -1,5 +1,5 @@
 
-import { Box, User, Clock, MapPin, QrCode, LogOut, LayoutDashboard, History, Settings, Users, CalendarDays, Calendar } from 'lucide-react';
+import { Box, User, Clock, MapPin, QrCode, LogOut, LayoutDashboard, History, Settings, Users, CalendarDays, Calendar, HelpCircle } from 'lucide-react';
 
 export const APP_NAME = "Tallyd";
 export const LOGO_URL = "https://145955222.fs1.hubspotusercontent-eu1.net/hubfs/145955222/Tally%20Logo.png";
@@ -13,12 +13,14 @@ export const NAVIGATION_ITEMS = {
     { name: 'Kiosk', icon: QrCode, path: '/admin/kiosk' },
     { name: 'Locations', icon: MapPin, path: '/admin/locations' },
     { name: 'Settings', icon: Settings, path: '/admin/settings' },
+    { name: 'Help Center', icon: HelpCircle, path: '/help' },
   ],
   STAFF: [
     { name: 'Status', icon: Clock, path: '/staff' },
     { name: 'My Rota', icon: Calendar, path: '/staff/rota' },
     { name: 'Activity', icon: History, path: '/staff/activity' },
     { name: 'Profile', icon: User, path: '/staff/profile' },
+    { name: 'Help', icon: HelpCircle, path: '/help' },
   ]
 };
 

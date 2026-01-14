@@ -47,11 +47,11 @@ export const StaffRota = () => {
   if (company && company.settings.rotaEnabled === false) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
-              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
+              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
                   <Lock className="w-8 h-8 text-slate-400" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Rota System Not Active</h2>
-              <p className="text-slate-500 max-w-md">Your employer has not enabled the scheduling system for this company.</p>
+              <h2 className="text-2xl font-bold text-white">Rota System Not Active</h2>
+              <p className="text-slate-400 max-w-md">Your employer has not enabled the scheduling system for this company.</p>
           </div>
       );
   }
@@ -101,34 +101,33 @@ export const StaffRota = () => {
       const allowBidding = company?.settings.allowShiftBidding !== false; 
       const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
       
-      // Robust Overnight Check
       const startD = new Date(shift.startTime);
       const endD = new Date(shift.endTime);
       const isOvernight = startD.toDateString() !== endD.toDateString();
 
       return (
-        <div className={`bg-white dark:bg-slate-800 p-5 rounded-2xl border ${isOpenBoard ? 'border-amber-200 dark:border-amber-900/30' : 'border-slate-100 dark:border-slate-700'} shadow-sm mb-4`}>
+        <div className={`glass-panel p-5 rounded-2xl border ${isOpenBoard ? 'border-amber-900/30 bg-amber-900/5' : 'border-white/10'} shadow-sm mb-4`}>
             <div className="flex justify-between items-start mb-3">
                 <div>
-                    <div className="font-bold text-lg text-slate-900 dark:text-white">{new Date(shift.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-                    <div className="text-sm text-slate-500 flex items-center">
+                    <div className="font-bold text-lg text-white">{new Date(shift.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                    <div className="text-sm text-slate-400 flex items-center">
                         {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
                         {showFinishTimes ? (
                             <>
                                 - {new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                {isOvernight && <span className="ml-1 text-[9px] font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/50 px-1 rounded">+1</span>}
+                                {isOvernight && <span className="ml-1 text-[9px] font-bold text-brand-400 bg-brand-900/30 px-1 rounded">+1</span>}
                             </>
                         ) : (
-                            <span className="ml-2 font-medium text-slate-400">Till Finish</span>
+                            <span className="ml-2 font-medium text-slate-500">Till Finish</span>
                         )}
                     </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${isOpenBoard ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'}`}>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${isOpenBoard ? 'bg-amber-900/30 text-amber-400' : 'bg-brand-900/30 text-brand-400'}`}>
                     {shift.role}
                 </span>
             </div>
             
-            <div className="flex items-center space-x-2 text-sm text-slate-500 mb-4">
+            <div className="flex items-center space-x-2 text-sm text-slate-400 mb-4">
                 <MapPin className="w-4 h-4" />
                 <span>{shift.locationName || 'General Location'}</span>
             </div>
@@ -140,7 +139,7 @@ export const StaffRota = () => {
                         disabled={!!isBidded}
                         className={`w-full py-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition ${
                             isBidded 
-                            ? 'bg-amber-50 text-amber-600 cursor-default' 
+                            ? 'bg-amber-900/20 text-amber-500 cursor-default' 
                             : 'bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-500/20'
                         }`}
                     >
@@ -154,7 +153,7 @@ export const StaffRota = () => {
                         )}
                     </button>
                 ) : (
-                    <div className="w-full py-3 bg-slate-50 dark:bg-slate-700 text-slate-400 rounded-xl font-medium text-center text-sm">
+                    <div className="w-full py-3 bg-slate-800 text-slate-500 rounded-xl font-medium text-center text-sm">
                         Bidding Disabled
                     </div>
                 )
@@ -166,33 +165,33 @@ export const StaffRota = () => {
   return (
     <div className="max-w-xl mx-auto space-y-6 pb-20">
         <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Schedule</h1>
+            <h1 className="text-2xl font-bold text-white">Schedule</h1>
             <button 
                 onClick={() => setIsTimeOffOpen(true)}
-                className="text-sm font-bold text-brand-600 hover:bg-brand-50 px-3 py-2 rounded-lg transition"
+                className="text-sm font-bold text-brand-400 hover:bg-brand-900/20 px-3 py-2 rounded-lg transition"
             >
                 + Time Off
             </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+        <div className="flex p-1 bg-slate-800 rounded-xl border border-white/5">
             <button 
                 onClick={() => setActiveTab('my-shifts')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'my-shifts' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'my-shifts' ? 'bg-slate-700 shadow-sm text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
                 My Shifts
             </button>
             <button 
                 onClick={() => setActiveTab('open-board')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'open-board' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'open-board' ? 'bg-slate-700 shadow-sm text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
                 Open Board
-                {openShifts.length > 0 && <span className="ml-2 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{openShifts.length}</span>}
+                {openShifts.length > 0 && <span className="ml-2 bg-amber-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{openShifts.length}</span>}
             </button>
              <button 
                 onClick={() => setActiveTab('time-off')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'time-off' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'time-off' ? 'bg-slate-700 shadow-sm text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
                 Time Off
             </button>
@@ -227,7 +226,7 @@ export const StaffRota = () => {
                             ) : (
                                 Object.entries(groupedOpenShifts).map(([date, shifts]) => (
                                     <div key={date} className="mb-6">
-                                        <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 pl-1">{date}</h3>
+                                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 pl-1">{date}</h3>
                                         {shifts.map(s => <ShiftCard key={s.id} shift={s} isOpenBoard />)}
                                     </div>
                                 ))
@@ -238,15 +237,15 @@ export const StaffRota = () => {
                     {activeTab === 'time-off' && (
                         <div className="space-y-4">
                             {myRequests.map(req => (
-                                <div key={req.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                                <div key={req.id} className="glass-panel p-4 rounded-xl border border-white/10 flex justify-between items-center">
                                     <div>
-                                        <div className="font-bold text-slate-900 dark:text-white capitalize">{req.type}</div>
-                                        <div className="text-sm text-slate-500">{new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}</div>
+                                        <div className="font-bold text-white capitalize">{req.type}</div>
+                                        <div className="text-sm text-slate-400">{new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}</div>
                                     </div>
                                     <div>
-                                        {req.status === 'pending' && <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">Pending</span>}
-                                        {req.status === 'approved' && <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Approved</span>}
-                                        {req.status === 'rejected' && <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold">Rejected</span>}
+                                        {req.status === 'pending' && <span className="px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-bold border border-yellow-700/50">Pending</span>}
+                                        {req.status === 'approved' && <span className="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-bold border border-green-700/50">Approved</span>}
+                                        {req.status === 'rejected' && <span className="px-3 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-bold border border-red-700/50">Rejected</span>}
                                     </div>
                                 </div>
                             ))}
@@ -264,19 +263,19 @@ export const StaffRota = () => {
 
         {/* Time Off Modal */}
         {isTimeOffOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-                 <div className="bg-white dark:bg-slate-800 w-full max-w-md p-6 rounded-2xl shadow-xl border dark:border-slate-700">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Request Time Off</h3>
+                        <h3 className="font-bold text-lg text-white">Request Time Off</h3>
                         <button onClick={() => setIsTimeOffOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
                     </div>
 
                     <form onSubmit={handleSubmitTimeOff} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Type</label>
+                            <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Type</label>
                             <select 
                                 value={toType} onChange={e => setToType(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-800 text-white"
                             >
                                 <option value="holiday">Holiday</option>
                                 <option value="sickness">Sickness</option>
@@ -285,35 +284,35 @@ export const StaffRota = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                              <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Start Date</label>
+                                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Start Date</label>
                                 <input 
                                     type="date" required
                                     value={toStart} onChange={e => setToStart(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-slate-900 dark:text-white"
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-800 text-white"
                                 />
                             </div>
                              <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">End Date</label>
+                                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">End Date</label>
                                 <input 
                                     type="date" required
                                     value={toEnd} onChange={e => setToEnd(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-slate-900 dark:text-white"
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-800 text-white"
                                 />
                             </div>
                         </div>
                          <div>
-                            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Reason (Optional)</label>
+                            <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Reason (Optional)</label>
                             <input 
                                 type="text"
                                 value={toReason} onChange={e => setToReason(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-800 text-white"
                                 placeholder="e.g. Family wedding"
                             />
                         </div>
 
                         <div className="pt-2">
                             {company?.settings.requireTimeOffApproval === false ? (
-                                <p className="text-xs text-green-600 mb-2">Note: Requests are automatically approved.</p>
+                                <p className="text-xs text-green-400 mb-2">Note: Requests are automatically approved.</p>
                             ) : (
                                 <p className="text-xs text-slate-500 mb-2">Note: Requests require manager approval.</p>
                             )}

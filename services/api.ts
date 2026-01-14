@@ -117,6 +117,11 @@ export const getCompany = async (companyId: string): Promise<Company> => {
     return docSnap.data() as Company;
 };
 
+export const updateCompany = async (companyId: string, updates: Partial<Company>): Promise<void> => {
+    const docRef = doc(db, COMPANIES_REF, companyId);
+    await updateDoc(docRef, updates);
+}
+
 export const updateCompanySettings = async (companyId: string, settings: Partial<Company['settings']>): Promise<void> => {
     const company = await getCompany(companyId);
     const newSettings = { ...company.settings, ...settings };
@@ -158,11 +163,20 @@ export const createScheduleShift = async (shift: ScheduleShift): Promise<void> =
 
 export const createBatchScheduleShifts = async (shifts: ScheduleShift[]): Promise<void> => {
     const batch = writeBatch(db);
-    shifts.forEach(shift => {
-        const ref = doc(db, SCHEDULE_REF, shift.id);
-        batch.set(ref, shift);
-    });
-    await batch.commit();
+    // Firestore batch limit is 500
+    const chunks = [];
+    for (let i = 0; i < shifts.length; i += 400) {
+        chunks.push(shifts.slice(i, i + 400));
+    }
+
+    for (const chunk of chunks) {
+        const chunkBatch = writeBatch(db);
+        chunk.forEach(shift => {
+            const ref = doc(db, SCHEDULE_REF, shift.id);
+            chunkBatch.set(ref, shift);
+        });
+        await chunkBatch.commit();
+    }
 };
 
 export const updateScheduleShift = async (shiftId: string, updates: Partial<ScheduleShift>): Promise<void> => {
@@ -203,7 +217,9 @@ export const getSchedule = async (companyId: string, startTime: number, endTime:
 
 export const copyScheduleWeek = async (companyId: string, sourceWeekStart: number, targetWeekStart: number): Promise<void> => {
     // 1. Get Source Week Shifts
-    const sourceEnd = sourceWeekStart + (7 * 24 * 60 * 60 * 1000) - 1;
+    // Ensure we cover the full range of the source week
+    const sourceEnd = sourceWeekStart + (7 * 24 * 60 * 60 * 1000) + (12 * 60 * 60 * 1000); // Add buffer for late shifts
+    
     const sourceShifts = await getSchedule(companyId, sourceWeekStart, sourceEnd);
     
     if (sourceShifts.length === 0) return;
@@ -215,17 +231,17 @@ export const copyScheduleWeek = async (companyId: string, sourceWeekStart: numbe
         const newEnd = s.endTime + timeDiff;
         return {
             ...s,
-            id: `sch_${Date.now()}_cp_${Math.random().toString(36).substr(2,5)}`,
+            id: `sch_${Date.now()}_cp_${Math.random().toString(36).substr(2,5)}_${Math.floor(Math.random()*1000)}`,
             startTime: newStart,
             endTime: newEnd,
-            userId: null, // Reset assignment on copy? Usually safer to reset.
-            userName: undefined,
-            bids: [],
-            status: 'draft' // Copy as draft
+            // Keep the user assignment, but reset status to draft so admin can review
+            status: 'draft', 
+            bids: [] // Clear bids as it's a fresh week
         };
     });
 
     // 3. Batch Create
+    // We use a robust batch function that handles >500 items if needed
     await createBatchScheduleShifts(newShifts);
 };
 
@@ -460,8 +476,7 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
                     if (matchingShift.data.endTime !== undefined) rotaData.scheduledEndTime = matchingShift.data.endTime;
                 }
             } catch (e) {
-                console.error("Rota integration check failed. If this is a 'failed-precondition' (missing index) error, follow the link in the console to create it:", e);
-                // Proceeding is safe, we just lose the rota link for this specific punch
+                console.error("Rota integration check failed.", e);
             }
         }
         // --- ROTA INTEGRATION END ---

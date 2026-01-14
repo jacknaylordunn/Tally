@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { NAVIGATION_ITEMS, APP_NAME, LOGO_URL } from '../constants';
-import { LogOut, Menu, X, ChevronRight } from 'lucide-react';
+import { LogOut, Menu, X, ChevronRight, LayoutGrid } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { getCompany } from '../services/api';
 
@@ -17,7 +17,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [rotaEnabled, setRotaEnabled] = useState(false);
 
-  // Fetch company settings to determine if Rota is enabled
   useEffect(() => {
     const checkSettings = async () => {
         if (user?.currentCompanyId) {
@@ -32,7 +31,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     checkSettings();
   }, [user]);
 
-  // If kiosk mode, don't show layout chrome
   if (location.pathname.includes('/kiosk')) {
     return <>{children}</>;
   }
@@ -41,105 +39,101 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     ? NAVIGATION_ITEMS.ADMIN 
     : NAVIGATION_ITEMS.STAFF;
 
-  // Filter items based on Rota setting
   const navItems = baseNavItems.filter(item => {
       if (item.name.includes('Rota') && !rotaEnabled) return false;
       return true;
   });
 
   return (
-    <div className="min-h-screen flex bg-[#f8fafc] dark:bg-[#0b1120]">
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-4 z-50 flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg object-contain bg-white" />
-           <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">{APP_NAME}</span>
-        </div>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-slate-500">
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
-      </div>
-
-      {/* Mobile Menu Overlay */}
-      {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-white dark:bg-slate-900 pt-20 px-6 space-y-2 animate-in slide-in-from-top-10 duration-200">
-           {navItems.map((item) => (
-             <Link 
-               key={item.path} 
-               to={item.path}
-               onClick={() => setMobileMenuOpen(false)}
-               className={`flex items-center space-x-4 p-4 rounded-2xl transition-all ${
-                   location.pathname === item.path 
-                   ? 'bg-brand-50 dark:bg-slate-800 text-brand-600 font-semibold' 
-                   : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
-               }`}
-             >
-               <item.icon className={`w-5 h-5 ${location.pathname === item.path ? 'text-brand-500' : 'text-slate-400'}`} />
-               <span>{item.name}</span>
-             </Link>
-           ))}
-           <div className="pt-8 mt-8 border-t border-slate-100 dark:border-slate-800">
-               <button onClick={logout} className="flex items-center space-x-4 p-4 w-full text-left text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors">
-                  <LogOut className="w-5 h-5" />
-                  <span>Sign Out</span>
-               </button>
+    <div className="min-h-screen flex flex-col md:flex-row relative overflow-hidden bg-slate-900 text-slate-100">
+      
+      {/* --- DESKTOP SIDEBAR (Floating Dock) --- */}
+      <aside className="hidden md:flex flex-col w-20 lg:w-72 fixed left-4 top-4 bottom-4 glass-panel rounded-3xl z-50 transition-all duration-300 shadow-2xl">
+        <div className="flex items-center gap-4 p-6 mb-4">
+           <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-purple-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
+                <img src={LOGO_URL} alt="Logo" className="relative w-10 h-10 rounded-xl object-cover bg-white" />
            </div>
-        </div>
-      )}
-
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-72 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 h-screen sticky top-0 py-8 px-6">
-        <div className="flex items-center space-x-3 mb-12 px-2">
-           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg object-contain bg-white" />
-           <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">{APP_NAME}</span>
+           <span className="font-extrabold text-xl tracking-tight text-white hidden lg:block">{APP_NAME}</span>
         </div>
         
-        <nav className="flex-1 space-y-1">
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
                 <Link 
                   key={item.path} 
                   to={item.path}
-                  className={`group flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
+                  className={`group flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 relative overflow-hidden ${
                       isActive 
-                      ? 'bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white font-medium' 
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'
+                      ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' 
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  <div className="flex items-center space-x-3">
-                      <item.icon className={`w-5 h-5 transition-colors ${isActive ? 'text-brand-500' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`} />
-                      <span>{item.name}</span>
-                  </div>
-                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-brand-500"></div>}
+                  <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                  <span className="font-medium hidden lg:block tracking-wide">{item.name}</span>
+                  {isActive && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/20 rounded-l-full"></div>}
                 </Link>
             );
           })}
         </nav>
 
-        <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-center space-x-3 mb-6 px-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-100 to-blue-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-brand-600 dark:text-white font-bold text-sm">
-              {user?.name.charAt(0)}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{user?.name}</p>
-              <p className="text-xs text-slate-400 truncate">{user?.role === 'admin' ? 'Administrator' : 'Staff Member'}</p>
-            </div>
-          </div>
+        <div className="p-4 border-t border-white/5 mt-auto">
           <button 
             onClick={logout}
-            className="flex items-center space-x-3 px-4 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors w-full text-left text-sm"
+            className="flex items-center gap-4 px-4 py-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors w-full text-left"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            <span className="hidden lg:block font-medium">Sign Out</span>
           </button>
+          
+          <div className="mt-4 flex items-center gap-3 px-2 lg:bg-white/5 lg:p-3 lg:rounded-2xl">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs shadow-lg">
+              {user?.name.charAt(0)}
+            </div>
+            <div className="hidden lg:block flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
+              <p className="text-xs text-slate-400 truncate capitalize">{user?.role}</p>
+            </div>
+          </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 p-6 md:p-12 overflow-y-auto pt-24 md:pt-12">
-        <div className="max-w-6xl mx-auto animate-fade-in">
+      {/* --- MOBILE HEADER & BOTTOM NAV --- */}
+      <div className="md:hidden fixed top-0 left-0 right-0 glass-panel z-50 px-6 py-4 flex justify-between items-center border-b border-white/5">
+        <div className="flex items-center gap-3">
+           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg bg-white" />
+           <span className="font-bold text-lg text-white">{APP_NAME}</span>
+        </div>
+        <button onClick={logout} className="p-2 text-slate-400 hover:text-white">
+            <LogOut className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="md:hidden fixed bottom-0 left-0 right-0 glass-panel z-50 border-t border-white/5 pb-safe">
+          <div className="flex justify-around items-center p-2">
+            {navItems.slice(0, 4).map((item) => { // Limit to 4 for mobile bar
+                const isActive = location.pathname === item.path;
+                return (
+                    <Link 
+                        key={item.path} 
+                        to={item.path}
+                        className={`flex flex-col items-center justify-center p-3 rounded-2xl w-full transition-all ${
+                            isActive ? 'text-brand-400 bg-brand-500/10' : 'text-slate-500'
+                        }`}
+                    >
+                        <item.icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-current' : ''}`} />
+                        <span className="text-[10px] font-medium">{item.name}</span>
+                    </Link>
+                )
+            })}
+             {/* If more items, simpler menu or just hide for now as per "Tailored" design usually simplifying mobile */}
+          </div>
+      </div>
+
+      {/* --- MAIN CONTENT AREA --- */}
+      <main className="flex-1 md:ml-24 lg:ml-80 p-6 md:p-10 pt-24 md:pt-10 pb-24 md:pb-10 min-h-screen overflow-x-hidden">
+        <div className="max-w-7xl mx-auto animate-fade-in">
             {children}
         </div>
       </main>
