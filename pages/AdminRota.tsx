@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishAllDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
 import { ScheduleShift, User, Location, TimeOffRequest, Company, Shift } from '../types';
-import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer, Settings, Check, LayoutTemplate, AlignJustify, Table } from 'lucide-react';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -20,14 +20,18 @@ export const AdminRota = () => {
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Clipboard State
-  const [clipboardShift, setClipboardShift] = useState<ScheduleShift | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  // Print Settings State
+  const [isPrintSettingsOpen, setIsPrintSettingsOpen] = useState(false);
+  const [printConfig, setPrintConfig] = useState({
+      layout: 'list' as 'list' | 'staff_grid' | 'date_grid',
+      showLocation: true,
+      showRole: true,
+      showUnassigned: true
+  });
 
   // Modal States
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isTimeOffModalOpen, setIsTimeOffModalOpen] = useState(false);
-  const [isRepeatModalOpen, setIsRepeatModalOpen] = useState(false);
   
   // Expanded Group State
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
@@ -98,8 +102,6 @@ export const AdminRota = () => {
 
   // --- GROUPING LOGIC ---
   const getGroupKey = (s: ScheduleShift) => {
-      // Group by Role + Time + Location. 
-      // We do NOT group by User, because we want to bundle "Bar Staff" slots together regardless of who is assigned.
       return `${s.role}_${s.startTime}_${s.endTime}_${s.locationId || 'nal'}`;
   };
 
@@ -120,6 +122,17 @@ export const AdminRota = () => {
              sDate.getMonth() === date.getMonth() &&
              sDate.getFullYear() === date.getFullYear();
     }).sort((a, b) => a.startTime - b.startTime);
+  };
+
+  const getShiftsForCell = (date: Date, userId: string | null) => {
+      return schedule.filter(s => {
+          const sDate = new Date(s.startTime);
+          const isSameDate = sDate.getDate() === date.getDate() && 
+                             sDate.getMonth() === date.getMonth() && 
+                             sDate.getFullYear() === date.getFullYear();
+          const isSameUser = s.userId === userId;
+          return isSameDate && isSameUser;
+      }).sort((a,b) => a.startTime - b.startTime);
   };
 
   // --- ACTIONS ---
@@ -250,10 +263,8 @@ export const AdminRota = () => {
     if (!baseShift) return;
 
     if (editingShift) {
-        // Update Single
         await updateScheduleShift(editingShift.id, baseShift);
     } else {
-        // Create Batch (Quantity)
         if (shiftQuantity > 1) {
             const shiftsToCreate = [];
             for (let i = 0; i < shiftQuantity; i++) {
@@ -264,7 +275,6 @@ export const AdminRota = () => {
             }
             await createBatchScheduleShifts(shiftsToCreate);
         } else {
-            // Single Create
             const newId = `sch_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
             await createScheduleShift({ ...baseShift, id: newId });
         }
@@ -303,13 +313,17 @@ export const AdminRota = () => {
       }
   };
 
-  const handlePrint = () => {
-      window.print();
+  const handlePrintClick = () => {
+      setIsPrintSettingsOpen(true);
+  };
+
+  const handleConfirmPrint = () => {
+      setIsPrintSettingsOpen(false);
+      setTimeout(() => window.print(), 300);
   };
 
   // --- VISUAL COMPONENTS ---
 
-  // Stacked Card for Multiple Shifts
   const GroupShiftCard: React.FC<{ groupKey: string, shifts: ScheduleShift[] }> = ({ groupKey, shifts }) => {
       const isExpanded = expandedGroupId === groupKey;
       const assignedCount = shifts.filter(s => s.userId).length;
@@ -320,7 +334,6 @@ export const AdminRota = () => {
       const firstShift = shifts[0];
       const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
 
-      // Color Logic for the Bar
       const getProgressColor = () => {
           if (isEmpty) return 'bg-red-500';
           if (isFull) return 'bg-green-500';
@@ -333,7 +346,6 @@ export const AdminRota = () => {
                 onClick={() => setExpandedGroupId(groupKey)}
                 className={`relative p-3 rounded-xl border border-white/5 bg-slate-800 hover:bg-slate-700 cursor-pointer transition shadow-md group mb-2 overflow-hidden`}
               >
-                  {/* Progress Bar Background */}
                   <div className="absolute bottom-0 left-0 h-1 bg-slate-900 w-full">
                       <div 
                         className={`h-full ${getProgressColor()} transition-all duration-500`} 
@@ -354,13 +366,11 @@ export const AdminRota = () => {
                       {showFinishTimes && ` - ${new Date(firstShift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
                   </div>
 
-                  {/* Stack Effect Visuals */}
                   <div className="absolute -bottom-1 left-2 right-2 h-1 bg-slate-700 rounded-b-lg border-x border-b border-white/5 z-0"></div>
               </div>
           );
       }
 
-      // If Expanded or Single, show list
       return (
           <div className="space-y-2 mb-2 animate-fade-in">
               {shifts.map((shift, idx) => (
@@ -451,64 +461,186 @@ export const AdminRota = () => {
 
   return (
     <>
-    {/* PRINT VIEW */}
-    <div className="hidden print:block p-8 bg-white text-black min-h-screen">
-        <div className="mb-8 border-b-2 border-black pb-4">
-            <h1 className="text-4xl font-bold uppercase tracking-tight">{company?.name} Rota</h1>
-            <p className="text-lg mt-2">
-                {weekStart.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })} - {new Date(weekStart.getTime() + 6*86400000).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
+    {/* PRINT VIEW - Configurable */}
+    <div className="hidden print:block p-4 bg-white text-black min-h-screen text-[10px]">
+        {/* Header */}
+        <div className="mb-6 border-b-2 border-black pb-4 flex justify-between items-end">
+            <div>
+                <h1 className="text-3xl font-bold uppercase tracking-tight">{company?.name} Rota</h1>
+                <p className="text-sm mt-1">
+                    {weekStart.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })} - {new Date(weekStart.getTime() + 6*86400000).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+            </div>
+            <div className="text-right">
+                <div className="text-xs text-gray-500">Generated on {new Date().toLocaleDateString()}</div>
+            </div>
         </div>
 
-        <div className="space-y-8">
-            {weekDates.map((date, i) => {
-                // If viewing a specific day, only print that day
-                if (viewMode === 'day' && date.getDate() !== currentDate.getDate()) return null;
+        {/* List Layout */}
+        {printConfig.layout === 'list' && (
+            <div className="space-y-6">
+                {weekDates.map((date, i) => {
+                    if (viewMode === 'day' && date.getDate() !== currentDate.getDate()) return null;
+                    const dayShifts = getShiftsForDay(date);
+                    if (dayShifts.length === 0) return null;
 
-                const dayShifts = getShiftsForDay(date);
-                if (dayShifts.length === 0) return null;
-
-                return (
-                    <div key={i} className="break-inside-avoid">
-                        <h3 className="text-xl font-bold mb-3 uppercase border-b border-gray-300 pb-1 flex justify-between">
-                            <span>{WEEK_DAYS[i]} {date.getDate()}</span>
-                            <span className="text-sm font-normal text-gray-500">{dayShifts.length} Shifts</span>
-                        </h3>
-                        <table className="w-full text-sm text-left">
-                            <thead>
-                                <tr className="text-xs uppercase text-gray-500">
-                                    <th className="py-1 w-24">Time</th>
-                                    <th className="py-1 w-32">Role</th>
-                                    <th className="py-1">Staff</th>
-                                    <th className="py-1 w-32 text-right">Location</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {dayShifts.map(s => (
-                                    <tr key={s.id}>
-                                        <td className="py-2 font-mono">
-                                            {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                            <span className="text-gray-400 mx-1">-</span>
-                                            {new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                        </td>
-                                        <td className="py-2 font-bold">{s.role}</td>
-                                        <td className="py-2">
-                                            {s.userName || <span className="text-gray-400 italic">Open</span>}
-                                        </td>
-                                        <td className="py-2 text-right text-gray-500 text-xs">
-                                            {s.locationName || '-'}
-                                        </td>
+                    return (
+                        <div key={i} className="break-inside-avoid">
+                            <h3 className="text-lg font-bold mb-2 uppercase border-b border-gray-300 pb-1 flex justify-between">
+                                <span>{WEEK_DAYS[i]} {date.getDate()}</span>
+                                <span className="font-normal text-gray-500">{dayShifts.length} Shifts</span>
+                            </h3>
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="text-xs uppercase text-gray-500 border-b border-gray-200">
+                                        <th className="py-1 w-24">Time</th>
+                                        {printConfig.showRole && <th className="py-1 w-32">Role</th>}
+                                        <th className="py-1">Staff</th>
+                                        {printConfig.showLocation && <th className="py-1 w-32 text-right">Location</th>}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                );
-            })}
-        </div>
-        <div className="mt-8 pt-4 border-t border-gray-300 text-center text-xs text-gray-400">
-            Generated by Tallyd on {new Date().toLocaleString()}
-        </div>
+                                </thead>
+                                <tbody>
+                                    {dayShifts.map(s => {
+                                        if (!printConfig.showUnassigned && !s.userId) return null;
+                                        return (
+                                            <tr key={s.id} className="border-b border-gray-100">
+                                                <td className="py-1 font-mono font-bold">
+                                                    {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                    {company?.settings.rotaShowFinishTimes !== false && ` - ${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                                                </td>
+                                                {printConfig.showRole && <td className="py-1">{s.role}</td>}
+                                                <td className="py-1">
+                                                    {s.userName || <span className="italic text-gray-400">Open</span>}
+                                                </td>
+                                                {printConfig.showLocation && <td className="py-1 text-right text-gray-500">{s.locationName || '-'}</td>}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                })}
+            </div>
+        )}
+
+        {/* Staff Grid Layout */}
+        {printConfig.layout === 'staff_grid' && (
+            <table className="w-full border-collapse border border-black table-fixed text-[9px]">
+                <thead>
+                    <tr>
+                        <th className="border border-black p-1 w-24 bg-gray-100">Staff</th>
+                        {weekDates.map((d, i) => (
+                            <th key={i} className="border border-black p-1 bg-gray-100">
+                                {WEEK_DAYS[i]} {d.getDate()}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {staff.map(u => (
+                        <tr key={u.id}>
+                            <td className="border border-black p-1 font-bold truncate">{u.name}</td>
+                            {weekDates.map((d, i) => {
+                                const cellShifts = getShiftsForCell(d, u.id);
+                                return (
+                                    <td key={i} className="border border-black p-1 align-top h-12">
+                                        {cellShifts.map(s => (
+                                            <div key={s.id} className="mb-1">
+                                                <span className="font-bold">
+                                                    {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                    {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                                                </span>
+                                                {printConfig.showRole && <div className="truncate">{s.role}</div>}
+                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600">{s.locationName}</div>}
+                                            </div>
+                                        ))}
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    ))}
+                    {printConfig.showUnassigned && (
+                        <tr className="bg-gray-50">
+                            <td className="border border-black p-1 font-bold italic">Open / Unassigned</td>
+                            {weekDates.map((d, i) => {
+                                const cellShifts = getShiftsForCell(d, null);
+                                return (
+                                    <td key={i} className="border border-black p-1 align-top h-12">
+                                        {cellShifts.map(s => (
+                                            <div key={s.id} className="mb-1">
+                                                <span className="font-bold">
+                                                    {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                    {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                                                </span>
+                                                {printConfig.showRole && <div className="truncate">{s.role}</div>}
+                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600">{s.locationName}</div>}
+                                            </div>
+                                        ))}
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        )}
+
+        {/* Date Grid Layout */}
+        {printConfig.layout === 'date_grid' && (
+            <table className="w-full border-collapse border border-black table-fixed text-[9px]">
+                <thead>
+                    <tr>
+                        <th className="border border-black p-1 w-20 bg-gray-100">Date</th>
+                        {staff.map(u => (
+                            <th key={u.id} className="border border-black p-1 bg-gray-100 truncate w-20">
+                                {u.name.split(' ')[0]}
+                            </th>
+                        ))}
+                        {printConfig.showUnassigned && <th className="border border-black p-1 bg-gray-100 w-20 italic">Open</th>}
+                    </tr>
+                </thead>
+                <tbody>
+                    {weekDates.map((d, i) => (
+                        <tr key={i}>
+                            <td className="border border-black p-1 font-bold bg-gray-50">
+                                {WEEK_DAYS[i]} {d.getDate()}
+                            </td>
+                            {staff.map(u => {
+                                const cellShifts = getShiftsForCell(d, u.id);
+                                return (
+                                    <td key={u.id} className="border border-black p-1 align-top h-12">
+                                        {cellShifts.map(s => (
+                                            <div key={s.id} className="mb-1">
+                                                <span className="font-bold block">
+                                                    {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                    {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                                                </span>
+                                                {printConfig.showRole && <div className="truncate text-[8px]">{s.role}</div>}
+                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600 text-[8px]">{s.locationName}</div>}
+                                            </div>
+                                        ))}
+                                    </td>
+                                );
+                            })}
+                            {printConfig.showUnassigned && (
+                                <td className="border border-black p-1 align-top bg-gray-50">
+                                    {getShiftsForCell(d, null).map(s => (
+                                        <div key={s.id} className="mb-1">
+                                            <span className="font-bold block">
+                                                {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                                            </span>
+                                            <div className="truncate text-[8px]">{s.role}</div>
+                                        </div>
+                                    ))}
+                                </td>
+                            )}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        )}
     </div>
 
     {/* WEB APP VIEW */}
@@ -534,7 +666,7 @@ export const AdminRota = () => {
                 </button>
                 <div className="flex rounded-xl glass-panel border border-white/10 p-1">
                     <button 
-                        onClick={handlePrint}
+                        onClick={handlePrintClick}
                         className="px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition flex items-center gap-1"
                         title="Print Rota"
                     >
@@ -682,6 +814,95 @@ export const AdminRota = () => {
         </div>
 
         {/* --- MODALS --- */}
+        {isPrintSettingsOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
+                <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                            <Settings className="w-5 h-5" /> Print Settings
+                        </h3>
+                        <button onClick={() => setIsPrintSettingsOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-white" /></button>
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* Layout Selection */}
+                        <div className="grid grid-cols-3 gap-3">
+                            <button 
+                                onClick={() => setPrintConfig({...printConfig, layout: 'list'})}
+                                className={`flex flex-col items-center p-4 rounded-xl border transition-all ${printConfig.layout === 'list' ? 'bg-brand-600 border-brand-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                <AlignJustify className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold">List View</span>
+                            </button>
+                            <button 
+                                onClick={() => setPrintConfig({...printConfig, layout: 'staff_grid'})}
+                                className={`flex flex-col items-center p-4 rounded-xl border transition-all ${printConfig.layout === 'staff_grid' ? 'bg-brand-600 border-brand-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                <Table className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold">Staff Grid</span>
+                            </button>
+                            <button 
+                                onClick={() => setPrintConfig({...printConfig, layout: 'date_grid'})}
+                                className={`flex flex-col items-center p-4 rounded-xl border transition-all ${printConfig.layout === 'date_grid' ? 'bg-brand-600 border-brand-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                <LayoutTemplate className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold">Date Grid</span>
+                            </button>
+                        </div>
+
+                        {/* Options */}
+                        <div className="bg-slate-800/50 rounded-xl p-4 space-y-3 border border-white/5">
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-sm text-slate-300">Show Locations</span>
+                                <div 
+                                    onClick={() => setPrintConfig({...printConfig, showLocation: !printConfig.showLocation})}
+                                    className={`w-10 h-6 rounded-full p-1 transition-colors ${printConfig.showLocation ? 'bg-brand-500' : 'bg-slate-700'}`}
+                                >
+                                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${printConfig.showLocation ? 'translate-x-4' : ''}`}></div>
+                                </div>
+                            </label>
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-sm text-slate-300">Show Role Names</span>
+                                <div 
+                                    onClick={() => setPrintConfig({...printConfig, showRole: !printConfig.showRole})}
+                                    className={`w-10 h-6 rounded-full p-1 transition-colors ${printConfig.showRole ? 'bg-brand-500' : 'bg-slate-700'}`}
+                                >
+                                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${printConfig.showRole ? 'translate-x-4' : ''}`}></div>
+                                </div>
+                            </label>
+                            {printConfig.layout !== 'list' && (
+                                <label className="flex items-center justify-between cursor-pointer">
+                                    <span className="text-sm text-slate-300">Show Unassigned Row</span>
+                                    <div 
+                                        onClick={() => setPrintConfig({...printConfig, showUnassigned: !printConfig.showUnassigned})}
+                                        className={`w-10 h-6 rounded-full p-1 transition-colors ${printConfig.showUnassigned ? 'bg-brand-500' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${printConfig.showUnassigned ? 'translate-x-4' : ''}`}></div>
+                                    </div>
+                                </label>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                onClick={() => setIsPrintSettingsOpen(false)} 
+                                className="flex-1 px-4 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleConfirmPrint}
+                                className="flex-1 px-4 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center gap-2"
+                            >
+                                <Printer className="w-5 h-5" />
+                                <span>Print Now</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {isShiftModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
