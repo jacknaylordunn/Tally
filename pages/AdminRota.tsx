@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishAllDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
 import { ScheduleShift, User, Location, TimeOffRequest, Company, Shift } from '../types';
-import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer } from 'lucide-react';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -29,6 +29,9 @@ export const AdminRota = () => {
   const [isTimeOffModalOpen, setIsTimeOffModalOpen] = useState(false);
   const [isRepeatModalOpen, setIsRepeatModalOpen] = useState(false);
   
+  // Expanded Group State
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [editingShift, setEditingShift] = useState<ScheduleShift | null>(null);
 
@@ -38,6 +41,7 @@ export const AdminRota = () => {
   const [shiftEnd, setShiftEnd] = useState('17:00');
   const [shiftUser, setShiftUser] = useState<string>('open'); 
   const [shiftLocation, setShiftLocation] = useState<string>('');
+  const [shiftQuantity, setShiftQuantity] = useState(1);
 
   useEffect(() => {
     loadData();
@@ -76,16 +80,8 @@ export const AdminRota = () => {
     setLocations(locData);
     setTimeOffRequests(timeOffData.filter(r => r.status === 'pending'));
     setCompany(companyData);
-    setActualShifts(actualsData); // Store actuals
+    setActualShifts(actualsData); 
     setLoading(false);
-  };
-
-  const getShiftsForDay = (date: Date) => {
-    const start = new Date(date);
-    start.setHours(0,0,0,0);
-    const end = new Date(date);
-    end.setHours(23,59,59,999);
-    return schedule.filter(s => s.startTime >= start.getTime() && s.startTime <= end.getTime()).sort((a,b) => a.startTime - b.startTime);
   };
 
   if (company && company.settings.rotaEnabled === false) {
@@ -100,13 +96,38 @@ export const AdminRota = () => {
       );
   }
 
+  // --- GROUPING LOGIC ---
+  const getGroupKey = (s: ScheduleShift) => {
+      // Group by Role + Time + Location. 
+      // We do NOT group by User, because we want to bundle "Bar Staff" slots together regardless of who is assigned.
+      return `${s.role}_${s.startTime}_${s.endTime}_${s.locationId || 'nal'}`;
+  };
+
+  const groupShifts = (shifts: ScheduleShift[]) => {
+      const groups: Record<string, ScheduleShift[]> = {};
+      shifts.forEach(s => {
+          const key = getGroupKey(s);
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(s);
+      });
+      return groups;
+  };
+
+  const getShiftsForDay = (date: Date) => {
+    return schedule.filter(s => {
+      const sDate = new Date(s.startTime);
+      return sDate.getDate() === date.getDate() &&
+             sDate.getMonth() === date.getMonth() &&
+             sDate.getFullYear() === date.getFullYear();
+    }).sort((a, b) => a.startTime - b.startTime);
+  };
+
   // --- ACTIONS ---
 
   const handleTimeOffAction = async (requestId: string, status: 'approved' | 'rejected') => {
       if (!user?.currentCompanyId) return;
       try {
           await updateTimeOffStatus(requestId, status);
-          // Refresh list
           const timeOffData = await getTimeOffRequests(user.currentCompanyId);
           setTimeOffRequests(timeOffData.filter(r => r.status === 'pending'));
       } catch (e) {
@@ -147,14 +168,9 @@ export const AdminRota = () => {
 
   const handleClearDrafts = async () => {
       if (!confirm("Are you sure you want to delete ALL 'Draft' shifts for this week? This cannot be undone.")) return;
-      
-      // Filter visible drafts
       const drafts = schedule.filter(s => s.status === 'draft');
       if (drafts.length === 0) return;
-
       setLoading(true);
-      // Process serially or parallel batch if needed (using existing individual delete for simplicity in this context)
-      // In a real app, adding a batch delete endpoint is better.
       await Promise.all(drafts.map(s => deleteScheduleShift(s.id)));
       loadData();
   };
@@ -167,6 +183,7 @@ export const AdminRota = () => {
     setShiftEnd('17:00');
     setShiftUser('open');
     setShiftLocation(locations[0]?.id || '');
+    setShiftQuantity(1);
     setIsShiftModalOpen(true);
   };
 
@@ -175,127 +192,15 @@ export const AdminRota = () => {
     setEditingShift(shift);
     setSelectedDay(new Date(shift.startTime));
     setShiftRole(shift.role);
-    
     const s = new Date(shift.startTime);
     const eTime = new Date(shift.endTime);
-    
     setShiftStart(s.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}));
     setShiftEnd(eTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}));
     setShiftUser(shift.userId || 'open');
     setShiftLocation(shift.locationId || '');
+    setShiftQuantity(1); // Editing implies single shift
     setIsShiftModalOpen(true);
   };
-
-  // --- COPY / PASTE / DUPLICATE LOGIC ---
-
-  const handleQuickDuplicate = async (e: React.MouseEvent, shift: ScheduleShift) => {
-      e.stopPropagation();
-      const newId = `sch_${Date.now()}_dup_${Math.random().toString(36).substr(2,5)}`;
-      const newShift = { ...shift, id: newId, status: 'draft' as const, bids: [] };
-      
-      // Optimistic update
-      setSchedule([...schedule, newShift]);
-      await createScheduleShift(newShift);
-      loadData(); // Sync
-  };
-
-  const handleCopyToClipboard = (e: React.MouseEvent, shift: ScheduleShift) => {
-      e.stopPropagation();
-      setClipboardShift(shift);
-  };
-
-  const handlePasteToDay = async (date: Date) => {
-      if (!clipboardShift) return;
-      
-      const startOfDay = new Date(date);
-      const originalStart = new Date(clipboardShift.startTime);
-      const originalEnd = new Date(clipboardShift.endTime);
-      
-      // Calculate duration
-      const duration = originalEnd.getTime() - originalStart.getTime();
-      
-      // Set new start time (keep original hours/minutes)
-      const newStartTime = new Date(startOfDay);
-      newStartTime.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
-      
-      const newEndTime = new Date(newStartTime.getTime() + duration);
-
-      const newShift: ScheduleShift = {
-          ...clipboardShift,
-          id: `sch_${Date.now()}_paste_${Math.random().toString(36).substr(2,5)}`,
-          startTime: newStartTime.getTime(),
-          endTime: newEndTime.getTime(),
-          status: 'draft',
-          bids: [], // Reset bids
-          isOffered: false // Reset offers
-          // Keep user assignment? Generally when copying to a new day, we might keep it or reset it.
-          // Let's keep it for now as "Repeated Shift".
-      };
-
-      setSchedule([...schedule, newShift]);
-      await createScheduleShift(newShift);
-      loadData();
-  };
-
-  // --- DRAG AND DROP LOGIC ---
-
-  const handleDragStart = (e: React.DragEvent, shift: ScheduleShift) => {
-      setIsDragging(true);
-      e.dataTransfer.effectAllowed = 'copyMove';
-      e.dataTransfer.setData('text/plain', JSON.stringify(shift));
-      // Create a clean drag image if possible, or browser default
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault(); // Necessary to allow dropping
-      e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetDate: Date) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const data = e.dataTransfer.getData('text/plain');
-      if (!data) return;
-
-      const srcShift = JSON.parse(data) as ScheduleShift;
-      
-      // Calculate Time Difference
-      const oldStart = new Date(srcShift.startTime);
-      const oldEnd = new Date(srcShift.endTime);
-      
-      const newStart = new Date(targetDate);
-      newStart.setHours(oldStart.getHours(), oldStart.getMinutes(), 0, 0);
-      
-      const duration = oldEnd.getTime() - oldStart.getTime();
-      const newEnd = new Date(newStart.getTime() + duration);
-
-      // Check if COPY (Alt Key) or MOVE
-      if (e.altKey) {
-          // COPY
-          const newShift: ScheduleShift = {
-              ...srcShift,
-              id: `sch_${Date.now()}_copy_${Math.random().toString(36).substr(2,5)}`,
-              startTime: newStart.getTime(),
-              endTime: newEnd.getTime(),
-              status: 'draft',
-              bids: [],
-              isOffered: false
-          };
-          setSchedule([...schedule, newShift]);
-          await createScheduleShift(newShift);
-      } else {
-          // MOVE (Update)
-          // Optimistic UI Update
-          setSchedule(prev => prev.map(s => s.id === srcShift.id ? { ...s, startTime: newStart.getTime(), endTime: newEnd.getTime() } : s));
-          await updateScheduleShift(srcShift.id, {
-              startTime: newStart.getTime(),
-              endTime: newEnd.getTime()
-          });
-      }
-      loadData();
-  };
-
-  // --- END DRAG AND DROP ---
 
   const getShiftDataFromForm = (overrideDay?: Date): any => {
       if (!user?.currentCompanyId) return null;
@@ -303,7 +208,6 @@ export const AdminRota = () => {
       if (!targetDay) return null;
 
       const [sH, sM] = shiftStart.split(':').map(Number);
-      
       const startTs = new Date(targetDay);
       startTs.setHours(sH, sM, 0, 0);
       
@@ -314,11 +218,7 @@ export const AdminRota = () => {
           const [eH, eM] = shiftEnd.split(':').map(Number);
           endTs = new Date(targetDay);
           endTs.setHours(eH, eM, 0, 0);
-          
-          // Auto-adjust for overnight shifts
-          if (endTs <= startTs) {
-              endTs.setDate(endTs.getDate() + 1);
-          }
+          if (endTs <= startTs) endTs.setDate(endTs.getDate() + 1);
       } else {
           endTs = new Date(startTs.getTime() + (8 * 60 * 60 * 1000));
       }
@@ -328,7 +228,7 @@ export const AdminRota = () => {
       let userName: string | null = null;
       if (shiftUser !== 'open') {
           const u = staff.find(s => s.id === shiftUser);
-          if (u) userName = u.name || 'Staff'; // Ensure never undefined
+          if (u) userName = u.name || 'Staff'; 
       }
 
       return {
@@ -346,71 +246,32 @@ export const AdminRota = () => {
 
   const handleSaveShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    const shiftData = getShiftDataFromForm();
-    if (!shiftData) return;
-
-    // Sanitize to remove undefined if any crept in (redundant safety)
-    const sanitizedShift = JSON.parse(JSON.stringify(shiftData));
+    const baseShift = getShiftDataFromForm();
+    if (!baseShift) return;
 
     if (editingShift) {
-        await updateScheduleShift(editingShift.id, sanitizedShift);
+        // Update Single
+        await updateScheduleShift(editingShift.id, baseShift);
     } else {
-        sanitizedShift.id = `sch_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
-        await createScheduleShift(sanitizedShift as ScheduleShift);
+        // Create Batch (Quantity)
+        if (shiftQuantity > 1) {
+            const shiftsToCreate = [];
+            for (let i = 0; i < shiftQuantity; i++) {
+                shiftsToCreate.push({
+                    ...baseShift,
+                    id: `sch_${Date.now()}_${i}_${Math.random().toString(36).substr(2,5)}`
+                });
+            }
+            await createBatchScheduleShifts(shiftsToCreate);
+        } else {
+            // Single Create
+            const newId = `sch_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+            await createScheduleShift({ ...baseShift, id: newId });
+        }
     }
 
     setIsShiftModalOpen(false);
     loadData();
-  };
-
-  const handleRepeatShift = async (weeks: number) => {
-      if (!selectedDay || !user?.currentCompanyId) return;
-      const baseShiftData = getShiftDataFromForm();
-      if (!baseShiftData) return;
-
-      const showFinish = company?.settings.rotaShowFinishTimes !== false;
-      const newShifts: ScheduleShift[] = [];
-      
-      for (let i = 1; i <= weeks; i++) {
-          const nextDate = new Date(selectedDay);
-          nextDate.setDate(nextDate.getDate() + (i * 7));
-          
-          const [sH, sM] = shiftStart.split(':').map(Number);
-          const startTs = new Date(nextDate);
-          startTs.setHours(sH, sM, 0, 0);
-          
-          let endTs;
-          if (showFinish) {
-              const [eH, eM] = shiftEnd.split(':').map(Number);
-              endTs = new Date(nextDate);
-              endTs.setHours(eH, eM, 0, 0);
-              if (endTs <= startTs) endTs.setDate(endTs.getDate() + 1);
-          } else {
-              endTs = new Date(startTs.getTime() + (8 * 60 * 60 * 1000));
-          }
-
-          const shiftCopy = JSON.parse(JSON.stringify(baseShiftData)); // deep copy & sanitize
-          newShifts.push({
-              ...shiftCopy,
-              id: `sch_${Date.now()}_${i}_${Math.random().toString(36).substr(2,5)}`,
-              startTime: startTs.getTime(),
-              endTime: endTs.getTime(),
-          });
-      }
-
-      await createBatchScheduleShifts(newShifts);
-      
-      const sanitizedBase = JSON.parse(JSON.stringify(baseShiftData));
-      if (!editingShift) {
-          sanitizedBase.id = `sch_${Date.now()}_0`;
-          await createScheduleShift(sanitizedBase);
-      } else {
-          await updateScheduleShift(editingShift.id, sanitizedBase);
-      }
-
-      setIsRepeatModalOpen(false);
-      setIsShiftModalOpen(false);
-      loadData();
   };
 
   const handleDeleteShift = async () => {
@@ -433,22 +294,91 @@ export const AdminRota = () => {
   const handleAssignBidder = async (shift: ScheduleShift, bidderId: string) => {
       const bidder = staff.find(s => s.id === bidderId);
       if (bidder) {
-          // Confirm assignment
           if(!confirm(`Assign ${bidder.name} to this shift?`)) return;
-
           const safeUserName = bidder.name || 'Staff';
           await assignShiftToUser(shift.id, bidder.id, safeUserName);
-          
-          // Close modal to prevent state conflicts
           setIsShiftModalOpen(false);
           setEditingShift(null);
           loadData();
       }
   };
 
-  // --- SUB-COMPONENTS ---
+  const handlePrint = () => {
+      window.print();
+  };
 
-  const ShiftCard: React.FC<{ shift: ScheduleShift }> = ({ shift }) => {
+  // --- VISUAL COMPONENTS ---
+
+  // Stacked Card for Multiple Shifts
+  const GroupShiftCard: React.FC<{ groupKey: string, shifts: ScheduleShift[] }> = ({ groupKey, shifts }) => {
+      const isExpanded = expandedGroupId === groupKey;
+      const assignedCount = shifts.filter(s => s.userId).length;
+      const totalCount = shifts.length;
+      const isFull = assignedCount === totalCount;
+      const isEmpty = assignedCount === 0;
+      
+      const firstShift = shifts[0];
+      const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
+
+      // Color Logic for the Bar
+      const getProgressColor = () => {
+          if (isEmpty) return 'bg-red-500';
+          if (isFull) return 'bg-green-500';
+          return 'bg-amber-500';
+      };
+
+      if (!isExpanded && shifts.length > 1) {
+          return (
+              <div 
+                onClick={() => setExpandedGroupId(groupKey)}
+                className={`relative p-3 rounded-xl border border-white/5 bg-slate-800 hover:bg-slate-700 cursor-pointer transition shadow-md group mb-2 overflow-hidden`}
+              >
+                  {/* Progress Bar Background */}
+                  <div className="absolute bottom-0 left-0 h-1 bg-slate-900 w-full">
+                      <div 
+                        className={`h-full ${getProgressColor()} transition-all duration-500`} 
+                        style={{ width: `${(assignedCount / totalCount) * 100}%` }}
+                      ></div>
+                  </div>
+
+                  <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">{firstShift.role}</span>
+                      <div className="flex items-center space-x-1 bg-black/30 px-2 py-0.5 rounded text-[10px] font-mono text-slate-300">
+                          <Users className="w-3 h-3" />
+                          <span>{assignedCount}/{totalCount}</span>
+                      </div>
+                  </div>
+
+                  <div className="text-[10px] text-slate-400 font-mono">
+                      {new Date(firstShift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                      {showFinishTimes && ` - ${new Date(firstShift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                  </div>
+
+                  {/* Stack Effect Visuals */}
+                  <div className="absolute -bottom-1 left-2 right-2 h-1 bg-slate-700 rounded-b-lg border-x border-b border-white/5 z-0"></div>
+              </div>
+          );
+      }
+
+      // If Expanded or Single, show list
+      return (
+          <div className="space-y-2 mb-2 animate-fade-in">
+              {shifts.map((shift, idx) => (
+                  <SingleShiftCard key={shift.id} shift={shift} isGrouped={shifts.length > 1} index={idx} />
+              ))}
+              {shifts.length > 1 && (
+                  <button 
+                    onClick={() => setExpandedGroupId(null)}
+                    className="w-full py-1 text-[10px] text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg flex items-center justify-center gap-1"
+                  >
+                      <Layers className="w-3 h-3" /> Collapse Group
+                  </button>
+              )}
+          </div>
+      );
+  };
+
+  const SingleShiftCard: React.FC<{ shift: ScheduleShift, isGrouped?: boolean, index?: number }> = ({ shift, isGrouped, index }) => {
       const isOpen = !shift.userId;
       const hasBids = shift.bids && shift.bids.length > 0;
       const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
@@ -458,10 +388,9 @@ export const AdminRota = () => {
       return (
         <div 
             draggable
-            onDragStart={(e) => handleDragStart(e, shift)}
             onClick={(e) => handleEditShift(shift, e)}
             className={`
-                group relative p-2.5 rounded-xl border text-left cursor-grab active:cursor-grabbing transition-all shadow-sm hover:shadow-lg hover:scale-[1.02] mb-2
+                group relative p-2.5 rounded-xl border text-left cursor-pointer transition-all shadow-sm hover:shadow-lg hover:scale-[1.02]
                 ${shift.status === 'draft' 
                     ? 'bg-slate-800/40 border-slate-700 border-dashed opacity-80 hover:opacity-100' 
                     : isOpen 
@@ -475,41 +404,25 @@ export const AdminRota = () => {
             `}
         >
             <div className="flex justify-between items-start mb-1">
-                <span className="text-[11px] font-bold text-slate-200 truncate uppercase tracking-wider">{shift.role}</span>
-                {/* Status Indicator */}
+                <span className="text-[11px] font-bold text-slate-200 truncate uppercase tracking-wider">
+                    {isGrouped ? `Slot ${index! + 1}` : shift.role}
+                </span>
                 {shift.status === 'draft' && <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>}
-                {isNoShow && !isOffered && <span title="No Show"><AlertTriangle className="w-3 h-3 text-red-500" /></span>}
-                {isOffered && <span title="Up for Grabs"><ArrowRightLeft className="w-3 h-3 text-purple-400" /></span>}
-                
-                {/* Hover Actions */}
-                <div className="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 rounded p-0.5 backdrop-blur-sm">
-                    <button 
-                        onClick={(e) => handleQuickDuplicate(e, shift)}
-                        className="p-1 text-slate-400 hover:text-white" title="Duplicate (Same Day)"
-                    >
-                        <Copy className="w-3 h-3" />
-                    </button>
-                    <button 
-                        onClick={(e) => handleCopyToClipboard(e, shift)}
-                        className="p-1 text-slate-400 hover:text-brand-400" title="Copy to Clipboard"
-                    >
-                        <ClipboardCopy className="w-3 h-3" />
-                    </button>
-                </div>
+                {isNoShow && !isOffered && <AlertTriangle className="w-3 h-3 text-red-500" />}
+                {isOffered && <ArrowRightLeft className="w-3 h-3 text-purple-400" />}
             </div>
 
-            <div className="text-[11px] text-slate-400 mb-2 flex items-center font-mono">
-                {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
-                {showFinishTimes ? (
-                    <> - {new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</>
-                ) : <span className="ml-1 opacity-50">→</span>}
-            </div>
+            {!isGrouped && (
+                <div className="text-[11px] text-slate-400 mb-2 flex items-center font-mono">
+                    {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                    {showFinishTimes && ` - ${new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                </div>
+            )}
             
-            {/* Show Bids badge if there are any bids, regardless of assigned status (allows swaps) */}
             {hasBids ? (
                 <div className={`flex items-center space-x-1 text-[10px] font-medium ${isOpen ? 'text-amber-400' : 'text-purple-400'}`}>
                     <AlertCircle className="w-3 h-3" />
-                    <span>{shift.bids?.length} Bids {isOpen ? '' : '(Swap)'}</span>
+                    <span>{shift.bids?.length} Bids</span>
                 </div>
             ) : isOpen ? (
                 <div className="flex items-center space-x-1 text-[10px] font-medium text-amber-400">
@@ -537,12 +450,74 @@ export const AdminRota = () => {
   const draftCount = schedule.filter(s => s.status === 'draft').length;
 
   return (
-    <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col">
+    <>
+    {/* PRINT VIEW */}
+    <div className="hidden print:block p-8 bg-white text-black min-h-screen">
+        <div className="mb-8 border-b-2 border-black pb-4">
+            <h1 className="text-4xl font-bold uppercase tracking-tight">{company?.name} Rota</h1>
+            <p className="text-lg mt-2">
+                {weekStart.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })} - {new Date(weekStart.getTime() + 6*86400000).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+        </div>
+
+        <div className="space-y-8">
+            {weekDates.map((date, i) => {
+                // If viewing a specific day, only print that day
+                if (viewMode === 'day' && date.getDate() !== currentDate.getDate()) return null;
+
+                const dayShifts = getShiftsForDay(date);
+                if (dayShifts.length === 0) return null;
+
+                return (
+                    <div key={i} className="break-inside-avoid">
+                        <h3 className="text-xl font-bold mb-3 uppercase border-b border-gray-300 pb-1 flex justify-between">
+                            <span>{WEEK_DAYS[i]} {date.getDate()}</span>
+                            <span className="text-sm font-normal text-gray-500">{dayShifts.length} Shifts</span>
+                        </h3>
+                        <table className="w-full text-sm text-left">
+                            <thead>
+                                <tr className="text-xs uppercase text-gray-500">
+                                    <th className="py-1 w-24">Time</th>
+                                    <th className="py-1 w-32">Role</th>
+                                    <th className="py-1">Staff</th>
+                                    <th className="py-1 w-32 text-right">Location</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {dayShifts.map(s => (
+                                    <tr key={s.id}>
+                                        <td className="py-2 font-mono">
+                                            {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                            <span className="text-gray-400 mx-1">-</span>
+                                            {new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                        </td>
+                                        <td className="py-2 font-bold">{s.role}</td>
+                                        <td className="py-2">
+                                            {s.userName || <span className="text-gray-400 italic">Open</span>}
+                                        </td>
+                                        <td className="py-2 text-right text-gray-500 text-xs">
+                                            {s.locationName || '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            })}
+        </div>
+        <div className="mt-8 pt-4 border-t border-gray-300 text-center text-xs text-gray-400">
+            Generated by Tallyd on {new Date().toLocaleString()}
+        </div>
+    </div>
+
+    {/* WEB APP VIEW */}
+    <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col print:hidden">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
             <div>
                 <h1 className="text-3xl font-bold text-white">Rota Management</h1>
-                <p className="text-slate-400">Drag to move. Alt+Drag to copy.</p>
+                <p className="text-slate-400">Plan shifts and manage staffing levels.</p>
             </div>
             <div className="flex flex-wrap gap-2">
                  <button 
@@ -558,6 +533,15 @@ export const AdminRota = () => {
                     )}
                 </button>
                 <div className="flex rounded-xl glass-panel border border-white/10 p-1">
+                    <button 
+                        onClick={handlePrint}
+                        className="px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition flex items-center gap-1"
+                        title="Print Rota"
+                    >
+                        <Printer className="w-3 h-3" />
+                        <span className="hidden sm:inline">Print</span>
+                    </button>
+                    <div className="w-px bg-white/10 mx-1"></div>
                     <button 
                         onClick={handleCopyWeek}
                         className="px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition"
@@ -597,14 +581,6 @@ export const AdminRota = () => {
                 </div>
             </div>
             
-            {clipboardShift && (
-                <div className="hidden md:flex items-center space-x-2 bg-brand-900/30 px-3 py-1.5 rounded-lg border border-brand-500/30 animate-fade-in">
-                    <ClipboardCopy className="w-4 h-4 text-brand-400" />
-                    <span className="text-xs font-bold text-brand-200">Copied: {clipboardShift.role}</span>
-                    <button onClick={() => setClipboardShift(null)} className="ml-2 text-brand-400 hover:text-white"><X className="w-3 h-3" /></button>
-                </div>
-            )}
-
             <div className="flex bg-slate-800 p-1 rounded-lg">
                 <button 
                     onClick={() => setViewMode('week')}
@@ -628,40 +604,27 @@ export const AdminRota = () => {
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-4 min-h-full">
                     {weekDates.map((date, i) => {
                         const dayShifts = getShiftsForDay(date);
+                        // Group Logic Here
+                        const groups = groupShifts(dayShifts);
                         const isToday = new Date().toDateString() === date.toDateString();
                         
                         return (
                             <div 
                                 key={i} 
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, date)}
                                 className={`flex flex-col rounded-xl overflow-hidden border transition-colors ${
                                     isToday ? 'border-brand-500/50 bg-brand-900/10' : 'border-white/5 bg-white/5'
-                                } ${isDragging ? 'hover:bg-brand-500/5 hover:border-brand-500/30' : ''}`}
+                                }`}
                             >
-                                {/* Header */}
-                                <div className={`text-center p-3 border-b group relative ${isToday ? 'bg-brand-900/20 border-brand-500/30' : 'bg-white/5 border-white/5'}`}>
+                                <div className={`text-center p-3 border-b ${isToday ? 'bg-brand-900/20 border-brand-500/30' : 'bg-white/5 border-white/5'}`}>
                                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{WEEK_DAYS[i]}</div>
                                     <div className={`text-lg font-bold ${isToday ? 'text-brand-400' : 'text-white'}`}>
                                         {date.getDate()}
                                     </div>
-                                    
-                                    {/* Paste Button in Header */}
-                                    {clipboardShift && (
-                                        <button 
-                                            onClick={() => handlePasteToDay(date)}
-                                            className="absolute right-2 top-2 p-1.5 bg-brand-600 text-white rounded shadow-lg hover:bg-brand-500 transition opacity-0 group-hover:opacity-100"
-                                            title="Paste Shift Here"
-                                        >
-                                            <ClipboardPaste className="w-3 h-3" />
-                                        </button>
-                                    )}
                                 </div>
 
-                                {/* Body */}
                                 <div className="flex-1 p-2 space-y-2 min-h-[10rem]">
-                                    {dayShifts.map(shift => (
-                                        <ShiftCard key={shift.id} shift={shift} />
+                                    {Object.entries(groups).map(([key, groupShifts]) => (
+                                        <GroupShiftCard key={key} groupKey={key} shifts={groupShifts} />
                                     ))}
                                     <button 
                                         onClick={() => handleAddShift(date)}
@@ -675,18 +638,12 @@ export const AdminRota = () => {
                     })}
                 </div>
             ) : (
-                // --- DAY VIEW (Grouped by Role) ---
+                // --- DAY VIEW ---
                 <div className="glass-panel rounded-xl p-6 min-h-full border border-white/10">
                     {(() => {
                         const dayShifts = getShiftsForDay(currentDate);
-                        const grouped: Record<string, ScheduleShift[]> = {};
-                        dayShifts.forEach(s => {
-                            const key = s.role || 'Unassigned';
-                            if (!grouped[key]) grouped[key] = [];
-                            grouped[key].push(s);
-                        });
-
-                        const roles = Object.keys(grouped).sort();
+                        const groups = groupShifts(dayShifts);
+                        const roleKeys = Object.keys(groups).sort();
 
                         return (
                             <div className="space-y-8">
@@ -694,46 +651,25 @@ export const AdminRota = () => {
                                     <h2 className="text-xl font-bold text-white">
                                         {currentDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
                                     </h2>
-                                    <div className="flex gap-2">
-                                        {clipboardShift && (
-                                            <button 
-                                                onClick={() => handlePasteToDay(currentDate)}
-                                                className="bg-slate-700 text-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-600 transition flex items-center space-x-2"
-                                            >
-                                                <ClipboardPaste className="w-4 h-4" />
-                                                <span>Paste</span>
-                                            </button>
-                                        )}
-                                        <button 
-                                            onClick={() => handleAddShift(currentDate)}
-                                            className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition flex items-center space-x-2"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                            <span>Add Shift</span>
-                                        </button>
-                                    </div>
+                                    <button 
+                                        onClick={() => handleAddShift(currentDate)}
+                                        className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition flex items-center space-x-2"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        <span>Add Shift</span>
+                                    </button>
                                 </div>
 
-                                {roles.length === 0 ? (
+                                {roleKeys.length === 0 ? (
                                     <div className="text-center py-20 text-slate-500">
                                         <Calendar className="w-16 h-16 mx-auto mb-4 opacity-20" />
                                         <p>No shifts scheduled for this day.</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {roles.map(role => (
-                                            <div key={role} className="bg-slate-800/50 rounded-xl p-4 border border-white/5">
-                                                <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
-                                                    <h3 className="font-bold text-white">{role}</h3>
-                                                    <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full text-xs font-bold shadow-sm">
-                                                        {grouped[role].length}
-                                                    </span>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    {grouped[role].map(shift => (
-                                                        <ShiftCard key={shift.id} shift={shift} />
-                                                    ))}
-                                                </div>
+                                        {roleKeys.map(key => (
+                                            <div key={key} className="bg-slate-800/50 rounded-xl p-4 border border-white/5">
+                                                <GroupShiftCard groupKey={key} shifts={groups[key]} />
                                             </div>
                                         ))}
                                     </div>
@@ -747,7 +683,7 @@ export const AdminRota = () => {
 
         {/* --- MODALS --- */}
         {isShiftModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-lg text-white">
@@ -766,6 +702,18 @@ export const AdminRota = () => {
                                 placeholder="e.g. Bar Staff"
                             />
                         </div>
+
+                        {!editingShift && (
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Number of Staff Needed</label>
+                                <input 
+                                    type="number" min="1" max="20" required
+                                    value={shiftQuantity} onChange={e => setShiftQuantity(parseInt(e.target.value))}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">Creates multiple open slots for this role.</p>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-4">
                              <div>
@@ -796,13 +744,15 @@ export const AdminRota = () => {
                             <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Assign Staff</label>
                             <select 
                                 value={shiftUser} onChange={e => setShiftUser(e.target.value)}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                disabled={!editingShift && shiftQuantity > 1}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none disabled:opacity-50"
                             >
                                 <option value="open">-- Open / Unassigned --</option>
                                 {staff.map(s => (
                                     <option key={s.id} value={s.id}>{s.name} ({s.position || 'Staff'})</option>
                                 ))}
                             </select>
+                            {!editingShift && shiftQuantity > 1 && <p className="text-xs text-amber-500 mt-1">Cannot assign staff during bulk creation.</p>}
                         </div>
 
                          <div>
@@ -818,7 +768,7 @@ export const AdminRota = () => {
                             </select>
                         </div>
                         
-                        {/* Bids Section: Show for both Unassigned AND Assigned (for swaps) */}
+                        {/* Bids Section */}
                         {editingShift && editingShift.bids && editingShift.bids.length > 0 && (
                             <div className="bg-amber-900/20 p-4 rounded-lg border border-amber-900/30 animate-fade-in">
                                 <h4 className="text-sm font-bold text-amber-400 mb-2">
@@ -845,17 +795,6 @@ export const AdminRota = () => {
                             </div>
                         )}
 
-                        <div className="flex gap-2 pt-2 border-t border-white/5">
-                             <button 
-                                type="button" 
-                                onClick={() => setIsRepeatModalOpen(true)}
-                                className="flex-1 py-2 text-xs font-bold text-slate-300 bg-slate-700 rounded-lg hover:bg-slate-600 flex items-center justify-center space-x-1"
-                            >
-                                <Repeat className="w-3 h-3" />
-                                <span>Repeat</span>
-                            </button>
-                        </div>
-
                         <div className="flex gap-3 pt-4">
                             {editingShift && (
                                 <button type="button" onClick={handleDeleteShift} className="px-4 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg font-bold transition">Delete</button>
@@ -869,25 +808,9 @@ export const AdminRota = () => {
             </div>
         )}
 
-        {isRepeatModalOpen && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                 <div className="glass-panel w-full max-w-sm p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
-                     <h3 className="font-bold text-lg text-white mb-4">Repeat Shift</h3>
-                     <p className="text-sm text-slate-400 mb-4">Create copies of this shift for upcoming weeks.</p>
-                     
-                     <div className="space-y-2">
-                        <button onClick={() => handleRepeatShift(4)} className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-left font-medium text-white transition border border-white/5">Repeat for 4 Weeks</button>
-                        <button onClick={() => handleRepeatShift(8)} className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-left font-medium text-white transition border border-white/5">Repeat for 8 Weeks</button>
-                        <button onClick={() => handleRepeatShift(12)} className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-left font-medium text-white transition border border-white/5">Repeat for 12 Weeks</button>
-                     </div>
-                     
-                     <button onClick={() => setIsRepeatModalOpen(false)} className="mt-4 w-full py-2 text-slate-400 font-bold text-sm hover:text-white transition">Cancel</button>
-                 </div>
-            </div>
-        )}
-
+        {/* Time Off Modal */}
         {isTimeOffModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
                 <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900 h-[80vh] flex flex-col">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-lg text-white">Time Off Requests</h3>
@@ -935,5 +858,6 @@ export const AdminRota = () => {
             </div>
         )}
     </div>
+    </>
   );
 };

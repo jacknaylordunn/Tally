@@ -45,10 +45,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   });
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row relative overflow-hidden bg-slate-900 text-slate-100">
+    <div className="min-h-screen flex flex-col md:flex-row relative overflow-hidden bg-slate-900 text-slate-100 print:bg-white print:text-black">
       
       {/* --- DESKTOP SIDEBAR (Floating Dock) --- */}
-      <aside className="hidden md:flex flex-col w-20 lg:w-72 fixed left-4 top-4 bottom-4 glass-panel rounded-3xl z-50 transition-all duration-300 shadow-2xl">
+      <aside className="hidden md:flex flex-col w-20 lg:w-72 fixed left-4 top-4 bottom-4 glass-panel rounded-3xl z-50 transition-all duration-300 shadow-2xl print:hidden">
         <div className="flex items-center gap-4 p-6 mb-4">
            <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-purple-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
@@ -100,7 +100,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </aside>
 
       {/* --- MOBILE HEADER & BOTTOM NAV --- */}
-      <div className="md:hidden fixed top-0 left-0 right-0 glass-panel z-50 px-6 py-4 flex justify-between items-center border-b border-white/5">
+      <div className="md:hidden fixed top-0 left-0 right-0 glass-panel z-50 px-6 py-4 flex justify-between items-center border-b border-white/5 print:hidden">
         <div className="flex items-center gap-3">
            <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg bg-white" />
            <span className="font-bold text-lg text-white">{APP_NAME}</span>
@@ -110,7 +110,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </button>
       </div>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 glass-panel z-50 border-t border-white/5 pb-safe">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 glass-panel z-50 border-t border-white/5 pb-safe print:hidden">
           <div className="flex justify-around items-center p-2">
             {navItems.slice(0, 4).map((item) => { // Limit to 4 for mobile bar
                 const isActive = location.pathname === item.path;
@@ -132,8 +132,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <main className="flex-1 md:ml-24 lg:ml-80 p-6 md:p-10 pt-24 md:pt-10 pb-24 md:pb-10 min-h-screen overflow-x-hidden">
-        <div className="max-w-7xl mx-auto animate-fade-in">
+      <main className="flex-1 md:ml-24 lg:ml-80 p-6 md:p-10 pt-24 md:pt-10 pb-24 md:pb-10 min-h-screen overflow-x-hidden print:m-0 print:p-0">
+        <div className="max-w-7xl mx-auto animate-fade-in print:max-w-none">
             {children}
         </div>
       </main>

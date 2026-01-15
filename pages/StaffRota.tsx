@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, bidOnShift, cancelBid, createTimeOffRequest, getMyTimeOff, getCompany, setShiftOfferStatus, deleteTimeOffRequest } from '../services/api';
 import { ScheduleShift, TimeOffRequest, Company } from '../types';
-import { Calendar, MapPin, Clock, AlertCircle, CheckCircle, Plus, X, User, Lock, RotateCcw, ArrowRightLeft, Trash2 } from 'lucide-react';
+import { Calendar, MapPin, Clock, AlertCircle, CheckCircle, Plus, X, User, Lock, RotateCcw, ArrowRightLeft, Trash2, Users } from 'lucide-react';
 
 export const StaffRota = () => {
   const { user } = useAuth();
@@ -56,16 +56,18 @@ export const StaffRota = () => {
       );
   }
 
-  const handleBid = async (shiftId: string) => {
+  const handleBid = async (shiftIds: string[]) => {
       if (!user) return;
-      await bidOnShift(shiftId, user.id);
+      // Smart Bidding: Apply bid to ALL unassigned shifts in this group
+      // This ensures that if one specific slot is taken, the user is still in the running for the others.
+      await Promise.all(shiftIds.map(id => bidOnShift(id, user.id)));
       loadData();
   };
 
-  const handleCancelBid = async (shiftId: string) => {
+  const handleCancelBid = async (shiftIds: string[]) => {
       if (!user) return;
-      if (!confirm("Cancel your request for this shift?")) return;
-      await cancelBid(shiftId, user.id);
+      if (!confirm("Cancel your request?")) return;
+      await Promise.all(shiftIds.map(id => cancelBid(id, user.id)));
       loadData();
   };
 
@@ -106,29 +108,31 @@ export const StaffRota = () => {
 
   const myShifts = schedule.filter(s => s.userId === user?.id).sort((a,b) => a.startTime - b.startTime);
   
-  // Open shifts include Unassigned OR Assigned-but-Offered shifts (Swap)
+  // Logic to Group Open Shifts
   const openShifts = schedule.filter(s => s.userId === null || (s.userId !== user?.id && s.isOffered)).sort((a,b) => a.startTime - b.startTime);
 
-  // Group open shifts by date string for better organization
-  const groupedOpenShifts: Record<string, ScheduleShift[]> = {};
+  // Group by Date -> Group Key
+  // Key includes Role, Start, End, AND Location to prevent merging shifts at different sites
+  const groupedOpenShifts: Record<string, Record<string, ScheduleShift[]>> = {};
+  
   openShifts.forEach(s => {
-      const d = new Date(s.startTime).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
-      if(!groupedOpenShifts[d]) groupedOpenShifts[d] = [];
-      groupedOpenShifts[d].push(s);
+      const dateKey = new Date(s.startTime).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
+      const groupKey = `${s.role}_${s.startTime}_${s.endTime}_${s.locationId || 'nal'}`;
+      
+      if(!groupedOpenShifts[dateKey]) groupedOpenShifts[dateKey] = {};
+      if(!groupedOpenShifts[dateKey][groupKey]) groupedOpenShifts[dateKey][groupKey] = [];
+      
+      groupedOpenShifts[dateKey][groupKey].push(s);
   });
 
   const ShiftCard: React.FC<{ shift: ScheduleShift; isOpenBoard?: boolean }> = ({ shift, isOpenBoard = false }) => {
-      const isBidded = user && shift.bids?.includes(user.id);
-      const allowBidding = company?.settings.allowShiftBidding !== false; 
       const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
-      const isSwap = !!shift.userId; // If on OpenBoard and has UserID, it's a swap request
-      
       const startD = new Date(shift.startTime);
       const endD = new Date(shift.endTime);
       const isOvernight = startD.toDateString() !== endD.toDateString();
 
       return (
-        <div className={`glass-panel p-5 rounded-2xl border ${isOpenBoard ? (isSwap ? 'border-purple-900/30 bg-purple-900/5' : 'border-amber-900/30 bg-amber-900/5') : 'border-white/10'} shadow-sm mb-4 transition`}>
+        <div className={`glass-panel p-5 rounded-2xl border border-white/10 shadow-sm mb-4 transition`}>
             <div className="flex justify-between items-start mb-3">
                 <div>
                     <div className="font-bold text-lg text-white">{new Date(shift.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
@@ -144,13 +148,72 @@ export const StaffRota = () => {
                         )}
                     </div>
                 </div>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold bg-brand-900/30 text-brand-400`}>
+                    {shift.role}
+                </span>
+            </div>
+            
+            <div className="flex items-center space-x-2 text-sm text-slate-400 mb-4">
+                <MapPin className="w-4 h-4" />
+                <span>{shift.locationName || 'General Location'}</span>
+            </div>
+
+            <div className="pt-2 border-t border-white/5">
+                {shift.isOffered ? (
+                    <button 
+                        onClick={() => handleOfferShift(shift.id, false)}
+                        className="w-full py-2 bg-purple-900/20 text-purple-300 border border-purple-500/30 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-purple-900/40 transition"
+                    >
+                        <RotateCcw className="w-4 h-4" /> Retract Offer
+                    </button>
+                ) : (
+                    <button 
+                        onClick={() => handleOfferShift(shift.id, true)}
+                        className="w-full py-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition hover:bg-slate-700"
+                    >
+                        <ArrowRightLeft className="w-4 h-4" /> Offer Swap
+                    </button>
+                )}
+            </div>
+        </div>
+      );
+  };
+
+  const OpenGroupCard: React.FC<{ shifts: ScheduleShift[] }> = ({ shifts }) => {
+      const shift = shifts[0]; // Representative for display
+      const allowBidding = company?.settings.allowShiftBidding !== false; 
+      const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
+      const isSwap = !!shift.userId; // If it has a user ID but is on open board, it's a swap offer
+      
+      // Do we have a pending bid on ANY of these?
+      const isBidded = shifts.some(s => user && s.bids?.includes(user.id));
+      const slotsCount = shifts.length;
+
+      const ids = shifts.map(s => s.id);
+
+      return (
+        <div className={`glass-panel p-5 rounded-2xl border ${isSwap ? 'border-purple-900/30 bg-purple-900/5' : 'border-amber-900/30 bg-amber-900/5'} shadow-sm mb-4 transition`}>
+            <div className="flex justify-between items-start mb-3">
+                <div>
+                    <div className="flex items-center space-x-2">
+                        <div className="font-bold text-lg text-white">{new Date(shift.startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                        {slotsCount > 1 && (
+                            <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded font-bold border border-amber-500/20 flex items-center gap-1">
+                                <Users className="w-3 h-3" />
+                                {slotsCount} Spots
+                            </span>
+                        )}
+                    </div>
+                    <div className="text-sm text-slate-400 flex items-center">
+                        {new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                        {showFinishTimes && ` - ${new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
+                    </div>
+                </div>
                 <div className="flex flex-col items-end gap-1">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${isOpenBoard ? (isSwap ? 'bg-purple-900/30 text-purple-400' : 'bg-amber-900/30 text-amber-400') : 'bg-brand-900/30 text-brand-400'}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${isSwap ? 'bg-purple-900/30 text-purple-400' : 'bg-amber-900/30 text-amber-400'}`}>
                         {shift.role}
                     </span>
-                    {isOpenBoard && isSwap && (
-                        <span className="text-[10px] text-purple-300 font-medium">Cover: {shift.userName?.split(' ')[0]}</span>
-                    )}
+                    {isSwap && <span className="text-[10px] text-purple-300 font-medium">Cover Request</span>}
                 </div>
             </div>
             
@@ -159,53 +222,29 @@ export const StaffRota = () => {
                 <span>{shift.locationName || 'General Location'}</span>
             </div>
 
-            {/* Actions for My Shifts */}
-            {!isOpenBoard && (
-                <div className="pt-2 border-t border-white/5">
-                    {shift.isOffered ? (
-                        <button 
-                            onClick={() => handleOfferShift(shift.id, false)}
-                            className="w-full py-2 bg-purple-900/20 text-purple-300 border border-purple-500/30 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-purple-900/40 transition"
-                        >
-                            <RotateCcw className="w-4 h-4" /> Retract Offer
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={() => handleOfferShift(shift.id, true)}
-                            className="w-full py-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition hover:bg-slate-700"
-                        >
-                            <ArrowRightLeft className="w-4 h-4" /> Offer Swap
-                        </button>
-                    )}
-                </div>
-            )}
-
-            {/* Actions for Open Board */}
-            {isOpenBoard && (
-                allowBidding ? (
-                    isBidded ? (
-                        <button 
-                            onClick={() => handleCancelBid(shift.id)}
-                            className="w-full py-3 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-xl font-bold flex items-center justify-center space-x-2 transition border border-slate-700 hover:border-slate-500"
-                        >
-                            <X className="w-5 h-5" />
-                            <span>Cancel Request</span>
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={() => handleBid(shift.id)}
-                            className={`w-full py-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition ${
-                                isSwap ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/20'
-                            }`}
-                        >
-                            <span>{isSwap ? 'Offer to Cover' : 'Bid for Shift'}</span>
-                        </button>
-                    )
+            {allowBidding ? (
+                isBidded ? (
+                    <button 
+                        onClick={() => handleCancelBid(ids)}
+                        className="w-full py-3 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-xl font-bold flex items-center justify-center space-x-2 transition border border-slate-700 hover:border-slate-500"
+                    >
+                        <X className="w-5 h-5" />
+                        <span>Cancel Request</span>
+                    </button>
                 ) : (
-                    <div className="w-full py-3 bg-slate-800 text-slate-500 rounded-xl font-medium text-center text-sm">
-                        Bidding Disabled
-                    </div>
+                    <button 
+                        onClick={() => handleBid(ids)}
+                        className={`w-full py-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition ${
+                            isSwap ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/20'
+                        }`}
+                    >
+                        <span>{isSwap ? 'Offer to Cover' : `Bid for Shift (${slotsCount} Left)`}</span>
+                    </button>
                 )
+            ) : (
+                <div className="w-full py-3 bg-slate-800 text-slate-500 rounded-xl font-medium text-center text-sm">
+                    Bidding Disabled
+                </div>
             )}
         </div>
       );
@@ -273,10 +312,12 @@ export const StaffRota = () => {
                                     <p>No open shifts available right now.</p>
                                 </div>
                             ) : (
-                                Object.entries(groupedOpenShifts).map(([date, shifts]) => (
+                                Object.entries(groupedOpenShifts).map(([date, roleGroups]) => (
                                     <div key={date} className="mb-6">
                                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 pl-1">{date}</h3>
-                                        {shifts.map(s => <ShiftCard key={s.id} shift={s} isOpenBoard />)}
+                                        {Object.values(roleGroups).map((group, idx) => (
+                                            <OpenGroupCard key={idx} shifts={group} />
+                                        ))}
                                     </div>
                                 ))
                             )}
