@@ -36,7 +36,7 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
           {
               targetId: 'welcome-modal', // Dummy ID for center positioning
               title: 'Welcome to Tallyd',
-              content: "Let's give you a complete tour of your Workforce OS. We'll show you how to eliminate time theft, automate payroll, and manage your team efficiently.",
+              content: "Let's give you a complete tour of **Tallyd**. We'll show you how to eliminate time theft, automate payroll, and manage your team efficiently.",
               position: 'center',
               action: 'next'
           },
@@ -76,31 +76,25 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
               {
                   targetId: 'rota-add-btn-0',
                   title: 'Create a Shift',
-                  content: 'Click the + button on the first day. You can create single shifts for specific staff, or "Open Slots" that your team can bid for.',
+                  content: 'Click the **+** button on the first day. You can create single shifts for specific staff, or "Open Slots" that your team can bid for.',
                   requiredRoute: '/admin/rota',
                   position: 'bottom',
                   action: 'click'
               },
-              {
-                  targetId: 'shift-modal-container',
-                  title: 'Shift Configuration',
-                  content: 'Set the role and time. If you leave "Assign Staff" as Open, eligible staff will be notified to claim the shift. This is great for filling gaps quickly.',
-                  position: 'right',
-                  action: 'next',
-                  transparentBackdrop: true
-              },
+              // Combined Step: Details + Save
+              // Changed position to 'left' to avoid covering form inputs on desktop
               {
                   targetId: 'shift-save-btn',
-                  title: 'Save Draft',
-                  content: 'Click Save to add this to the board. It remains a "Draft" (invisible to staff) until you are ready to publish the week.',
-                  position: 'top',
+                  title: 'Configure & Save',
+                  content: 'Customize the shift details (Role, Time, Staff) using the form. When you are ready, press **Save** to create the draft.',
+                  position: 'right', 
                   action: 'click',
                   transparentBackdrop: true
               },
               {
                   targetId: 'rota-publish-menu-btn',
                   title: 'Publishing Control',
-                  content: 'When your plan is solid, use the Publish menu. This sends push notifications to all affected staff so they know when to work.',
+                  content: 'The shift is now a Draft (grey). Use the Publish menu to make it visible to your staff and notify them.',
                   position: 'left',
                   action: 'click'
               },

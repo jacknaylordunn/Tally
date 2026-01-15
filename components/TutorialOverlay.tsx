@@ -88,7 +88,7 @@ export const TutorialOverlay = () => {
       }
 
       const padding = 16; // Safe area from screen edge
-      const gap = 20;     // Distance from target
+      const gap = 24;     // Distance from target (increased for breathing room)
       const viewportW = window.innerWidth;
       const viewportH = window.innerHeight;
       
@@ -101,7 +101,7 @@ export const TutorialOverlay = () => {
 
       // Auto-flip for bottom edge (e.g. mobile nav)
       // If target is very close to bottom, force top
-      if (pos === 'bottom' && targetRect.bottom > viewportH - 100) {
+      if (pos === 'bottom' && targetRect.bottom > viewportH - 150) {
           pos = 'top';
       }
       
@@ -120,73 +120,54 @@ export const TutorialOverlay = () => {
           case 'top':
               t = targetRect.top - gap;
               l = targetRect.left + (targetRect.width / 2);
-              transform = 'translate(-50%, -100%)'; // Centered horizontally, moved up
+              transform = 'translate(-50%, -100%)'; 
               arrowBaseClass = 'bottom-[-8px] left-1/2 -translate-x-1/2 border-t-white dark:border-t-slate-900 border-l-transparent border-r-transparent border-b-transparent';
               break;
           case 'bottom':
               t = targetRect.bottom + gap;
               l = targetRect.left + (targetRect.width / 2);
-              transform = 'translate(-50%, 0)'; // Centered horizontally
+              transform = 'translate(-50%, 0)'; 
               arrowBaseClass = 'top-[-8px] left-1/2 -translate-x-1/2 border-b-white dark:border-b-slate-900 border-l-transparent border-r-transparent border-t-transparent';
               break;
           case 'left':
               t = targetRect.top + (targetRect.height / 2);
               l = targetRect.left - gap;
-              transform = 'translate(-100%, -50%)'; // Centered vertically, moved left
+              transform = 'translate(-100%, -50%)'; 
               arrowBaseClass = 'right-[-8px] top-1/2 -translate-y-1/2 border-l-white dark:border-l-slate-900 border-t-transparent border-b-transparent border-r-transparent';
               break;
           case 'right':
               t = targetRect.top + (targetRect.height / 2);
               l = targetRect.right + gap;
-              transform = 'translate(0, -50%)'; // Centered vertically
+              transform = 'translate(0, -50%)';
               arrowBaseClass = 'left-[-8px] top-1/2 -translate-y-1/2 border-r-white dark:border-r-slate-900 border-t-transparent border-b-transparent border-l-transparent';
               break;
           default:
-              // Fallback to center logic handled above
               break;
       }
 
-      // --- 3. Clamp Logic (The Fix) ---
-      // We calculate the actual bounding box of the card based on `t`, `l`, and `transform`.
-      // Then we shift `t` or `l` to keep it onscreen.
-      
+      // --- 3. Clamp Logic ---
       let arrowOffsetX = 0;
       let arrowOffsetY = 0;
 
       if (pos === 'top' || pos === 'bottom') {
-          // Centered Horizontally. 
-          // Left Edge = l - w/2
-          // Right Edge = l + w/2
-          
           const minX = padding + (w / 2);
           const maxX = viewportW - padding - (w / 2);
           
           const originalL = l;
           l = Math.max(minX, Math.min(l, maxX)); // Clamp
-          
-          // Calculate arrow offset to keep pointing at target
-          // The arrow moves with the card. We need to shift the arrow BACK by the amount we shifted the card.
-          // Shift amount = l - originalL (new position - old position)
-          // Arrow offset = -(l - originalL) = originalL - l
-          arrowOffsetX = originalL - l;
+          arrowOffsetX = originalL - l; // Shift arrow back
       } 
       else {
-          // Left / Right
-          // Centered Vertically.
-          // Top Edge = t - h/2
-          // Bottom Edge = t + h/2
-          
           const minY = padding + (h / 2);
           const maxY = viewportH - padding - (h / 2);
           
           const originalT = t;
           t = Math.max(minY, Math.min(t, maxY)); // Clamp
-          
-          arrowOffsetY = originalT - t;
+          arrowOffsetY = originalT - t; // Shift arrow back
       }
 
-      // Limit arrow offset to stay within card radius (so arrow doesn't float in air)
-      const maxArrowShiftX = (w / 2) - 24; // 24px corner radius safe zone
+      // Limit arrow offset to stay within card radius
+      const maxArrowShiftX = (w / 2) - 24; 
       const maxArrowShiftY = (h / 2) - 24;
       
       arrowOffsetX = Math.max(-maxArrowShiftX, Math.min(maxArrowShiftX, arrowOffsetX));
@@ -210,25 +191,51 @@ export const TutorialOverlay = () => {
 
   const { style, arrowClass, arrowStyle } = getPopoverStyle();
 
+  // Helper to render bold text
+  const renderContent = (text: string) => {
+      const parts = text.split(/(\*\*.*?\*\*)/g);
+      return parts.map((part, i) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+              return <strong key={i} className="text-slate-900 dark:text-white font-bold">{part.slice(2, -2)}</strong>;
+          }
+          return part;
+      });
+  };
+
   return (
     <div className="fixed inset-0 z-[100] pointer-events-none transition-opacity duration-500 ease-in-out">
         
-        {/* Subtle Backdrop - Conditional Opacity */}
-        <div className={`absolute inset-0 transition-all duration-500 ${step.transparentBackdrop ? 'bg-transparent' : 'bg-slate-950/40'}`} />
+        {/* Spotlight Backdrop Implementation */}
+        {targetRect && !step.transparentBackdrop ? (
+            <div 
+                className="absolute rounded-xl transition-all duration-300 ease-out z-40 pointer-events-none"
+                style={{
+                    top: targetRect.top - 4, // Slight padding around element
+                    left: targetRect.left - 4,
+                    width: targetRect.width + 8,
+                    height: targetRect.height + 8,
+                    // The magic: Box shadow creates the dark backdrop AROUND the element, leaving the element itself bright
+                    boxShadow: '0 0 0 9999px rgba(2, 6, 23, 0.7)' 
+                }}
+            />
+        ) : (
+            // Fallback for center steps or transparent mode
+            <div className={`absolute inset-0 transition-all duration-500 ${step.transparentBackdrop ? 'bg-transparent' : 'bg-slate-950/70'}`} />
+        )}
 
-        {/* Target Spotlight */}
+        {/* Focus Ring (Animation) */}
         {targetRect && step.position !== 'center' && (
             <div 
                 className={`absolute rounded-xl transition-all duration-300 ease-out z-50 pointer-events-none ${
                     step.action === 'click' 
-                        ? 'ring-4 ring-brand-500/80 shadow-[0_0_50px_rgba(99,102,241,0.6)] animate-pulse' 
-                        : 'ring-2 ring-white/50'
+                        ? 'ring-4 ring-brand-500/80 animate-pulse' 
+                        : 'ring-2 ring-white/30'
                 }`}
                 style={{
-                    top: targetRect.top - 6,
-                    left: targetRect.left - 6,
-                    width: targetRect.width + 12,
-                    height: targetRect.height + 12,
+                    top: targetRect.top - 4,
+                    left: targetRect.left - 4,
+                    width: targetRect.width + 8,
+                    height: targetRect.height + 8,
                 }}
             />
         )}
@@ -269,7 +276,7 @@ export const TutorialOverlay = () => {
                     
                     {/* Content */}
                     <p className="text-slate-600 dark:text-slate-300 text-base mb-6 leading-relaxed font-medium">
-                        {step.content}
+                        {renderContent(step.content)}
                     </p>
 
                     {/* Footer */}
