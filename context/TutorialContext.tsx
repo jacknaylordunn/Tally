@@ -36,28 +36,28 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
           {
               targetId: 'welcome-modal', // Dummy ID for center positioning
               title: 'Welcome to Tallyd',
-              content: "Let's give you a quick tour of your Workforce OS. We'll show you how to manage shifts, track time, and handle payroll.",
+              content: "Let's give you a complete tour of your Workforce OS. We'll show you how to eliminate time theft, automate payroll, and manage your team efficiently.",
               position: 'center',
               action: 'next'
           },
           {
               targetId: 'nav-dashboard',
-              title: 'Live Dashboard',
-              content: 'This is your Command Center. Monitor live attendance and see who is clocked in right now.',
+              title: 'Live Command Center',
+              content: 'This dashboard gives you a real-time pulse of your business. See exactly who is on-site, track current labor costs, and spot attendance issues (like late arrivals) the moment they happen.',
               position: 'right',
               action: 'next'
           },
           {
               targetId: 'nav-rota',
-              title: 'Smart Rota',
-              content: 'Build conflict-free schedules and manage shift bids here.',
+              title: 'Smart Scheduling',
+              content: 'Build conflict-free schedules in minutes. The Rota system handles shift bidding, time-off requests, and budget forecasting before you even publish the week.',
               position: 'right',
               action: 'next'
           },
           {
               targetId: 'nav-timesheets',
-              title: 'Payroll Ready',
-              content: 'Export accurate timesheets with automatic holiday pay calculations.',
+              title: 'Payroll Automation',
+              content: 'Forget manual calculations. Timesheets are generated automatically from clock-in data, complete with holiday pay and overtime calculations, ready for export.',
               position: 'right',
               action: 'next'
           },
@@ -65,8 +65,8 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
           // 2. Interactive Rota Task
           {
               targetId: 'nav-rota',
-              title: 'Let\'s Schedule',
-              content: 'Enough looking! Let\'s build a shift. Click the **Rota** tab to continue.',
+              title: 'Let\'s Build a Shift',
+              content: 'The best way to learn is to do. Click the **Rota** tab to create your first schedule entry.',
               action: 'click'
           }
       ];
@@ -76,39 +76,47 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
               {
                   targetId: 'rota-add-btn-0',
                   title: 'Create a Shift',
-                  content: 'Click the + button on the first day to add a new shift.',
+                  content: 'Click the + button on the first day. You can create single shifts for specific staff, or "Open Slots" that your team can bid for.',
                   requiredRoute: '/admin/rota',
                   position: 'bottom',
                   action: 'click'
               },
               {
+                  targetId: 'shift-modal-container',
+                  title: 'Shift Configuration',
+                  content: 'Set the role and time. If you leave "Assign Staff" as Open, eligible staff will be notified to claim the shift. This is great for filling gaps quickly.',
+                  position: 'right',
+                  action: 'next',
+                  transparentBackdrop: true
+              },
+              {
                   targetId: 'shift-save-btn',
-                  title: 'Save Shift',
-                  content: 'Fill in the details (or leave defaults) and click Save to create a draft.',
+                  title: 'Save Draft',
+                  content: 'Click Save to add this to the board. It remains a "Draft" (invisible to staff) until you are ready to publish the week.',
                   position: 'top',
-                  action: 'click'
+                  action: 'click',
+                  transparentBackdrop: true
               },
               {
                   targetId: 'rota-publish-menu-btn',
-                  title: 'Publish Schedule',
-                  content: 'Draft shifts (grey) are invisible to staff. Click Publish to send them out.',
+                  title: 'Publishing Control',
+                  content: 'When your plan is solid, use the Publish menu. This sends push notifications to all affected staff so they know when to work.',
                   position: 'left',
                   action: 'click'
               },
               {
                   targetId: 'publish-week-btn',
                   title: 'Confirm Publish',
-                  content: 'Select "Publish Current Week" to notify your team.',
+                  content: 'Select "Publish Current Week" to make these shifts live.',
                   position: 'left',
                   action: 'click'
               }
           );
       } else {
-          // If rota disabled, skip straight to next section
           workflow.push({
               targetId: 'nav-staff',
               title: 'Skip Rota',
-              content: 'Since rota is disabled, let\'s manage staff instead.',
+              content: 'Since the Rota module is disabled, we will move straight to Staff management.',
               action: 'click'
           });
       }
@@ -117,72 +125,82 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
       workflow.push(
           {
               targetId: 'nav-staff',
-              title: 'Manage Staff',
-              content: 'Now let\'s look at your team. Click the **Staff** tab.',
+              title: 'Staff Management',
+              content: 'Click **Staff** to manage your team. This is where you handle pay rates, roles, and access levels.',
               action: 'click'
           },
           {
               targetId: 'staff-bulk-btn',
-              title: 'Bulk Tools',
-              content: 'Need to give everyone a raise? Click here to see bulk tools.',
+              title: 'Bulk Operations',
+              content: 'Need to apply a pay rise across the board? The Bulk Adjust tool saves you editing profiles one by one.',
               requiredRoute: '/admin/staff',
               position: 'bottom',
               action: 'click'
           },
           {
+              targetId: 'bulk-update-container',
+              title: 'Global Updates',
+              content: 'You can filter staff by their current rate (e.g. £11.44) and update them all to a new rate (e.g. £12.00) in seconds.',
+              position: 'right',
+              action: 'next',
+              transparentBackdrop: true
+          },
+          {
               targetId: 'bulk-close-btn',
               title: 'Close Modal',
-              content: 'Simple right? Close this window to continue.',
+              content: 'Close this window to continue the tour.',
               position: 'left',
+              action: 'click',
+              transparentBackdrop: true
+          },
+
+          // 4. Kiosk Intro (Security Focus)
+          {
+              targetId: 'nav-kiosk',
+              title: 'Anti-Fraud Kiosk Mode',
+              content: 'Click **Kiosk** to see our secure terminal. This is designed for tablets mounted at your entrance.',
               action: 'click'
           },
+          {
+              targetId: 'kiosk-exit-btn',
+              title: 'Dynamic Security',
+              content: 'Notice the QR code? It regenerates every 10 seconds. This prevents "Buddy Punching" (staff taking a photo of the code to clock in a friend later). It requires a live scan.',
+              requiredRoute: '/admin/kiosk',
+              position: 'bottom',
+              action: 'click',
+              transparentBackdrop: true
+          },
           
-          // 4. Locations Task
+          // 5. Locations Task (GPS Focus)
           {
               targetId: 'nav-locations',
-              title: 'Locations',
-              content: 'Finally, let\'s get your clock-in posters. Click **Locations**.',
+              title: 'GPS-Locked Posters',
+              content: 'For unmanned sites where a tablet isn\'t possible, use **Locations**. Click to verify your geofences.',
               action: 'click'
           },
           {
               targetId: 'location-print-btn',
-              title: 'Get QR Poster',
-              content: 'Click "Generate Poster" on your main location to see the clock-in code.',
+              title: 'Static QR Security',
+              content: 'Click "Generate Poster". Unlike the Kiosk, this code doesn\'t change. Instead, we use the phone\'s GPS to verify the employee is physically inside the geofence radius before accepting the scan.',
               requiredRoute: '/admin/locations',
               position: 'top',
               action: 'click'
           },
           {
               targetId: 'location-poster-close-btn',
-              title: 'Print & Close',
-              content: 'You can print this page for your wall. Click the X to close the modal.',
+              title: 'Print & Go',
+              content: 'Print this and stick it on the wall. It\'s a zero-hardware solution for secure time tracking. Close the modal to finish.',
               position: 'left',
-              action: 'click'
-          },
-          
-          // 5. Back to Dashboard & Kiosk Intro
-          {
-              targetId: 'nav-dashboard',
-              title: 'Back to HQ',
-              content: 'We are almost done. Click **Live Board** to return to the dashboard.',
-              action: 'click'
-          },
-          {
-              targetId: 'dashboard-kiosk-btn',
-              title: 'Kiosk Mode',
-              content: 'This button launches Kiosk Mode. It turns any tablet or computer into a dedicated, stationary clock-in terminal for your staff.',
-              requiredRoute: '/admin',
-              position: 'bottom',
-              action: 'next'
+              action: 'click',
+              transparentBackdrop: true
           },
           
           // 6. Finish
           {
-              targetId: 'welcome-modal', // Dummy ID for center positioning
-              title: 'You are Ready!',
-              content: 'You have mastered the basics of Tallyd. You can now start adding your staff and building your first schedule.',
-              position: 'center',
-              action: 'next'
+              targetId: 'nav-dashboard',
+              title: 'Tour Complete',
+              content: 'You are now an expert! Return to the **Live Board** to see your operation in action.',
+              action: 'click'
           }
       );
 
@@ -191,33 +209,30 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
 
   // --- Interactive Staff Script (Mobile Optimized) ---
   const getStaffSteps = (): TutorialStep[] => [
-      // 1. Intro
       {
           targetId: 'welcome-modal',
-          title: 'Welcome',
-          content: 'Let\'s get you set up. Tap Next for a quick tour.',
+          title: 'Welcome to Tallyd',
+          content: 'This app is your digital timecard. We\'ll show you how to clock in and manage your shifts.',
           position: 'center',
           action: 'next'
       },
       {
           targetId: 'staff-clock-in-btn',
           title: 'Clock In',
-          content: 'Tap the big button to scan a QR code and clock in.',
+          content: 'Tap this button to open the scanner. Point it at the Kiosk or QR Poster at your workplace to start your shift.',
           position: 'bottom',
           action: 'next'
       },
-      
-      // 2. Interactive Task
       {
           targetId: 'nav-rota',
-          title: 'Check Schedule',
-          content: 'Tap **My Rota** to see your shifts or book a holiday.',
+          title: 'Your Schedule',
+          content: 'Tap **My Rota** to see when you are working next, bid on open shifts, or request holiday.',
           action: 'click'
       },
       {
           targetId: 'staff-rota-timeoff-btn',
-          title: 'Time Off',
-          content: 'Tap here to request leave.',
+          title: 'Request Leave',
+          content: 'Need a day off? Tap here to send a request directly to your manager.',
           requiredRoute: '/staff/rota',
           position: 'bottom',
           action: 'click'
@@ -225,16 +240,15 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
       {
           targetId: 'timeoff-close-btn',
           title: 'Close Form',
-          content: 'Close this window for now.',
+          content: 'Close this to finish up.',
           position: 'right',
-          action: 'click'
+          action: 'click',
+          transparentBackdrop: true
       },
-      
-      // 3. Conclusion
       {
           targetId: 'nav-dashboard',
-          title: 'All Done',
-          content: 'Tap **Status** to go back home.',
+          title: 'All Set',
+          content: 'Tap **Status** to return to your home screen.',
           action: 'click'
       }
   ];
@@ -242,6 +256,9 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
   const startTutorial = async (force = false) => {
       if (!user) return;
       
+      // Fix: Do not reset tutorial if already active and not forced
+      if (isActive && !force) return;
+
       const hasSeen = localStorage.getItem(`tally_tutorial_${user.id}`);
       if (hasSeen && !force) return;
 

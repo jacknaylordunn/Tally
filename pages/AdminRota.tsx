@@ -477,6 +477,7 @@ export const AdminRota = () => {
   return (
     <>
     {/* PRINT VIEW - Configurable */}
+    {/* ... (Existing Print View Code) ... */}
     <div className="hidden print:block p-4 bg-white text-black min-h-screen text-[8px]">
         {/* Header */}
         <div className="mb-2 border-b border-black pb-1 flex justify-between items-end">
@@ -659,7 +660,8 @@ export const AdminRota = () => {
 
     {/* WEB APP VIEW */}
     <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col print:hidden">
-        {/* Header */}
+        {/* ... (Existing Toolbar and Grid) ... */}
+        {/* Toolbar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
             <div>
                 <h1 className="text-3xl font-bold text-white">Rota Management</h1>
@@ -857,15 +859,17 @@ export const AdminRota = () => {
 
         {/* --- MODALS --- */}
         {isPrintSettingsOpen && (
+            // ... (Existing Print Settings Modal) ...
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
                 <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
+                    {/* ... Content ... */}
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-lg text-white flex items-center gap-2">
                             <Settings className="w-5 h-5" /> Print Settings
                         </h3>
                         <button onClick={() => setIsPrintSettingsOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-white" /></button>
                     </div>
-
+                    {/* ... Rest of modal ... */}
                     <div className="space-y-6">
                         {/* Layout Selection */}
                         <div className="grid grid-cols-3 gap-3">
@@ -947,7 +951,7 @@ export const AdminRota = () => {
 
         {isShiftModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
-                <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
+                <div id="shift-modal-container" className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-lg text-white">
                             {editingShift ? 'Edit Shift' : `Add Shift`}

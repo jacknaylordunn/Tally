@@ -12,7 +12,7 @@ export const TutorialOverlay = () => {
   const cardRef = useRef<HTMLDivElement>(null);
   const step = steps[currentStepIndex];
 
-  // Persistent Element Finder
+  // Persistent Element Finder with Mobile Fallback
   useEffect(() => {
     if (!isActive || !step) return;
 
@@ -23,22 +23,37 @@ export const TutorialOverlay = () => {
             return;
         }
 
-        const el = document.getElementById(step.targetId);
-        if (el) {
-            const rect = el.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-                setTargetRect(rect);
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                // Click Listener for action steps
-                if (step.action === 'click') {
-                    const handler = () => setTimeout(() => nextStep(), 300);
-                    el.addEventListener('click', handler, { once: true });
+        let el = document.getElementById(step.targetId);
+        let rect = el?.getBoundingClientRect();
+
+        // 1. Try finding the primary target
+        let found = el && rect && rect.width > 0 && rect.height > 0;
+
+        // 2. If not found or hidden, try mobile specific ID
+        if (!found) {
+            const mobileEl = document.getElementById(`mobile-${step.targetId}`);
+            if (mobileEl) {
+                const mobileRect = mobileEl.getBoundingClientRect();
+                if (mobileRect.width > 0 && mobileRect.height > 0) {
+                    el = mobileEl;
+                    rect = mobileRect;
+                    found = true;
                 }
-                return; 
             }
         }
-        setTargetRect(null); 
+
+        if (found && el && rect) {
+            setTargetRect(rect);
+            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            
+            // Click Listener for action steps
+            if (step.action === 'click') {
+                const handler = () => setTimeout(() => nextStep(), 300);
+                el.addEventListener('click', handler, { once: true });
+            }
+        } else {
+            setTargetRect(null);
+        }
     };
 
     const interval = setInterval(findTarget, 500);
@@ -56,7 +71,7 @@ export const TutorialOverlay = () => {
 
   if (!isActive || !step) return null;
 
-  // --- POSITIONING LOGIC ---
+  // --- ROBUST POSITIONING LOGIC ---
   const getPopoverStyle = () => {
       if (!targetRect || step.position === 'center') {
           return {
@@ -64,99 +79,142 @@ export const TutorialOverlay = () => {
                   top: '50%', 
                   left: '50%', 
                   transform: 'translate(-50%, -50%)', 
-                  position: 'fixed' as const 
+                  position: 'fixed' as const,
+                  width: 'min(90vw, 448px)'
               },
+              arrowStyle: {},
               arrowClass: null
           };
       }
 
-      const gap = 24;
-      const viewportWidth = window.innerWidth;
-      // Use 90vw for mobile, clamp to max-w-md (28rem) for desktop
-      const cardW = Math.min(viewportWidth * 0.9, 448); 
+      const padding = 16; // Safe area from screen edge
+      const gap = 20;     // Distance from target
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
       
-      let top = 0;
-      let left = 0;
-      let arrowClass = '';
+      // Estimate card dimensions if not yet measured (fallback)
+      const w = cardRect?.width || Math.min(viewportW - 32, 448);
+      const h = cardRect?.height || 200;
+
+      // --- 1. Determine Base Position ---
+      let pos = step.position || 'bottom';
+
+      // Auto-flip for bottom edge (e.g. mobile nav)
+      // If target is very close to bottom, force top
+      if (pos === 'bottom' && targetRect.bottom > viewportH - 100) {
+          pos = 'top';
+      }
       
-      // Initial Position Calculation
-      switch (step.position) {
+      // Auto-flip for right edge (e.g. admin sidebar on small screen)
+      if (pos === 'right' && targetRect.right + w + gap > viewportW) {
+          pos = 'bottom';
+      }
+
+      // --- 2. Calculate Coordinates ---
+      let t = 0;
+      let l = 0;
+      let transform = '';
+      let arrowBaseClass = '';
+
+      switch (pos) {
           case 'top':
-              top = targetRect.top - gap;
-              left = targetRect.left + (targetRect.width / 2);
-              arrowClass = 'bottom-[-8px] left-1/2 -translate-x-1/2 border-t-white dark:border-t-slate-900 border-l-transparent border-r-transparent border-b-transparent';
-              break;
-          case 'left':
-              top = targetRect.top + (targetRect.height / 2);
-              left = targetRect.left - gap;
-              arrowClass = 'right-[-8px] top-1/2 -translate-y-1/2 border-l-white dark:border-l-slate-900 border-t-transparent border-b-transparent border-r-transparent';
-              break;
-          case 'right':
-              top = targetRect.top + (targetRect.height / 2);
-              left = targetRect.right + gap;
-              arrowClass = 'left-[-8px] top-1/2 -translate-y-1/2 border-r-white dark:border-r-slate-900 border-t-transparent border-b-transparent border-l-transparent';
+              t = targetRect.top - gap;
+              l = targetRect.left + (targetRect.width / 2);
+              transform = 'translate(-50%, -100%)'; // Centered horizontally, moved up
+              arrowBaseClass = 'bottom-[-8px] left-1/2 -translate-x-1/2 border-t-white dark:border-t-slate-900 border-l-transparent border-r-transparent border-b-transparent';
               break;
           case 'bottom':
+              t = targetRect.bottom + gap;
+              l = targetRect.left + (targetRect.width / 2);
+              transform = 'translate(-50%, 0)'; // Centered horizontally
+              arrowBaseClass = 'top-[-8px] left-1/2 -translate-x-1/2 border-b-white dark:border-b-slate-900 border-l-transparent border-r-transparent border-t-transparent';
+              break;
+          case 'left':
+              t = targetRect.top + (targetRect.height / 2);
+              l = targetRect.left - gap;
+              transform = 'translate(-100%, -50%)'; // Centered vertically, moved left
+              arrowBaseClass = 'right-[-8px] top-1/2 -translate-y-1/2 border-l-white dark:border-l-slate-900 border-t-transparent border-b-transparent border-r-transparent';
+              break;
+          case 'right':
+              t = targetRect.top + (targetRect.height / 2);
+              l = targetRect.right + gap;
+              transform = 'translate(0, -50%)'; // Centered vertically
+              arrowBaseClass = 'left-[-8px] top-1/2 -translate-y-1/2 border-r-white dark:border-r-slate-900 border-t-transparent border-b-transparent border-l-transparent';
+              break;
           default:
-              top = targetRect.bottom + gap;
-              left = targetRect.left + (targetRect.width / 2);
-              arrowClass = 'top-[-8px] left-1/2 -translate-x-1/2 border-b-white dark:border-b-slate-900 border-l-transparent border-r-transparent border-t-transparent';
+              // Fallback to center logic handled above
               break;
       }
 
-      // --- BOUNDARY CLAMPING ---
-      const padding = 16;
+      // --- 3. Clamp Logic (The Fix) ---
+      // We calculate the actual bounding box of the card based on `t`, `l`, and `transform`.
+      // Then we shift `t` or `l` to keep it onscreen.
+      
+      let arrowOffsetX = 0;
+      let arrowOffsetY = 0;
 
-      if (step.position === 'top' || step.position === 'bottom') {
-          // Clamp Left (X axis)
-          const minLeft = (cardW / 2) + padding;
-          const maxLeft = viewportWidth - (cardW / 2) - padding;
+      if (pos === 'top' || pos === 'bottom') {
+          // Centered Horizontally. 
+          // Left Edge = l - w/2
+          // Right Edge = l + w/2
           
-          if (left < minLeft) left = minLeft;
-          if (left > maxLeft) left = maxLeft;
-
-          // Adjust Arrow to point back to target if we shifted the card
-          const originalCenter = targetRect.left + (targetRect.width / 2);
-          const offset = originalCenter - left;
-          // Limit arrow offset to keep it within card radius
-          const maxOffset = (cardW / 2) - 24; 
-          const arrowOffset = Math.max(-maxOffset, Math.min(maxOffset, offset));
+          const minX = padding + (w / 2);
+          const maxX = viewportW - padding - (w / 2);
           
-          // Rebuild arrow style with margin
-          if (step.position === 'top') {
-             arrowClass = `bottom-[-8px] left-1/2 border-t-white dark:border-t-slate-900 border-l-transparent border-r-transparent border-b-transparent ml-[${arrowOffset}px]`;
-          } else {
-             arrowClass = `top-[-8px] left-1/2 border-b-white dark:border-b-slate-900 border-l-transparent border-r-transparent border-t-transparent ml-[${arrowOffset}px]`;
-          }
+          const originalL = l;
+          l = Math.max(minX, Math.min(l, maxX)); // Clamp
+          
+          // Calculate arrow offset to keep pointing at target
+          // The arrow moves with the card. We need to shift the arrow BACK by the amount we shifted the card.
+          // Shift amount = l - originalL (new position - old position)
+          // Arrow offset = -(l - originalL) = originalL - l
+          arrowOffsetX = originalL - l;
+      } 
+      else {
+          // Left / Right
+          // Centered Vertically.
+          // Top Edge = t - h/2
+          // Bottom Edge = t + h/2
+          
+          const minY = padding + (h / 2);
+          const maxY = viewportH - padding - (h / 2);
+          
+          const originalT = t;
+          t = Math.max(minY, Math.min(t, maxY)); // Clamp
+          
+          arrowOffsetY = originalT - t;
       }
 
-      let transform = '';
-      if (step.position === 'left' || step.position === 'right') {
-          transform = 'translate(0, -50%)';
-          // Simple flip if off screen
-          if (step.position === 'right' && left + cardW > viewportWidth) {
-             left = targetRect.left - gap - cardW;
-             transform = 'translate(0, -50%)'; 
-             arrowClass = 'right-[-8px] top-1/2 -translate-y-1/2 border-l-white dark:border-l-slate-900 border-t-transparent border-b-transparent border-r-transparent';
-          }
-      } else {
-          transform = 'translate(-50%, 0)';
-          if (step.position === 'top') transform = 'translate(-50%, -100%)';
-      }
+      // Limit arrow offset to stay within card radius (so arrow doesn't float in air)
+      const maxArrowShiftX = (w / 2) - 24; // 24px corner radius safe zone
+      const maxArrowShiftY = (h / 2) - 24;
+      
+      arrowOffsetX = Math.max(-maxArrowShiftX, Math.min(maxArrowShiftX, arrowOffsetX));
+      arrowOffsetY = Math.max(-maxArrowShiftY, Math.min(maxArrowShiftY, arrowOffsetY));
 
       return { 
-          style: { top: `${top}px`, left: `${left}px`, transform, position: 'fixed' as const },
-          arrowClass
+          style: { 
+              top: `${t}px`, 
+              left: `${l}px`, 
+              transform, 
+              position: 'fixed' as const,
+              width: `${w}px`
+          },
+          arrowClass: arrowBaseClass,
+          arrowStyle: {
+              marginLeft: `${arrowOffsetX}px`,
+              marginTop: `${arrowOffsetY}px`
+          }
       };
   };
 
-  const { style, arrowClass } = getPopoverStyle();
+  const { style, arrowClass, arrowStyle } = getPopoverStyle();
 
   return (
     <div className="fixed inset-0 z-[100] pointer-events-none transition-opacity duration-500 ease-in-out">
         
-        {/* Subtle Backdrop */}
-        <div className="absolute inset-0 bg-slate-950/40 transition-all duration-500" />
+        {/* Subtle Backdrop - Conditional Opacity */}
+        <div className={`absolute inset-0 transition-all duration-500 ${step.transparentBackdrop ? 'bg-transparent' : 'bg-slate-950/40'}`} />
 
         {/* Target Spotlight */}
         {targetRect && step.position !== 'center' && (
@@ -178,14 +236,14 @@ export const TutorialOverlay = () => {
         {/* Tutorial Card */}
         <div 
             ref={cardRef}
-            className="w-[90vw] max-w-md pointer-events-auto transition-all duration-500 absolute z-[60]"
+            className="max-w-md pointer-events-auto transition-all duration-500 absolute z-[60]"
             style={style}
         >
             {/* Arrow Tip */}
             {arrowClass && (
                 <div 
                     className={`absolute w-0 h-0 border-[8px] ${arrowClass} drop-shadow-sm z-10 transition-all duration-300`}
-                    style={arrowClass.includes('ml-') ? { marginLeft: arrowClass.match(/ml-\[(.*?)\]/)?.[1] } : {}}
+                    style={arrowStyle}
                 ></div>
             )}
 

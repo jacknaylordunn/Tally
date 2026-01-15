@@ -119,7 +119,7 @@ export const KioskMode = () => {
                 >
                     {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
                  </button>
-                 <Link to="/admin" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all backdrop-blur-sm group">
+                 <Link to="/admin" id="kiosk-exit-btn" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all backdrop-blur-sm group">
                     <X className="w-6 h-6 text-slate-300 group-hover:text-white" />
                 </Link>
              </div>

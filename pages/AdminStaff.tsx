@@ -383,7 +383,7 @@ export const AdminStaff = () => {
         {/* Bulk Update Modal */}
         {isBulkOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
+                <div id="bulk-update-container" className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-white">Bulk Adjust Rates</h2>
                         <button id="bulk-close-btn" onClick={() => setIsBulkOpen(false)} className="text-slate-400 hover:text-white">

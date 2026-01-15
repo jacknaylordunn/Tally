@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getShifts, getLocations, getCompany, getSchedule, updateShift, deleteShift } from '../services/api';
 import { Shift, Location, Company } from '../types';
-import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save } from 'lucide-react';
+import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import { Link } from 'react-router-dom';
@@ -19,6 +19,10 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'active'>('all');
+
+  // Widget States
+  const [costWindow, setCostWindow] = useState<12 | 18 | 24>(12);
+  const [isCostMenuOpen, setIsCostMenuOpen] = useState(false);
 
   const [isLocationSelectorOpen, setIsLocationSelectorOpen] = useState(false);
   const [selectedLocationForPoster, setSelectedLocationForPoster] = useState<Location | null>(null);
@@ -55,7 +59,7 @@ export const AdminDashboard = () => {
         }
         setLoading(false);
         
-        // Try starting tutorial (Context checks if it's already done)
+        // Try starting tutorial (Context checks if it's already active/done)
         setTimeout(() => startTutorial(), 1000);
     };
     loadData();
@@ -68,20 +72,80 @@ export const AdminDashboard = () => {
   });
 
   const activeShiftsCount = shifts.filter(s => !s.endTime).length;
-  
-  const totalMs = shifts.reduce((acc, s) => acc + (s.endTime ? s.endTime - s.startTime : Date.now() - s.startTime), 0);
-  const hours = Math.floor(totalMs / 3600000);
-  const minutes = Math.floor((totalMs % 3600000) / 60000);
-  const totalDurationDisplay = `${hours}h ${minutes}m`;
+  const currency = company?.settings.currency || '£';
 
-  const alertCount = shifts.filter(s => {
-      const duration = (s.endTime || Date.now()) - s.startTime;
-      return duration > (14 * 3600000) || (s.endTime && duration < (5 * 60000));
-  }).length;
+  // --- COMPREHENSIVE AUDIT LOGIC ---
+  const getAlertCount = () => {
+      if (!company) return 0;
+      const { 
+          auditLateInThreshold = 15,
+          auditEarlyOutThreshold = 15,
+          auditLateOutThreshold = 15,
+          auditShortShiftThreshold = 5,
+          auditLongShiftThreshold = 14 
+      } = company.settings;
 
-  const getStaticQrUrl = (locId: string) => `${window.location.protocol}//${window.location.host}/#/action?type=static&lid=${locId}`;
+      return shifts.filter(s => {
+          const now = Date.now();
+          // Check Long Shift / Forgotten Clock Out
+          const durationMins = ((s.endTime || now) - s.startTime) / 60000;
+          if (durationMins > (auditLongShiftThreshold * 60)) return true;
+
+          // Check Short Shift (only if finished)
+          if (s.endTime && durationMins < auditShortShiftThreshold) return true;
+
+          // Check Late In
+          if (s.scheduledStartTime) {
+              const lateMins = (s.startTime - s.scheduledStartTime) / 60000;
+              if (lateMins > auditLateInThreshold) return true;
+          }
+
+          // Check Early/Late Out (only if finished)
+          if (s.endTime && s.scheduledEndTime) {
+              const earlyMins = (s.scheduledEndTime - s.endTime) / 60000;
+              const lateOutMins = (s.endTime - s.scheduledEndTime) / 60000;
+              if (earlyMins > auditEarlyOutThreshold) return true;
+              if (lateOutMins > auditLateOutThreshold) return true;
+          }
+
+          return false;
+      }).length;
+  };
+
+  const alertCount = getAlertCount();
+
+  // --- ROLLING COST CALCULATION ---
+  const calculateRollingCost = () => {
+      const now = Date.now();
+      const cutoff = now - (costWindow * 60 * 60 * 1000);
+      
+      return shifts.reduce((total, s) => {
+          // Shift end time (or now if active)
+          const sEnd = s.endTime || now;
+          
+          // If shift ended before window started, skip
+          if (sEnd < cutoff) return total;
+          
+          // If shift started in future (sanity check), skip
+          if (s.startTime > now) return total;
+
+          // Calculate overlap with window
+          const effectiveStart = Math.max(s.startTime, cutoff);
+          const effectiveEnd = Math.min(sEnd, now);
+          
+          const durationHours = (effectiveEnd - effectiveStart) / 3600000;
+          if (durationHours <= 0) return total;
+
+          const rate = s.hourlyRate || company?.settings.defaultHourlyRate || 0;
+          return total + (durationHours * rate);
+      }, 0);
+  };
+
+  const rollingCost = calculateRollingCost();
 
   // --- Handlers ---
+
+  const getStaticQrUrl = (locId: string) => `${window.location.protocol}//${window.location.host}/#/action?type=static&lid=${locId}`;
 
   const toLocalISO = (ts: number) => {
       const d = new Date(ts);
@@ -140,15 +204,40 @@ export const AdminDashboard = () => {
       setOpenActionMenuId(null);
   };
 
-  const StatWidget = ({ label, value, subtext, icon: Icon, color }: any) => (
-      <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group hover:bg-white/5 transition duration-300">
+  const StatWidget = ({ label, value, subtext, icon: Icon, color, isDropdown = false }: any) => (
+      <div className="glass-panel p-6 rounded-3xl relative overflow-visible group hover:bg-white/5 transition duration-300">
           <div className={`absolute -right-4 -top-4 w-24 h-24 bg-${color}-500/10 rounded-full blur-2xl group-hover:bg-${color}-500/20 transition`}></div>
           <div className="relative z-10">
               <div className="flex justify-between items-start mb-4">
                   <div className={`p-3 rounded-2xl bg-${color}-500/20 text-${color}-400`}>
                       <Icon className="w-6 h-6" />
                   </div>
-                  {subtext && <span className="text-xs font-medium text-slate-500 bg-white/5 px-2 py-1 rounded-lg">{subtext}</span>}
+                  {isDropdown ? (
+                      <div className="relative">
+                          <button 
+                            onClick={() => setIsCostMenuOpen(!isCostMenuOpen)}
+                            className="text-xs font-bold text-slate-400 bg-white/5 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white hover:bg-white/10 transition"
+                          >
+                              <span>{costWindow} hrs</span>
+                              <ChevronDown className="w-3 h-3" />
+                          </button>
+                          {isCostMenuOpen && (
+                              <div className="absolute right-0 top-8 w-32 bg-slate-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                                  {[12, 18, 24].map((h) => (
+                                      <button
+                                        key={h}
+                                        onClick={() => { setCostWindow(h as any); setIsCostMenuOpen(false); }}
+                                        className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-white/10 ${costWindow === h ? 'text-brand-400' : 'text-slate-400'}`}
+                                      >
+                                          Last {h} Hours
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
+                      </div>
+                  ) : (
+                      subtext && <span className="text-xs font-medium text-slate-500 bg-white/5 px-2 py-1 rounded-lg">{subtext}</span>
+                  )}
               </div>
               <h3 className="text-4xl font-bold text-white mb-1 tracking-tight">{value}</h3>
               <p className="text-slate-400 font-medium text-sm">{label}</p>
@@ -157,7 +246,7 @@ export const AdminDashboard = () => {
   );
 
   return (
-    <div className="space-y-8 pb-12" onClick={() => setOpenActionMenuId(null)}>
+    <div className="space-y-8 pb-12" onClick={() => { setOpenActionMenuId(null); setIsCostMenuOpen(false); }}>
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
                 <h1 className="text-3xl font-bold text-white tracking-tight">Command Center</h1>
@@ -194,16 +283,22 @@ export const AdminDashboard = () => {
                 icon={Users}
                 color="emerald"
             />
+            
+            {/* Interactive Cost Widget */}
+            <div onClick={(e) => e.stopPropagation()}>
+                <StatWidget 
+                    label={`Est. Cost (Last ${costWindow}h)`} 
+                    value={`${currency}${rollingCost.toFixed(0)}`} 
+                    isDropdown={true}
+                    icon={DollarSign}
+                    color="brand"
+                />
+            </div>
+
             <StatWidget 
-                label="Total Time" 
-                value={totalDurationDisplay} 
-                icon={Clock}
-                color="brand"
-            />
-            <StatWidget 
-                label="Alerts" 
+                label="Requires Review" 
                 value={alertCount} 
-                subtext="Requires Review"
+                subtext="Alerts"
                 icon={AlertCircle}
                 color="rose"
             />

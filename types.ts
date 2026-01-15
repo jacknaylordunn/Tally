@@ -121,4 +121,5 @@ export interface TutorialStep {
   requiredRoute?: string; // If set, tutorial waits until user navigates here
   position?: 'top' | 'bottom' | 'left' | 'right' | 'center';
   action?: 'click' | 'next'; // 'click' means user must click target to advance
+  transparentBackdrop?: boolean; // If true, the dark overlay is removed
 }
