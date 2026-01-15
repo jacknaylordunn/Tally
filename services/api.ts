@@ -216,15 +216,11 @@ export const getSchedule = async (companyId: string, startTime: number, endTime:
 };
 
 export const copyScheduleWeek = async (companyId: string, sourceWeekStart: number, targetWeekStart: number): Promise<void> => {
-    // 1. Get Source Week Shifts
-    // Ensure we cover the full range of the source week
-    const sourceEnd = sourceWeekStart + (7 * 24 * 60 * 60 * 1000) + (12 * 60 * 60 * 1000); // Add buffer for late shifts
-    
+    const sourceEnd = sourceWeekStart + (7 * 24 * 60 * 60 * 1000) + (12 * 60 * 60 * 1000); 
     const sourceShifts = await getSchedule(companyId, sourceWeekStart, sourceEnd);
     
     if (sourceShifts.length === 0) return;
 
-    // 2. Prepare Target Shifts
     const timeDiff = targetWeekStart - sourceWeekStart;
     const newShifts: ScheduleShift[] = sourceShifts.map(s => {
         const newStart = s.startTime + timeDiff;
@@ -234,15 +230,12 @@ export const copyScheduleWeek = async (companyId: string, sourceWeekStart: numbe
             id: `sch_${Date.now()}_cp_${Math.random().toString(36).substr(2,5)}_${Math.floor(Math.random()*1000)}`,
             startTime: newStart,
             endTime: newEnd,
-            // Keep the user assignment, but reset status to draft so admin can review
             status: 'draft', 
-            bids: [], // Clear bids as it's a fresh week
-            isOffered: false // Reset offered status
+            bids: [], 
+            isOffered: false 
         };
     });
 
-    // 3. Batch Create
-    // We use a robust batch function that handles >500 items if needed
     await createBatchScheduleShifts(newShifts);
 };
 
@@ -271,22 +264,41 @@ export const assignShiftToUser = async (shiftId: string, userId: string, userNam
         userId: userId,
         userName: userName,
         bids: [],
-        isOffered: false // Reset offer status once assigned/swapped
+        isOffered: false 
     });
 };
 
-export const publishAllDrafts = async (companyId: string): Promise<void> => {
+export const publishDrafts = async (companyId: string, startTime?: number, endTime?: number): Promise<void> => {
     const q = query(
         collection(db, SCHEDULE_REF), 
         where("companyId", "==", companyId),
         where("status", "==", "draft")
     );
+    
     const snap = await getDocs(q);
     const batch = writeBatch(db);
+    let count = 0;
+
     snap.docs.forEach(d => {
-        batch.update(d.ref, { status: 'published' });
+        const data = d.data() as ScheduleShift;
+        let shouldPublish = true;
+
+        // Apply date filter in memory to avoid complex indexes
+        if (startTime !== undefined && endTime !== undefined) {
+            if (data.startTime < startTime || data.startTime > endTime) {
+                shouldPublish = false;
+            }
+        }
+
+        if (shouldPublish) {
+            batch.update(d.ref, { status: 'published' });
+            count++;
+        }
     });
-    await batch.commit();
+
+    if (count > 0) {
+        await batch.commit();
+    }
 };
 
 // --- TIME OFF ---
@@ -462,18 +474,12 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
         await updateUserProfile(user.id, { activeShiftId: null });
         return { success: true, message: 'Clocked Out Successfully.', shift: { ...shiftData, endTime: Date.now() } };
     } else {
-        // --- ROTA INTEGRATION START ---
-        // Look for a scheduled shift for this user around this time (+/- 2 hours)
         const now = Date.now();
         const twoHours = 2 * 60 * 60 * 1000;
-        
-        // Container for potential rota data
         let rotaData: Partial<Shift> = {};
 
         if (company.settings.rotaEnabled) {
             try {
-                // NOTE: Firestore requires composite index for complex queries. 
-                // We'll do a basic query and filter in memory for robustness without forcing index deployment immediately.
                 const schedQ = query(
                     collection(db, SCHEDULE_REF), 
                     where("companyId", "==", company.id),
@@ -482,11 +488,9 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
                 );
                 const schedSnap = await getDocs(schedQ);
                 
-                // Find the closest scheduled shift that hasn't passed more than 2 hours ago
-                // and is roughly now.
                 const matchingShift = schedSnap.docs
                     .map(d => ({ data: d.data() as ScheduleShift, id: d.id }))
-                    .find(s => Math.abs(s.data.startTime - now) < twoHours); // Within 2 hour window of start time
+                    .find(s => Math.abs(s.data.startTime - now) < twoHours); 
 
                 if (matchingShift) {
                     if (matchingShift.id) rotaData.scheduleShiftId = matchingShift.id;
@@ -497,7 +501,6 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
                 console.error("Rota integration check failed.", e);
             }
         }
-        // --- ROTA INTEGRATION END ---
 
         const shiftId = `shift_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const newShift: Shift = {
@@ -512,7 +515,6 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
             ...rotaData 
         };
 
-        // Sanitize object to remove undefined values
         Object.keys(newShift).forEach(key => {
             if ((newShift as any)[key] === undefined) {
                 delete (newShift as any)[key];

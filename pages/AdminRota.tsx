@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishAllDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
+import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
 import { ScheduleShift, User, Location, TimeOffRequest, Company, Shift } from '../types';
-import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer, Settings, Check, LayoutTemplate, AlignJustify, Table } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer, Settings, Check, LayoutTemplate, AlignJustify, Table, ChevronDown } from 'lucide-react';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -28,6 +28,9 @@ export const AdminRota = () => {
       showRole: true,
       showUnassigned: true
   });
+
+  // Publish State
+  const [isPublishMenuOpen, setIsPublishMenuOpen] = useState(false);
 
   // Modal States
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
@@ -293,10 +296,22 @@ export const AdminRota = () => {
     }
   };
 
-  const handlePublish = async () => {
+  const handlePublish = async (scope: 'week' | 'all') => {
     if (!user?.currentCompanyId) return;
-    if (confirm("Publish all draft shifts? Staff will be able to see them.")) {
-        await publishAllDrafts(user.currentCompanyId);
+    setIsPublishMenuOpen(false);
+    
+    const confirmMsg = scope === 'week' 
+        ? "Publish drafts for the currently visible week? This makes them visible to staff." 
+        : `Publish all ${draftCount} draft shifts across the entire schedule?`;
+        
+    if (confirm(confirmMsg)) {
+        setLoading(true);
+        if (scope === 'week') {
+            const { start, end } = getWeekRange(currentDate);
+            await publishDrafts(user.currentCompanyId, start.getTime(), end.getTime());
+        } else {
+            await publishDrafts(user.currentCompanyId);
+        }
         loadData();
     }
   };
@@ -462,23 +477,23 @@ export const AdminRota = () => {
   return (
     <>
     {/* PRINT VIEW - Configurable */}
-    <div className="hidden print:block p-4 bg-white text-black min-h-screen text-[10px]">
+    <div className="hidden print:block p-4 bg-white text-black min-h-screen text-[8px]">
         {/* Header */}
-        <div className="mb-4 border-b border-black pb-2 flex justify-between items-end">
+        <div className="mb-2 border-b border-black pb-1 flex justify-between items-end">
             <div>
-                <span className="font-bold text-lg uppercase block">{company?.name}</span>
-                <span className="text-sm">
+                <span className="font-bold text-base uppercase block">{company?.name}</span>
+                <span className="text-xs">
                     {weekStart.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })} - {new Date(weekStart.getTime() + 6*86400000).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
                 </span>
             </div>
             <div className="text-right">
-                <div className="text-[10px] text-gray-500">Generated {new Date().toLocaleDateString()}</div>
+                <div className="text-[8px] text-gray-500">Generated {new Date().toLocaleDateString()}</div>
             </div>
         </div>
 
         {/* List Layout */}
         {printConfig.layout === 'list' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
                 {weekDates.map((date, i) => {
                     if (viewMode === 'day' && date.getDate() !== currentDate.getDate()) return null;
                     const dayShifts = getShiftsForDay(date);
@@ -486,17 +501,17 @@ export const AdminRota = () => {
 
                     return (
                         <div key={i} className="break-inside-avoid">
-                            <h3 className="text-lg font-bold mb-2 uppercase border-b border-gray-300 pb-1 flex justify-between">
+                            <h3 className="text-sm font-bold mb-1 uppercase border-b border-gray-300 flex justify-between">
                                 <span>{WEEK_DAYS[i]} {date.getDate()}</span>
                                 <span className="font-normal text-gray-500">{dayShifts.length} Shifts</span>
                             </h3>
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left border-collapse table-auto">
                                 <thead>
-                                    <tr className="text-xs uppercase text-gray-500 border-b border-gray-200">
-                                        <th className="py-1 w-24">Time</th>
-                                        {printConfig.showRole && <th className="py-1 w-32">Role</th>}
-                                        <th className="py-1">Staff</th>
-                                        {printConfig.showLocation && <th className="py-1 w-32 text-right">Location</th>}
+                                    <tr className="text-[8px] uppercase text-gray-500 border-b border-gray-200">
+                                        <th className="py-0.5 w-auto">Time</th>
+                                        {printConfig.showRole && <th className="py-0.5 w-auto">Role</th>}
+                                        <th className="py-0.5 w-full">Staff</th>
+                                        {printConfig.showLocation && <th className="py-0.5 w-auto text-right">Location</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -504,15 +519,15 @@ export const AdminRota = () => {
                                         if (!printConfig.showUnassigned && !s.userId) return null;
                                         return (
                                             <tr key={s.id} className="border-b border-gray-100">
-                                                <td className="py-1 font-mono font-bold">
+                                                <td className="py-0.5 font-mono font-bold whitespace-nowrap pr-2">
                                                     {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                                                     {company?.settings.rotaShowFinishTimes !== false && ` - ${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
                                                 </td>
-                                                {printConfig.showRole && <td className="py-1">{s.role}</td>}
-                                                <td className="py-1">
+                                                {printConfig.showRole && <td className="py-0.5 whitespace-nowrap pr-2">{s.role}</td>}
+                                                <td className="py-0.5">
                                                     {s.userName || <span className="italic text-gray-400">Open</span>}
                                                 </td>
-                                                {printConfig.showLocation && <td className="py-1 text-right text-gray-500">{s.locationName || '-'}</td>}
+                                                {printConfig.showLocation && <td className="py-0.5 text-right text-gray-500 whitespace-nowrap">{s.locationName || '-'}</td>}
                                             </tr>
                                         );
                                     })}
@@ -526,12 +541,12 @@ export const AdminRota = () => {
 
         {/* Staff Grid Layout */}
         {printConfig.layout === 'staff_grid' && (
-            <table className="w-full border-collapse border border-black table-fixed text-[9px]">
+            <table className="w-full border-collapse border border-black table-auto text-[8px]">
                 <thead>
                     <tr>
-                        <th className="border border-black p-1 w-24 bg-gray-100">Staff</th>
+                        <th className="border border-black p-0.5 bg-gray-100 w-auto whitespace-nowrap">Staff</th>
                         {weekDates.map((d, i) => (
-                            <th key={i} className="border border-black p-1 bg-gray-100">
+                            <th key={i} className="border border-black p-0.5 bg-gray-100 w-auto text-center">
                                 {WEEK_DAYS[i]} {d.getDate()}
                             </th>
                         ))}
@@ -540,19 +555,19 @@ export const AdminRota = () => {
                 <tbody>
                     {staff.map(u => (
                         <tr key={u.id}>
-                            <td className="border border-black p-1 font-bold truncate">{u.name}</td>
+                            <td className="border border-black p-0.5 font-bold whitespace-nowrap">{u.name}</td>
                             {weekDates.map((d, i) => {
                                 const cellShifts = getShiftsForCell(d, u.id);
                                 return (
-                                    <td key={i} className="border border-black p-1 align-top h-12">
+                                    <td key={i} className="border border-black p-0.5 align-top min-w-[40px]">
                                         {cellShifts.map(s => (
-                                            <div key={s.id} className="mb-1">
-                                                <span className="font-bold">
+                                            <div key={s.id} className="mb-0.5 leading-tight">
+                                                <span className="font-bold block whitespace-nowrap">
                                                     {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                                                     {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
                                                 </span>
-                                                {printConfig.showRole && <div className="truncate">{s.role}</div>}
-                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600">{s.locationName}</div>}
+                                                {printConfig.showRole && <div className="truncate text-[7px]">{s.role}</div>}
+                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600 text-[7px]">{s.locationName}</div>}
                                             </div>
                                         ))}
                                     </td>
@@ -562,19 +577,18 @@ export const AdminRota = () => {
                     ))}
                     {printConfig.showUnassigned && (
                         <tr className="bg-gray-50">
-                            <td className="border border-black p-1 font-bold italic">Open / Unassigned</td>
+                            <td className="border border-black p-0.5 font-bold italic whitespace-nowrap">Open</td>
                             {weekDates.map((d, i) => {
                                 const cellShifts = getShiftsForCell(d, null);
                                 return (
-                                    <td key={i} className="border border-black p-1 align-top h-12">
+                                    <td key={i} className="border border-black p-0.5 align-top min-w-[40px]">
                                         {cellShifts.map(s => (
-                                            <div key={s.id} className="mb-1">
-                                                <span className="font-bold">
+                                            <div key={s.id} className="mb-0.5 leading-tight">
+                                                <span className="font-bold block whitespace-nowrap">
                                                     {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                                                     {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
                                                 </span>
-                                                {printConfig.showRole && <div className="truncate">{s.role}</div>}
-                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600">{s.locationName}</div>}
+                                                {printConfig.showRole && <div className="truncate text-[7px]">{s.role}</div>}
                                             </div>
                                         ))}
                                     </td>
@@ -588,50 +602,50 @@ export const AdminRota = () => {
 
         {/* Date Grid Layout */}
         {printConfig.layout === 'date_grid' && (
-            <table className="w-full border-collapse border border-black table-fixed text-[9px]">
+            <table className="w-full border-collapse border border-black table-auto text-[8px]">
                 <thead>
                     <tr>
-                        <th className="border border-black p-1 w-20 bg-gray-100">Date</th>
+                        <th className="border border-black p-0.5 bg-gray-100 w-auto whitespace-nowrap">Date</th>
                         {staff.map(u => (
-                            <th key={u.id} className="border border-black p-1 bg-gray-100 truncate w-20">
+                            <th key={u.id} className="border border-black p-0.5 bg-gray-100 w-auto text-center truncate max-w-[60px]">
                                 {u.name.split(' ')[0]}
                             </th>
                         ))}
-                        {printConfig.showUnassigned && <th className="border border-black p-1 bg-gray-100 w-20 italic">Open</th>}
+                        {printConfig.showUnassigned && <th className="border border-black p-0.5 bg-gray-100 w-auto italic text-center">Open</th>}
                     </tr>
                 </thead>
                 <tbody>
                     {weekDates.map((d, i) => (
                         <tr key={i}>
-                            <td className="border border-black p-1 font-bold bg-gray-50">
+                            <td className="border border-black p-0.5 font-bold bg-gray-50 whitespace-nowrap">
                                 {WEEK_DAYS[i]} {d.getDate()}
                             </td>
                             {staff.map(u => {
                                 const cellShifts = getShiftsForCell(d, u.id);
                                 return (
-                                    <td key={u.id} className="border border-black p-1 align-top h-12">
+                                    <td key={u.id} className="border border-black p-0.5 align-top min-w-[40px]">
                                         {cellShifts.map(s => (
-                                            <div key={s.id} className="mb-1">
-                                                <span className="font-bold block">
+                                            <div key={s.id} className="mb-0.5 leading-tight">
+                                                <span className="font-bold block whitespace-nowrap">
                                                     {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                                                     {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
                                                 </span>
-                                                {printConfig.showRole && <div className="truncate text-[8px]">{s.role}</div>}
-                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600 text-[8px]">{s.locationName}</div>}
+                                                {printConfig.showRole && <div className="truncate text-[7px]">{s.role}</div>}
+                                                {printConfig.showLocation && s.locationName && <div className="truncate italic text-gray-600 text-[7px]">{s.locationName}</div>}
                                             </div>
                                         ))}
                                     </td>
                                 );
                             })}
                             {printConfig.showUnassigned && (
-                                <td className="border border-black p-1 align-top bg-gray-50">
+                                <td className="border border-black p-0.5 align-top bg-gray-50 min-w-[40px]">
                                     {getShiftsForCell(d, null).map(s => (
-                                        <div key={s.id} className="mb-1">
-                                            <span className="font-bold block">
+                                        <div key={s.id} className="mb-0.5 leading-tight">
+                                            <span className="font-bold block whitespace-nowrap">
                                                 {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                                                 {company?.settings.rotaShowFinishTimes !== false && `-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`}
                                             </span>
-                                            <div className="truncate text-[8px]">{s.role}</div>
+                                            <div className="truncate text-[7px]">{s.role}</div>
                                         </div>
                                     ))}
                                 </td>
@@ -688,14 +702,39 @@ export const AdminRota = () => {
                         <Trash2 className="w-3 h-3" /> Clear Drafts
                     </button>
                 </div>
-                <button 
-                    onClick={handlePublish}
-                    disabled={draftCount === 0}
-                    className="bg-brand-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition disabled:opacity-50 flex items-center space-x-2"
-                >
-                    <Send className="w-4 h-4" />
-                    <span>Publish ({draftCount})</span>
-                </button>
+                
+                {/* Publish Dropdown */}
+                <div className="relative">
+                    <button 
+                        onClick={() => setIsPublishMenuOpen(!isPublishMenuOpen)}
+                        disabled={draftCount === 0}
+                        className="bg-brand-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition disabled:opacity-50 flex items-center space-x-2"
+                    >
+                        <Send className="w-4 h-4" />
+                        <span>Publish</span>
+                        <ChevronDown className="w-4 h-4 ml-1" />
+                    </button>
+                    {isPublishMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-64 bg-slate-900 rounded-xl shadow-xl border border-white/10 z-50 overflow-hidden animate-fade-in">
+                            <button 
+                                onClick={() => handlePublish('week')}
+                                className="w-full text-left px-4 py-3 hover:bg-white/5 text-slate-300 text-xs font-medium flex flex-col group"
+                            >
+                                <span className="text-white font-bold mb-0.5 group-hover:text-brand-400 transition">Publish Current Week</span>
+                                <span className="text-[10px] text-slate-500">
+                                    {weekStart.toLocaleDateString(undefined, {month:'short', day:'numeric'})} - {new Date(weekStart.getTime() + 6*86400000).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+                                </span>
+                            </button>
+                            <button 
+                                onClick={() => handlePublish('all')}
+                                className="w-full text-left px-4 py-3 hover:bg-white/5 text-slate-300 text-xs font-medium border-t border-white/5 flex flex-col group"
+                            >
+                                <span className="text-white font-bold mb-0.5 group-hover:text-brand-400 transition">Publish All Drafts</span>
+                                <span className="text-[10px] text-slate-500">{draftCount} shifts total</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
 
