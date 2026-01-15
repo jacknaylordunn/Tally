@@ -175,6 +175,7 @@ export const AdminStaff = () => {
                 <p className="text-slate-400">Manage employees, roles, and pay rates.</p>
             </div>
             <button 
+                id="staff-bulk-btn"
                 onClick={() => setIsBulkOpen(true)}
                 className="glass-panel text-slate-300 border border-white/10 px-4 py-2 rounded-lg flex items-center space-x-2 font-medium hover:bg-white/10 transition"
             >
@@ -385,7 +386,7 @@ export const AdminStaff = () => {
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-white">Bulk Adjust Rates</h2>
-                        <button onClick={() => setIsBulkOpen(false)} className="text-slate-400 hover:text-white">
+                        <button id="bulk-close-btn" onClick={() => setIsBulkOpen(false)} className="text-slate-400 hover:text-white">
                             <X className="w-6 h-6" />
                         </button>
                     </div>

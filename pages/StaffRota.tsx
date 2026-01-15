@@ -255,6 +255,7 @@ export const StaffRota = () => {
         <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-white">Schedule</h1>
             <button 
+                id="staff-rota-timeoff-btn"
                 onClick={() => setIsTimeOffOpen(true)}
                 className="text-sm font-bold text-brand-400 hover:bg-brand-900/20 px-3 py-2 rounded-lg transition"
             >
@@ -365,7 +366,7 @@ export const StaffRota = () => {
                  <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-lg text-white">Request Time Off</h3>
-                        <button onClick={() => setIsTimeOffOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
+                        <button id="timeoff-close-btn" onClick={() => setIsTimeOffOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
                     </div>
 
                     <form onSubmit={handleSubmitTimeOff} className="space-y-4">

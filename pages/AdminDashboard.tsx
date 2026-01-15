@@ -4,12 +4,14 @@ import { getShifts, getLocations, getCompany, getSchedule, updateShift, deleteSh
 import { Shift, Location, Company } from '../types';
 import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import { Link } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import { APP_NAME } from '../constants';
 
 export const AdminDashboard = () => {
   const { user } = useAuth();
+  const { startTutorial } = useTutorial();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
@@ -52,6 +54,9 @@ export const AdminDashboard = () => {
             } catch (e) { console.error(e); }
         }
         setLoading(false);
+        
+        // Try starting tutorial (Context checks if it's already done)
+        setTimeout(() => startTutorial(), 1000);
     };
     loadData();
   }, [user]);
@@ -160,7 +165,7 @@ export const AdminDashboard = () => {
             </div>
             
             <div className="flex gap-3">
-                <Link to="/admin/kiosk" className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-brand-900/50 flex items-center gap-2 transition transform active:scale-95">
+                <Link to="/admin/kiosk" id="dashboard-kiosk-btn" className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-brand-900/50 flex items-center gap-2 transition transform active:scale-95">
                     <Zap className="w-4 h-4" />
                     <span>Launch Kiosk</span>
                 </Link>

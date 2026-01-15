@@ -706,6 +706,7 @@ export const AdminRota = () => {
                 {/* Publish Dropdown */}
                 <div className="relative">
                     <button 
+                        id="rota-publish-menu-btn"
                         onClick={() => setIsPublishMenuOpen(!isPublishMenuOpen)}
                         disabled={draftCount === 0}
                         className="bg-brand-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition disabled:opacity-50 flex items-center space-x-2"
@@ -717,6 +718,7 @@ export const AdminRota = () => {
                     {isPublishMenuOpen && (
                         <div className="absolute right-0 mt-2 w-64 bg-slate-900 rounded-xl shadow-xl border border-white/10 z-50 overflow-hidden animate-fade-in">
                             <button 
+                                id="publish-week-btn"
                                 onClick={() => handlePublish('week')}
                                 className="w-full text-left px-4 py-3 hover:bg-white/5 text-slate-300 text-xs font-medium flex flex-col group"
                             >
@@ -798,6 +800,7 @@ export const AdminRota = () => {
                                         <GroupShiftCard key={key} groupKey={key} shifts={groupShifts} />
                                     ))}
                                     <button 
+                                        id={i === 0 ? 'rota-add-btn-0' : undefined}
                                         onClick={() => handleAddShift(date)}
                                         className="w-full py-3 border-2 border-dashed border-white/10 rounded-lg text-slate-500 hover:border-brand-500/50 hover:text-brand-400 hover:bg-brand-500/10 transition flex items-center justify-center group"
                                     >
@@ -1061,7 +1064,7 @@ export const AdminRota = () => {
                             )}
                             <div className="flex-1"></div>
                             <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold hover:text-white transition">Cancel</button>
-                            <button type="submit" className="px-6 py-2 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition">Save</button>
+                            <button id="shift-save-btn" type="submit" className="px-6 py-2 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition">Save</button>
                         </div>
                     </form>
                 </div>

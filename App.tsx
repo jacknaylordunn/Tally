@@ -3,6 +3,8 @@ import React from 'react';
 import { createHashRouter, RouterProvider, createRoutesFromElements, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { TutorialProvider } from './context/TutorialContext';
+import { TutorialOverlay } from './components/TutorialOverlay';
 import { Layout } from './components/Layout';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
@@ -38,7 +40,12 @@ const AuthWrapper = () => {
        );
     }
 
-    return <Outlet />;
+    return (
+        <TutorialProvider>
+            <Outlet />
+            <TutorialOverlay />
+        </TutorialProvider>
+    );
 };
 
 const ProtectedRoute = ({ children, role }: { children?: React.ReactNode, role?: UserRole }) => {

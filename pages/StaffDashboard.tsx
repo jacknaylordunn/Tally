@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import { getStaffActivity, getCompany, getSchedule } from '../services/api';
 import { Shift, Company, ScheduleShift } from '../types';
 import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle, Play, StopCircle, MapPin, ChevronRight } from 'lucide-react';
@@ -9,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const StaffDashboard = () => {
   const { user } = useAuth();
+  const { startTutorial } = useTutorial();
   const navigate = useNavigate();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
@@ -56,6 +58,9 @@ export const StaffDashboard = () => {
               console.error("Error fetching next shift", e);
           }
       }
+      
+      // Try starting tutorial
+      setTimeout(() => startTutorial(), 1000);
   };
 
   useEffect(() => {
@@ -171,7 +176,7 @@ export const StaffDashboard = () => {
                    </div>
                </div>
            ) : (
-               <div className="relative group cursor-pointer" onClick={() => setIsScanning(true)}>
+               <div id="staff-clock-in-btn" className="relative group cursor-pointer" onClick={() => setIsScanning(true)}>
                    <div className="absolute inset-0 bg-brand-600 rounded-full blur-[60px] opacity-20 group-hover:opacity-40 transition duration-500"></div>
                    <div className="w-64 h-64 rounded-full bg-gradient-to-br from-brand-600 to-indigo-700 flex flex-col items-center justify-center relative z-10 shadow-2xl shadow-brand-900/50 border-4 border-white/5 transition-all hover:scale-105 hover:rotate-3 active:scale-95">
                        <Play className="w-16 h-16 text-white ml-2 mb-2 fill-current" />

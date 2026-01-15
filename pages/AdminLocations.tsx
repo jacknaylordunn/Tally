@@ -107,7 +107,7 @@ export const AdminLocations = () => {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {locations.map(loc => (
+            {locations.map((loc, idx) => (
                 <div key={loc.id} className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10 flex flex-col justify-between min-h-[12rem]">
                     <div>
                         <div className="flex justify-between items-start mb-2">
@@ -132,6 +132,7 @@ export const AdminLocations = () => {
                     
                     <button 
                         onClick={() => handlePrint(loc)}
+                        id={idx === 0 ? 'location-print-btn' : undefined}
                         className="w-full mt-4 py-2 border border-white/10 bg-white/5 rounded-lg flex items-center justify-center space-x-2 text-slate-300 hover:bg-white/10 transition font-medium"
                     >
                         <Printer className="w-4 h-4" />
@@ -146,6 +147,7 @@ export const AdminLocations = () => {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white rounded-none md:rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl print:shadow-none print:w-screen print:h-screen print:max-w-none print:rounded-none print:flex print:flex-col print:items-center print:justify-center">
                     <button 
+                        id="location-poster-close-btn"
                         onClick={() => setSelectedLocation(null)}
                         className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition print:hidden"
                     >

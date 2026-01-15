@@ -44,6 +44,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       return true;
   });
 
+  // Helper to generate ID for tutorial targeting
+  const getNavId = (name: string) => {
+      if (name.includes('Live Board') || name.includes('Status')) return 'nav-dashboard';
+      if (name.includes('Rota')) return 'nav-rota';
+      if (name.includes('Timesheets')) return 'nav-timesheets';
+      if (name.includes('Activity')) return 'nav-activity';
+      if (name.includes('Locations')) return 'nav-locations';
+      if (name.includes('Settings')) return 'nav-settings';
+      return `nav-${name.toLowerCase().replace(' ', '-')}`;
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row relative overflow-hidden bg-slate-900 text-slate-100 print:bg-white print:text-black">
       
@@ -64,6 +75,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <Link 
                   key={item.path} 
                   to={item.path}
+                  id={getNavId(item.name)}
                   className={`group flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 relative overflow-hidden ${
                       isActive 
                       ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' 
@@ -118,6 +130,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <Link 
                         key={item.path} 
                         to={item.path}
+                        id={`mobile-${getNavId(item.name)}`}
                         className={`flex flex-col items-center justify-center p-3 rounded-2xl w-full transition-all ${
                             isActive ? 'text-brand-400 bg-brand-500/10' : 'text-slate-500'
                         }`}
@@ -127,7 +140,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </Link>
                 )
             })}
-             {/* If more items, simpler menu or just hide for now as per "Tailored" design usually simplifying mobile */}
           </div>
       </div>
 
