@@ -464,15 +464,15 @@ export const AdminRota = () => {
     {/* PRINT VIEW - Configurable */}
     <div className="hidden print:block p-4 bg-white text-black min-h-screen text-[10px]">
         {/* Header */}
-        <div className="mb-6 border-b-2 border-black pb-4 flex justify-between items-end">
+        <div className="mb-4 border-b border-black pb-2 flex justify-between items-end">
             <div>
-                <h1 className="text-3xl font-bold uppercase tracking-tight">{company?.name} Rota</h1>
-                <p className="text-sm mt-1">
+                <span className="font-bold text-lg uppercase block">{company?.name}</span>
+                <span className="text-sm">
                     {weekStart.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })} - {new Date(weekStart.getTime() + 6*86400000).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
+                </span>
             </div>
             <div className="text-right">
-                <div className="text-xs text-gray-500">Generated on {new Date().toLocaleDateString()}</div>
+                <div className="text-[10px] text-gray-500">Generated {new Date().toLocaleDateString()}</div>
             </div>
         </div>
 
