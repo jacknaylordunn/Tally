@@ -87,10 +87,11 @@ export const AdminLocations = () => {
     <div className="space-y-6 relative">
         <header className="flex items-center justify-between">
             <div>
-                <h1 className="text-3xl font-bold text-white">Locations</h1>
-                <p className="text-slate-400">Manage GPS geofences and static QR codes.</p>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Locations</h1>
+                <p className="text-slate-500 dark:text-slate-400">Manage GPS geofences and static QR codes.</p>
             </div>
             <button 
+                id="add-location-btn"
                 onClick={() => setIsAddModalOpen(true)}
                 className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-brand-500/30 hover:bg-brand-700 transition flex items-center space-x-2"
             >
@@ -108,21 +109,21 @@ export const AdminLocations = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {locations.map((loc, idx) => (
-                <div key={loc.id} className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10 flex flex-col justify-between min-h-[12rem]">
+                <div key={loc.id} className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10 flex flex-col justify-between min-h-[12rem] bg-white dark:bg-slate-800">
                     <div>
                         <div className="flex justify-between items-start mb-2">
-                            <div className="p-2 bg-brand-900/30 text-brand-400 rounded-lg inline-block border border-brand-500/20">
+                            <div className="p-2 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-lg inline-block border border-brand-500/20">
                                 <MapPin className="w-6 h-6" />
                             </div>
                             <button 
                                 onClick={() => handleDelete(loc.id)}
-                                className="text-slate-500 hover:text-red-400 transition"
+                                className="text-slate-400 hover:text-red-500 transition"
                             >
                                 <Trash2 className="w-4 h-4" />
                             </button>
                         </div>
-                        <h3 className="text-xl font-bold text-white truncate">{loc.name}</h3>
-                        <p className="text-slate-400 text-sm mt-1 font-mono bg-white/5 inline-block px-2 py-0.5 rounded">
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white truncate">{loc.name}</h3>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-mono bg-slate-100 dark:bg-white/5 inline-block px-2 py-0.5 rounded">
                             {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}
                         </p>
                         <p className="text-xs text-slate-500 mt-2 flex items-center space-x-1">
@@ -133,7 +134,7 @@ export const AdminLocations = () => {
                     <button 
                         onClick={() => handlePrint(loc)}
                         id={idx === 0 ? 'location-print-btn' : undefined}
-                        className="w-full mt-4 py-2 border border-white/10 bg-white/5 rounded-lg flex items-center justify-center space-x-2 text-slate-300 hover:bg-white/10 transition font-medium"
+                        className="w-full mt-4 py-2 border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 rounded-lg flex items-center justify-center space-x-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition font-medium"
                     >
                         <Printer className="w-4 h-4" />
                         <span>Generate Poster</span>
@@ -197,10 +198,10 @@ export const AdminLocations = () => {
         {/* Modal for Add Location */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
-                <div className="glass-panel w-full max-w-2xl p-6 md:p-8 rounded-3xl shadow-xl border border-white/10 bg-slate-900 my-8">
+                <div className="glass-panel w-full max-w-2xl p-6 md:p-8 rounded-3xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 my-8">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold text-white">Add Location</h2>
-                        <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white">
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Add Location</h2>
+                        <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
@@ -209,40 +210,40 @@ export const AdminLocations = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Location Name</label>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Location Name</label>
                                     <input 
                                         type="text" required
                                         value={newLocName} onChange={e => setNewLocName(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none" 
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none" 
                                         placeholder="e.g. West Entrance"
                                     />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Latitude</label>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Latitude</label>
                                         <input 
                                             type="number" step="any" required
                                             value={newLocLat} onChange={e => setNewLocLat(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none" 
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none" 
                                             placeholder="51.505"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Longitude</label>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Longitude</label>
                                         <input 
                                             type="number" step="any" required
                                             value={newLocLng} onChange={e => setNewLocLng(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none" 
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none" 
                                             placeholder="-0.09"
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Geofence Radius (meters)</label>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Geofence Radius (meters)</label>
                                      <input 
                                         type="number" required
                                         value={newLocRadius} onChange={e => setNewLocRadius(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-slate-800 text-white focus:ring-2 focus:ring-brand-500 outline-none" 
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none" 
                                         placeholder="200"
                                     />
                                 </div>
@@ -250,7 +251,7 @@ export const AdminLocations = () => {
                             
                             {/* Map Column */}
                             <div className="space-y-2">
-                                <label className="block text-sm font-medium text-slate-300">Tap to select location</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Tap to select location</label>
                                 <LocationMap 
                                     lat={parseFloat(newLocLat) || 51.505} 
                                     lng={parseFloat(newLocLng) || -0.09} 

@@ -67,7 +67,7 @@ export const StaffDashboard = () => {
     loadData();
   }, [user]);
 
-  // Scanner Logic (Same logic, new UI hook triggers)
+  // Scanner Logic
   useEffect(() => {
     let stream: MediaStream | null = null;
     let animationFrame: number;
@@ -144,12 +144,12 @@ export const StaffDashboard = () => {
   return (
     <div className="max-w-md mx-auto space-y-8 animate-fade-in relative pb-20">
        
-       <header className="flex items-center justify-between glass-panel p-6 rounded-3xl">
+       <header className="flex items-center justify-between glass-panel p-6 rounded-3xl border border-slate-200 dark:border-white/10">
           <div>
-              <h1 className="text-xl font-bold text-white">{greeting}, {user?.name.split(' ')[0]}</h1>
-              <p className="text-slate-400 text-sm">Ready to work?</p>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white">{greeting}, {user?.name.split(' ')[0]}</h1>
+              <p className="text-slate-500 text-sm">Ready to work?</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-brand-500/20 border border-brand-500/50 flex items-center justify-center text-brand-300 font-bold text-lg shadow-glow">
+          <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/50 flex items-center justify-center text-brand-600 dark:text-brand-300 font-bold text-lg shadow-sm dark:shadow-glow">
               {user?.name.charAt(0)}
           </div>
        </header>
@@ -162,15 +162,15 @@ export const StaffDashboard = () => {
                    <div className="absolute inset-0 bg-green-500 rounded-full blur-[60px] opacity-20 animate-pulse-slow"></div>
                    
                    {/* Main Circle */}
-                   <div className="w-64 h-64 rounded-full glass-panel border-2 border-green-500/50 flex flex-col items-center justify-center relative z-10 shadow-2xl transition-transform hover:scale-105">
-                       <div className="text-xs font-bold uppercase tracking-[0.2em] text-green-400 mb-2">Active Shift</div>
-                       <div className="text-6xl font-mono font-bold text-white tracking-tighter tabular-nums">
+                   <div className="w-64 h-64 rounded-full bg-white dark:bg-slate-900 border-4 border-green-500/20 flex flex-col items-center justify-center relative z-10 shadow-2xl transition-transform hover:scale-105">
+                       <div className="text-xs font-bold uppercase tracking-[0.2em] text-green-600 dark:text-green-400 mb-2">Active Shift</div>
+                       <div className="text-6xl font-mono font-bold text-slate-900 dark:text-white tracking-tighter tabular-nums">
                            {duration.h}:{duration.m.toString().padStart(2, '0')}
                        </div>
                        <div className="text-slate-400 mt-1 font-medium">hrs</div>
                        
-                       <div className="absolute bottom-8 flex items-center gap-2 text-white/80 bg-white/10 px-4 py-2 rounded-full backdrop-blur-md">
-                           <StopCircle className="w-4 h-4 fill-current text-red-400" />
+                       <div className="absolute bottom-8 flex items-center gap-2 text-white bg-red-500 px-4 py-2 rounded-full shadow-lg">
+                           <StopCircle className="w-4 h-4 fill-current" />
                            <span className="text-sm font-bold">Tap to End</span>
                        </div>
                    </div>
@@ -178,13 +178,13 @@ export const StaffDashboard = () => {
            ) : (
                <div id="staff-clock-in-btn" className="relative group cursor-pointer" onClick={() => setIsScanning(true)}>
                    <div className="absolute inset-0 bg-brand-600 rounded-full blur-[60px] opacity-20 group-hover:opacity-40 transition duration-500"></div>
-                   <div className="w-64 h-64 rounded-full bg-gradient-to-br from-brand-600 to-indigo-700 flex flex-col items-center justify-center relative z-10 shadow-2xl shadow-brand-900/50 border-4 border-white/5 transition-all hover:scale-105 hover:rotate-3 active:scale-95">
+                   <div className="w-64 h-64 rounded-full bg-gradient-to-br from-brand-600 to-indigo-700 flex flex-col items-center justify-center relative z-10 shadow-2xl shadow-brand-900/50 border-4 border-white/20 transition-all hover:scale-105 hover:rotate-3 active:scale-95">
                        <Play className="w-16 h-16 text-white ml-2 mb-2 fill-current" />
                        <span className="text-2xl font-bold text-white tracking-tight">Clock In</span>
                        
                        {nextScheduledShift && (
-                           <div className="absolute -bottom-6 bg-slate-800 border border-slate-700 text-slate-300 px-4 py-2 rounded-xl text-xs font-medium flex items-center gap-2 shadow-lg">
-                               <Calendar className="w-3 h-3 text-brand-400" />
+                           <div className="absolute -bottom-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2 rounded-xl text-xs font-medium flex items-center gap-2 shadow-lg">
+                               <Calendar className="w-3 h-3 text-brand-500" />
                                {new Date(nextScheduledShift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                            </div>
                        )}
@@ -230,22 +230,26 @@ export const StaffDashboard = () => {
        )}
 
        {/* Activity List */}
-       <div className="glass-panel rounded-3xl p-6">
+       <div className="glass-panel rounded-3xl p-6 border border-slate-200 dark:border-white/10">
            <div className="flex items-center justify-between mb-4">
-               <h3 className="font-bold text-white text-lg">Recent History</h3>
-               <button onClick={() => navigate('/staff/activity')} className="text-brand-400 text-sm font-semibold hover:text-brand-300">View All</button>
+               <h3 className="font-bold text-slate-900 dark:text-white text-lg">Recent History</h3>
+               <button onClick={() => navigate('/staff/activity')} className="text-brand-600 dark:text-brand-400 text-sm font-semibold hover:text-brand-500">View All</button>
            </div>
            
            <div className="space-y-3">
                {shifts.slice(0, 3).map(shift => (
-                   <div key={shift.id} className="group bg-white/5 p-4 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors flex items-center justify-between">
+                   <button 
+                        key={shift.id} 
+                        onClick={() => navigate('/staff/activity')}
+                        className="w-full group bg-white dark:bg-white/5 p-4 rounded-2xl border border-slate-100 dark:border-white/5 hover:border-brand-200 dark:hover:bg-white/10 transition-colors flex items-center justify-between shadow-sm dark:shadow-none text-left"
+                    >
                        <div className="flex items-center gap-4">
-                           <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-bold ${shift.endTime ? 'bg-slate-800 text-slate-400' : 'bg-green-500/20 text-green-400'}`}>
+                           <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-bold ${shift.endTime ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400'}`}>
                                <span>{new Date(shift.startTime).getDate()}</span>
                                <span className="uppercase opacity-60 text-[10px]">{new Date(shift.startTime).toLocaleString('default', { month: 'short' })}</span>
                            </div>
                            <div>
-                               <p className="font-semibold text-white text-sm">
+                               <p className="font-semibold text-slate-900 dark:text-white text-sm">
                                    {shift.endTime ? `${((shift.endTime - shift.startTime) / 3600000).toFixed(1)} hrs` : 'Active Now'}
                                 </p>
                                <div className="flex items-center gap-1 text-xs text-slate-500">
@@ -254,8 +258,8 @@ export const StaffDashboard = () => {
                                </div>
                            </div>
                        </div>
-                       <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-white transition" />
-                   </div>
+                       <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white transition" />
+                   </button>
                ))}
                {shifts.length === 0 && (
                    <div className="text-center py-8 text-slate-500 text-sm">No activity recorded yet.</div>

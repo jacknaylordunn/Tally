@@ -114,6 +114,8 @@ export interface ValidationResult {
   shift?: Shift;
 }
 
+// --- TUTORIAL & GUIDE SYSTEM ---
+
 export interface TutorialStep {
   targetId: string; // ID of the DOM element to highlight
   title: string;
@@ -122,6 +124,16 @@ export interface TutorialStep {
   position?: 'top' | 'bottom' | 'left' | 'right' | 'center';
   action?: 'click' | 'next'; // 'click' means user must click target to advance
   transparentBackdrop?: boolean; // If true, the dark overlay is removed
+}
+
+export interface InteractiveGuide {
+  id: string;
+  title: string;
+  steps: {
+    targetId?: string; // Optional: if null, just shows text
+    content: string;
+    route: string; // Route to navigate to for this step
+  }[];
 }
 
 // --- CHAT SYSTEM TYPES ---

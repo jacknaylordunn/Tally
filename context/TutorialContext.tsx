@@ -1,11 +1,12 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TutorialStep, UserRole } from '../types';
+import { TutorialStep, UserRole, InteractiveGuide } from '../types';
 import { useAuth } from './AuthContext';
 import { getCompany } from '../services/api';
 
 interface TutorialContextType {
+  // Main Tour
   isActive: boolean;
   currentStepIndex: number;
   steps: TutorialStep[];
@@ -13,6 +14,13 @@ interface TutorialContextType {
   endTutorial: () => void;
   nextStep: () => void;
   prevStep: () => void;
+  
+  // Interactive Guides
+  activeGuide: InteractiveGuide | null;
+  guideStepIndex: number;
+  startGuide: (guide: InteractiveGuide) => void;
+  nextGuideStep: () => void;
+  stopGuide: () => void;
 }
 
 const TutorialContext = createContext<TutorialContextType | undefined>(undefined);
@@ -22,14 +30,18 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   
+  // Tour State
   const [isActive, setIsActive] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [steps, setSteps] = useState<TutorialStep[]>([]);
   
-  // Ref to prevent double-skipping from simultaneous click + route events
+  // Guide State
+  const [activeGuide, setActiveGuide] = useState<InteractiveGuide | null>(null);
+  const [guideStepIndex, setGuideStepIndex] = useState(0);
+
   const isAdvancingRef = useRef(false);
 
-  // --- Interactive Admin Script ---
+  // --- Interactive Admin Script (Standard Tour) ---
   const getAdminSteps = (hasRota: boolean): TutorialStep[] => {
       const workflow: TutorialStep[] = [
           // 1. Intro Tour
@@ -81,8 +93,6 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
                   position: 'bottom',
                   action: 'click'
               },
-              // Combined Step: Details + Save
-              // Changed position to 'left' to avoid covering form inputs on desktop
               {
                   targetId: 'shift-save-btn',
                   title: 'Configure & Save',
@@ -201,7 +211,7 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
       return workflow;
   };
 
-  // --- Interactive Staff Script (Mobile Optimized) ---
+  // --- Interactive Staff Script (Standard Tour) ---
   const getStaffSteps = (): TutorialStep[] => [
       {
           targetId: 'welcome-modal',
@@ -247,10 +257,10 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
       }
   ];
 
+  // --- TOUR FUNCTIONS ---
+
   const startTutorial = async (force = false) => {
       if (!user) return;
-      
-      // Fix: Do not reset tutorial if already active and not forced
       if (isActive && !force) return;
 
       const hasSeen = localStorage.getItem(`tally_tutorial_${user.id}`);
@@ -264,19 +274,16 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
           } catch (e) { console.error(e); }
       }
 
-      // Force boolean for rotaEnabled
       const hasRota = companySettings?.rotaEnabled === true;
-
-      const generatedSteps = user.role === UserRole.ADMIN 
-          ? getAdminSteps(hasRota)
-          : getStaffSteps();
+      const generatedSteps = user.role === UserRole.ADMIN ? getAdminSteps(hasRota) : getStaffSteps();
 
       setSteps(generatedSteps);
       setCurrentStepIndex(0);
       setIsActive(true);
-      isAdvancingRef.current = false;
       
-      // Ensure we start on dashboard
+      // Stop any active guide if starting main tour
+      setActiveGuide(null);
+
       if (user.role === UserRole.ADMIN) navigate('/admin');
       else navigate('/staff');
   };
@@ -290,9 +297,8 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
 
   const nextStep = () => {
       if (isAdvancingRef.current) return;
-      
       isAdvancingRef.current = true;
-      setTimeout(() => { isAdvancingRef.current = false; }, 600); // Debounce
+      setTimeout(() => { isAdvancingRef.current = false; }, 600);
 
       if (currentStepIndex < steps.length - 1) {
           setCurrentStepIndex(prev => prev + 1);
@@ -307,24 +313,55 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
       }
   };
 
-  // Route Watcher: Auto-advance if the user navigates manually to the required route of the *next* step
+  // --- GUIDE FUNCTIONS ---
+
+  const startGuide = (guide: InteractiveGuide) => {
+      // End tutorial if active
+      setIsActive(false);
+      
+      setActiveGuide(guide);
+      setGuideStepIndex(0);
+      
+      // Initial Navigation
+      if (guide.steps[0].route) {
+          navigate(guide.steps[0].route);
+      }
+  };
+
+  const nextGuideStep = () => {
+      if (!activeGuide) return;
+      
+      if (guideStepIndex < activeGuide.steps.length - 1) {
+          const nextIdx = guideStepIndex + 1;
+          setGuideStepIndex(nextIdx);
+          // Navigate if required for next step
+          if (activeGuide.steps[nextIdx].route) {
+              navigate(activeGuide.steps[nextIdx].route);
+          }
+      } else {
+          stopGuide();
+      }
+  };
+
+  const stopGuide = () => {
+      setActiveGuide(null);
+      setGuideStepIndex(0);
+  };
+
+  // Route Watcher for Tour
   useEffect(() => {
       if (!isActive || steps.length === 0) return;
-
       const nextStepObj = steps[currentStepIndex + 1];
-
-      // If the NEXT step requires a route, and we just arrived there, we can auto-advance
-      // This handles the case where the user clicks a nav link (action: 'click') and the route changes
       if (nextStepObj?.requiredRoute && location.pathname.includes(nextStepObj.requiredRoute)) {
-          // Only advance if we haven't just advanced via click handler
-          if (!isAdvancingRef.current) {
-              nextStep();
-          }
+          if (!isAdvancingRef.current) nextStep();
       }
   }, [location.pathname, isActive, steps, currentStepIndex]);
 
   return (
-    <TutorialContext.Provider value={{ isActive, currentStepIndex, steps, startTutorial, endTutorial, nextStep, prevStep }}>
+    <TutorialContext.Provider value={{ 
+        isActive, currentStepIndex, steps, startTutorial, endTutorial, nextStep, prevStep,
+        activeGuide, guideStepIndex, startGuide, nextGuideStep, stopGuide
+    }}>
       {children}
     </TutorialContext.Provider>
   );

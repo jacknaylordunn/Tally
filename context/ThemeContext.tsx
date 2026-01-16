@@ -3,7 +3,11 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { getCompany } from '../services/api';
 
+export type ThemeMode = 'light' | 'dark' | 'system';
+
 interface ThemeContextType {
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
   setBrandColor: (hex: string) => void;
 }
 
@@ -16,13 +20,27 @@ const adjustColor = (color: string, amount: number) => {
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+      return (localStorage.getItem('tally_theme') as ThemeMode) || 'system';
+  });
 
-  // Enforce Dark Mode on Mount
+  const setTheme = (newTheme: ThemeMode) => {
+      setThemeState(newTheme);
+      localStorage.setItem('tally_theme', newTheme);
+  };
+
+  // Apply Theme Class
   useEffect(() => {
-    document.documentElement.classList.add('dark');
-    // Ensure body background matches the dark theme (Slate-950)
-    document.body.style.backgroundColor = '#020617'; 
-  }, []);
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+
+    if (theme === 'system') {
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        root.classList.add(systemTheme);
+    } else {
+        root.classList.add(theme);
+    }
+  }, [theme]);
 
   const setBrandColor = (hex: string) => {
       const root = document.documentElement;
@@ -51,7 +69,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [user]);
 
   return (
-    <ThemeContext.Provider value={{ setBrandColor }}>
+    <ThemeContext.Provider value={{ theme, setTheme, setBrandColor }}>
       {children}
     </ThemeContext.Provider>
   );

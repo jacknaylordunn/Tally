@@ -56,16 +56,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row relative overflow-hidden bg-slate-900 text-slate-100 print:bg-white print:text-black">
+    <div className="min-h-screen flex flex-col md:flex-row relative overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 print:bg-white print:text-black transition-colors duration-300">
       
       {/* --- DESKTOP SIDEBAR (Floating Dock) --- */}
-      <aside className="hidden md:flex flex-col w-20 lg:w-72 fixed left-4 top-4 bottom-4 glass-panel rounded-3xl z-50 transition-all duration-300 shadow-2xl print:hidden">
+      <aside className="hidden md:flex flex-col w-20 lg:w-72 fixed left-4 top-4 bottom-4 glass-panel rounded-3xl z-50 transition-all duration-300 shadow-2xl print:hidden border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/60">
         <div className="flex items-center gap-4 p-6 mb-4">
            <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-purple-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
                 <img src={LOGO_URL} alt="Logo" className="relative w-10 h-10 rounded-xl object-cover bg-white" />
            </div>
-           <span className="font-extrabold text-xl tracking-tight text-white hidden lg:block">{APP_NAME}</span>
+           <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-white hidden lg:block">{APP_NAME}</span>
         </div>
         
         <nav className="flex-1 px-4 space-y-2 overflow-y-auto no-scrollbar">
@@ -79,7 +79,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   className={`group flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 relative overflow-hidden ${
                       isActive 
                       ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
                   }`}
                 >
                   <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
@@ -90,39 +90,39 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/5 mt-auto">
+        <div className="p-4 border-t border-slate-200 dark:border-white/5 mt-auto">
           <button 
             onClick={logout}
-            className="flex items-center gap-4 px-4 py-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors w-full text-left"
+            className="flex items-center gap-4 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-colors w-full text-left"
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className="hidden lg:block font-medium">Sign Out</span>
           </button>
           
-          <div className="mt-4 flex items-center gap-3 px-2 lg:bg-white/5 lg:p-3 lg:rounded-2xl">
+          <div className="mt-4 flex items-center gap-3 px-2 lg:bg-slate-100 dark:lg:bg-white/5 lg:p-3 lg:rounded-2xl transition-colors">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs shadow-lg">
               {user?.name.charAt(0)}
             </div>
             <div className="hidden lg:block flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
-              <p className="text-xs text-slate-400 truncate capitalize">{user?.role}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{user?.name}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate capitalize">{user?.role}</p>
             </div>
           </div>
         </div>
       </aside>
 
       {/* --- MOBILE HEADER & BOTTOM NAV --- */}
-      <div className="md:hidden fixed top-0 left-0 right-0 glass-panel z-50 px-6 py-4 flex justify-between items-center border-b border-white/5 print:hidden">
+      <div className="md:hidden fixed top-0 left-0 right-0 glass-panel z-50 px-6 py-4 flex justify-between items-center border-b border-slate-200 dark:border-white/5 print:hidden bg-white/90 dark:bg-slate-900/90">
         <div className="flex items-center gap-3">
-           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg bg-white" />
-           <span className="font-bold text-lg text-white">{APP_NAME}</span>
+           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg bg-white shadow-sm" />
+           <span className="font-bold text-lg text-slate-900 dark:text-white">{APP_NAME}</span>
         </div>
-        <button onClick={logout} className="p-2 text-slate-400 hover:text-white">
+        <button onClick={logout} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white">
             <LogOut className="w-5 h-5" />
         </button>
       </div>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 glass-panel z-50 border-t border-white/5 pb-safe print:hidden">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 glass-panel z-50 border-t border-slate-200 dark:border-white/5 pb-safe print:hidden bg-white/90 dark:bg-slate-900/90">
           <div className="flex justify-around items-center p-2">
             {navItems.slice(0, 4).map((item) => { // Limit to 4 for mobile bar
                 const isActive = location.pathname === item.path;
@@ -132,7 +132,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         to={item.path}
                         id={`mobile-${getNavId(item.name)}`}
                         className={`flex flex-col items-center justify-center p-3 rounded-2xl w-full transition-all ${
-                            isActive ? 'text-brand-400 bg-brand-500/10' : 'text-slate-500'
+                            isActive ? 'text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-500/10' : 'text-slate-500'
                         }`}
                     >
                         <item.icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-current' : ''}`} />

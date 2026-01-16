@@ -205,29 +205,29 @@ export const AdminDashboard = () => {
   };
 
   const StatWidget = ({ label, value, subtext, icon: Icon, color, isDropdown = false }: any) => (
-      <div className="glass-panel p-6 rounded-3xl relative overflow-visible group hover:bg-white/5 transition duration-300">
+      <div className="glass-panel p-6 rounded-3xl relative overflow-visible group hover:bg-white/50 dark:hover:bg-white/5 transition duration-300 border border-slate-200 dark:border-white/5">
           <div className={`absolute -right-4 -top-4 w-24 h-24 bg-${color}-500/10 rounded-full blur-2xl group-hover:bg-${color}-500/20 transition`}></div>
           <div className="relative z-10">
               <div className="flex justify-between items-start mb-4">
-                  <div className={`p-3 rounded-2xl bg-${color}-500/20 text-${color}-400`}>
+                  <div className={`p-3 rounded-2xl bg-${color}-500/20 text-${color}-600 dark:text-${color}-400`}>
                       <Icon className="w-6 h-6" />
                   </div>
                   {isDropdown ? (
                       <div className="relative">
                           <button 
                             onClick={() => setIsCostMenuOpen(!isCostMenuOpen)}
-                            className="text-xs font-bold text-slate-400 bg-white/5 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white hover:bg-white/10 transition"
+                            className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition"
                           >
                               <span>{costWindow} hrs</span>
                               <ChevronDown className="w-3 h-3" />
                           </button>
                           {isCostMenuOpen && (
-                              <div className="absolute right-0 top-8 w-32 bg-slate-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                              <div className="absolute right-0 top-8 w-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
                                   {[12, 18, 24].map((h) => (
                                       <button
                                         key={h}
                                         onClick={() => { setCostWindow(h as any); setIsCostMenuOpen(false); }}
-                                        className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-white/10 ${costWindow === h ? 'text-brand-400' : 'text-slate-400'}`}
+                                        className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-slate-50 dark:hover:bg-white/10 ${costWindow === h ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 dark:text-slate-400'}`}
                                       >
                                           Last {h} Hours
                                       </button>
@@ -236,11 +236,11 @@ export const AdminDashboard = () => {
                           )}
                       </div>
                   ) : (
-                      subtext && <span className="text-xs font-medium text-slate-500 bg-white/5 px-2 py-1 rounded-lg">{subtext}</span>
+                      subtext && <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded-lg">{subtext}</span>
                   )}
               </div>
-              <h3 className="text-4xl font-bold text-white mb-1 tracking-tight">{value}</h3>
-              <p className="text-slate-400 font-medium text-sm">{label}</p>
+              <h3 className="text-4xl font-bold text-slate-900 dark:text-white mb-1 tracking-tight">{value}</h3>
+              <p className="text-slate-500 dark:text-slate-400 font-medium text-sm">{label}</p>
           </div>
       </div>
   );
@@ -249,16 +249,16 @@ export const AdminDashboard = () => {
     <div className="space-y-8 pb-12" onClick={() => { setOpenActionMenuId(null); setIsCostMenuOpen(false); }}>
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-                <h1 className="text-3xl font-bold text-white tracking-tight">Command Center</h1>
-                <p className="text-slate-400 mt-1">Overview for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Command Center</h1>
+                <p className="text-slate-500 dark:text-slate-400 mt-1">Overview for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
             </div>
             
             <div className="flex gap-3">
-                <Link to="/admin/kiosk" id="dashboard-kiosk-btn" className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-brand-900/50 flex items-center gap-2 transition transform active:scale-95">
+                <Link to="/admin/kiosk" id="dashboard-kiosk-btn" className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-brand-900/20 flex items-center gap-2 transition transform active:scale-95">
                     <Zap className="w-4 h-4" />
                     <span>Launch Kiosk</span>
                 </Link>
-                <button onClick={() => setIsLocationSelectorOpen(true)} className="glass-panel hover:bg-white/10 text-white px-5 py-3 rounded-xl font-bold transition flex items-center gap-2">
+                <button onClick={() => setIsLocationSelectorOpen(true)} className="glass-panel hover:bg-white/50 dark:hover:bg-white/10 text-slate-700 dark:text-white border border-slate-200 dark:border-white/10 px-5 py-3 rounded-xl font-bold transition flex items-center gap-2">
                     <Printer className="w-4 h-4" />
                     <span className="hidden sm:inline">Print QR</span>
                 </button>
@@ -305,40 +305,40 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Main Content Block */}
-        <div className="glass-panel rounded-3xl overflow-hidden border border-white/5">
+        <div className="glass-panel rounded-3xl overflow-hidden border border-slate-200 dark:border-white/5">
             {/* Filters */}
-            <div className="p-6 border-b border-white/5 flex flex-col md:flex-row gap-4 justify-between items-center bg-white/5">
-                <div className="flex bg-slate-900/50 p-1 rounded-xl">
+            <div className="p-6 border-b border-slate-200 dark:border-white/5 flex flex-col md:flex-row gap-4 justify-between items-center bg-slate-50/50 dark:bg-white/5">
+                <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-xl">
                     <button 
                         onClick={() => setFilter('all')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition ${filter === 'all' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition ${filter === 'all' ? 'bg-white dark:bg-brand-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
                     >
                         All Activity
                     </button>
                     <button 
                         onClick={() => setFilter('active')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition ${filter === 'active' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition ${filter === 'active' ? 'bg-white dark:bg-brand-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
                     >
                         Active Now
                     </button>
                 </div>
 
                 <div className="relative w-full md:w-72">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 w-4 h-4" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <input 
                         type="text" 
                         placeholder="Search staff..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-white/5 rounded-xl text-white placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition-all"
                     />
                 </div>
             </div>
 
             {/* Table */}
             <div className="overflow-x-auto min-h-[400px]">
-                <table className="w-full text-left text-sm text-slate-400">
-                    <thead className="bg-slate-900/30 text-xs uppercase font-bold text-slate-500 tracking-wider">
+                <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
+                    <thead className="bg-slate-50 dark:bg-slate-900/30 text-xs uppercase font-bold text-slate-500 tracking-wider">
                         <tr>
                             <th className="px-6 py-4">Employee</th>
                             <th className="px-6 py-4">Status</th>
@@ -347,7 +347,7 @@ export const AdminDashboard = () => {
                             <th className="px-6 py-4 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-slate-200 dark:divide-white/5">
                         {loading ? (
                             <tr><td colSpan={5} className="p-12 text-center text-slate-500">Loading live data...</td></tr>
                         ) : filteredShifts.length === 0 ? (
@@ -359,16 +359,16 @@ export const AdminDashboard = () => {
                             const m = Math.floor((durationMs % 3600000) / 60000);
                             
                             return (
-                                <tr key={shift.id} className="hover:bg-white/5 transition duration-150 group">
+                                <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition duration-150 group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                            <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-gradient-to-tr dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-slate-600 dark:text-white font-bold text-sm shadow-sm">
                                                 {shift.userName.charAt(0)}
                                             </div>
                                             <div>
-                                                <div className="font-bold text-white flex items-center gap-2">
+                                                <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                                     {shift.userName}
-                                                    {shift.scheduleShiftId && <CheckCircle2 className="w-3 h-3 text-purple-400" />}
+                                                    {shift.scheduleShiftId && <CheckCircle2 className="w-3 h-3 text-purple-500" />}
                                                 </div>
                                                 <div className="text-xs text-slate-500">{new Date(shift.startTime).toLocaleDateString()}</div>
                                             </div>
@@ -376,20 +376,20 @@ export const AdminDashboard = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         {isActive ? (
-                                            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-xs font-bold">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                                                 <span>Active</span>
                                             </div>
                                         ) : (
-                                            <span className="text-slate-500 font-medium text-xs">Completed</span>
+                                            <span className="text-slate-500 font-medium text-xs bg-slate-100 dark:bg-white/5 px-2 py-1 rounded">Completed</span>
                                         )}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="font-mono text-white">{new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                        <div className="font-mono text-slate-700 dark:text-white">{new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                         <div className="text-xs text-slate-500 mt-0.5">{h}h {m}m duration</div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className="text-xs font-mono text-slate-400 bg-white/5 px-2 py-1 rounded border border-white/5">
+                                        <span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
                                             {shift.startMethod === 'dynamic_qr' ? 'KIOSK QR' : shift.startMethod === 'static_gps' ? 'GPS SCAN' : 'MANUAL'}
                                         </span>
                                     </td>
@@ -399,30 +399,30 @@ export const AdminDashboard = () => {
                                                 e.stopPropagation(); 
                                                 setOpenActionMenuId(openActionMenuId === shift.id ? null : shift.id); 
                                             }}
-                                            className={`p-2 rounded-lg transition ${openActionMenuId === shift.id ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                            className={`p-2 rounded-lg transition ${openActionMenuId === shift.id ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'}`}
                                         >
                                             <MoreHorizontal className="w-5 h-5" />
                                         </button>
 
                                         {openActionMenuId === shift.id && (
-                                            <div className="absolute right-0 top-12 w-48 bg-slate-900 rounded-xl shadow-xl border border-white/10 z-50 overflow-hidden animate-fade-in">
+                                            <div className="absolute right-0 top-12 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-white/10 z-50 overflow-hidden animate-fade-in">
                                                 <button 
                                                     onClick={() => handleEditClick(shift)} 
-                                                    className="w-full text-left px-4 py-3 hover:bg-white/5 text-slate-300 text-sm font-medium flex items-center gap-3 transition"
+                                                    className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300 text-sm font-medium flex items-center gap-3 transition"
                                                 >
-                                                    <Edit2 className="w-4 h-4 text-blue-400" /> Edit Time
+                                                    <Edit2 className="w-4 h-4 text-blue-500" /> Edit Time
                                                 </button>
                                                 {!shift.endTime && (
                                                     <button 
                                                         onClick={() => handleForceClockOut(shift)} 
-                                                        className="w-full text-left px-4 py-3 hover:bg-white/5 text-slate-300 text-sm font-medium flex items-center gap-3 transition border-t border-white/5"
+                                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300 text-sm font-medium flex items-center gap-3 transition border-t border-slate-100 dark:border-white/5"
                                                     >
-                                                        <LogOut className="w-4 h-4 text-amber-400" /> Clock Out
+                                                        <LogOut className="w-4 h-4 text-amber-500" /> Clock Out
                                                     </button>
                                                 )}
                                                 <button 
                                                     onClick={() => handleDeleteShift(shift.id)} 
-                                                    className="w-full text-left px-4 py-3 hover:bg-red-900/20 text-red-400 text-sm font-medium flex items-center gap-3 transition border-t border-white/5"
+                                                    className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 text-sm font-medium flex items-center gap-3 transition border-t border-slate-100 dark:border-white/5"
                                                 >
                                                     <Trash2 className="w-4 h-4" /> Delete
                                                 </button>
@@ -461,20 +461,20 @@ export const AdminDashboard = () => {
         {/* Location Selector */}
         {isLocationSelectorOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={(e) => e.stopPropagation()}>
-                <div className="glass-panel border border-white/10 rounded-3xl p-6 max-w-md w-full">
+                <div className="glass-panel border border-slate-200 dark:border-white/10 rounded-3xl p-6 max-w-md w-full bg-white dark:bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-white">Select Location</h2>
-                        <button onClick={() => setIsLocationSelectorOpen(false)} className="text-slate-400 hover:text-white"><X className="w-6 h-6" /></button>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select Location</h2>
+                        <button onClick={() => setIsLocationSelectorOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="w-6 h-6" /></button>
                     </div>
                     <div className="space-y-2 max-h-96 overflow-y-auto">
                         {locations.map(loc => (
                             <button key={loc.id} onClick={() => { setIsLocationSelectorOpen(false); setSelectedLocationForPoster(loc); }}
-                                className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-brand-600 transition group text-left border border-white/5">
+                                className="w-full flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-600 transition group text-left border border-slate-100 dark:border-white/5">
                                 <div className="flex items-center gap-3">
-                                    <MapPin className="w-5 h-5 text-slate-400 group-hover:text-white" />
-                                    <span className="font-bold text-white">{loc.name}</span>
+                                    <MapPin className="w-5 h-5 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-white" />
+                                    <span className="font-bold text-slate-900 dark:text-white">{loc.name}</span>
                                 </div>
-                                <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white" />
+                                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-white" />
                             </button>
                         ))}
                     </div>
@@ -485,10 +485,10 @@ export const AdminDashboard = () => {
         {/* Edit Modal */}
         {editingShift && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={(e) => e.stopPropagation()}>
-                <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-white/10 bg-slate-900">
+                <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
                      <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-white">Edit Shift</h2>
-                        <button onClick={() => setEditingShift(null)} className="text-slate-400 hover:text-white">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Shift</h2>
+                        <button onClick={() => setEditingShift(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
@@ -496,7 +496,7 @@ export const AdminDashboard = () => {
                     <div className="space-y-4 mb-8">
                         <div>
                             <p className="text-sm font-medium text-slate-500">Staff Member</p>
-                            <p className="font-bold text-lg text-white">{editingShift.userName}</p>
+                            <p className="font-bold text-lg text-slate-900 dark:text-white">{editingShift.userName}</p>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
@@ -506,7 +506,7 @@ export const AdminDashboard = () => {
                                     type="datetime-local"
                                     value={editStartTime}
                                     onChange={(e) => setEditStartTime(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                                 />
                             </div>
                             <div>
@@ -515,11 +515,11 @@ export const AdminDashboard = () => {
                                     type="datetime-local"
                                     value={editEndTime}
                                     onChange={(e) => setEditEndTime(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-white text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                                 />
                             </div>
                         </div>
-                        <div className="flex items-center space-x-2 text-xs text-brand-400 bg-brand-900/20 p-3 rounded-lg border border-brand-900/30">
+                        <div className="flex items-center space-x-2 text-xs text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20 p-3 rounded-lg border border-brand-200 dark:border-brand-900/30">
                             <Clock className="w-4 h-4" />
                             <span>This overrides the logged data.</span>
                         </div>
@@ -528,7 +528,7 @@ export const AdminDashboard = () => {
                     <div className="flex gap-3">
                          <button 
                             onClick={() => setEditingShift(null)}
-                            className="flex-1 py-3 text-slate-400 font-bold hover:bg-white/5 rounded-xl transition"
+                            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition"
                         >
                             Cancel
                         </button>

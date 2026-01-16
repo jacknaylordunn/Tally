@@ -16,7 +16,8 @@ import {
     arrayUnion,
     arrayRemove,
     onSnapshot,
-    addDoc
+    addDoc,
+    getCountFromServer
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest, Conversation, ChatMessage } from '../types';
@@ -179,29 +180,6 @@ export const deleteCompanyFull = async (companyId: string): Promise<void> => {
     await batch.commit();
 };
 
-export const deleteCompanyChatData = async (companyId: string): Promise<void> => {
-    // Note: This is a heavy operation. In production, this should be a Cloud Function.
-    // Client-side batch deletion is limited to 500 ops and can fail if dataset is large.
-    // For this prototype, we'll delete top-level conversations. Messages subcollections 
-    // are harder to delete client-side without iterating everything.
-    
-    const q = query(collection(db, CONVERSATIONS_REF), where("companyId", "==", companyId));
-    const snapshot = await getDocs(q);
-    
-    // Deleting documents in a batch (limit 500)
-    const batch = writeBatch(db);
-    let count = 0;
-    
-    snapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        count++;
-    });
-    
-    if (count > 0) {
-        await batch.commit();
-    }
-};
-
 // --- LOCATIONS ---
 
 export const getLocations = async (companyId: string): Promise<Location[]> => {
@@ -287,6 +265,16 @@ export const getSchedule = async (companyId: string, startTime: number, endTime:
     }
 };
 
+export const getGlobalDraftCount = async (companyId: string): Promise<number> => {
+    const q = query(
+        collection(db, SCHEDULE_REF), 
+        where("companyId", "==", companyId),
+        where("status", "==", "draft")
+    );
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+};
+
 export const copyScheduleWeek = async (companyId: string, sourceWeekStart: number, targetWeekStart: number): Promise<void> => {
     const sourceEnd = sourceWeekStart + (7 * 24 * 60 * 60 * 1000) + (12 * 60 * 60 * 1000); 
     const sourceShifts = await getSchedule(companyId, sourceWeekStart, sourceEnd);
@@ -348,14 +336,13 @@ export const publishDrafts = async (companyId: string, startTime?: number, endTi
     );
     
     const snap = await getDocs(q);
-    const batch = writeBatch(db);
-    let count = 0;
+    const docsToUpdate = [];
 
     snap.docs.forEach(d => {
         const data = d.data() as ScheduleShift;
         let shouldPublish = true;
 
-        // Apply date filter in memory to avoid complex indexes
+        // Apply date filter in memory if provided
         if (startTime !== undefined && endTime !== undefined) {
             if (data.startTime < startTime || data.startTime > endTime) {
                 shouldPublish = false;
@@ -363,12 +350,21 @@ export const publishDrafts = async (companyId: string, startTime?: number, endTi
         }
 
         if (shouldPublish) {
-            batch.update(d.ref, { status: 'published' });
-            count++;
+            docsToUpdate.push(d.ref);
         }
     });
 
-    if (count > 0) {
+    // Batch update (chunk by 400 for safety)
+    const chunks = [];
+    for (let i = 0; i < docsToUpdate.length; i += 400) {
+        chunks.push(docsToUpdate.slice(i, i + 400));
+    }
+
+    for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach(ref => {
+            batch.update(ref, { status: 'published' });
+        });
         await batch.commit();
     }
 };
@@ -405,96 +401,6 @@ export const getMyTimeOff = async (userId: string): Promise<TimeOffRequest[]> =>
     );
     const snap = await getDocs(q);
     return snap.docs.map(d => d.data() as TimeOffRequest);
-};
-
-// --- CHAT SYSTEM (Real-time) ---
-
-export const subscribeToConversations = (userId: string, companyId: string, callback: (convs: Conversation[]) => void) => {
-    const q = query(
-        collection(db, CONVERSATIONS_REF),
-        where("companyId", "==", companyId),
-        where("participants", "array-contains", userId),
-        orderBy("lastMessage.createdAt", "desc")
-    );
-
-    return onSnapshot(q, (snapshot) => {
-        const conversations = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Conversation));
-        callback(conversations);
-    });
-};
-
-export const subscribeToMessages = (conversationId: string, callback: (msgs: ChatMessage[]) => void) => {
-    const q = query(
-        collection(db, CONVERSATIONS_REF, conversationId, "messages"),
-        orderBy("createdAt", "asc"),
-        limit(100)
-    );
-
-    return onSnapshot(q, (snapshot) => {
-        const messages = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChatMessage));
-        callback(messages);
-    });
-};
-
-export const findDirectConversation = async (companyId: string, user1: string, user2: string): Promise<string | null> => {
-    // This is a client-side filter because Firestore doesn't support 'array-equals-exact' easily without composite keys.
-    // Given the scale, fetching all user conversations and filtering is acceptable.
-    const q = query(
-        collection(db, CONVERSATIONS_REF),
-        where("companyId", "==", companyId),
-        where("type", "==", "direct"),
-        where("participants", "array-contains", user1)
-    );
-    
-    const snap = await getDocs(q);
-    const match = snap.docs.find(d => {
-        const data = d.data() as Conversation;
-        return data.participants.includes(user2);
-    });
-
-    return match ? match.id : null;
-};
-
-export const createConversation = async (conversation: Omit<Conversation, 'id'>): Promise<string> => {
-    const docRef = await addDoc(collection(db, CONVERSATIONS_REF), conversation);
-    return docRef.id;
-};
-
-export const sendMessage = async (conversationId: string, message: Omit<ChatMessage, 'id' | 'conversationId'>) => {
-    // 1. Add message
-    const msgRef = await addDoc(collection(db, CONVERSATIONS_REF, conversationId, "messages"), {
-        ...message,
-        conversationId
-    });
-
-    // 2. Update conversation lastMessage
-    const convRef = doc(db, CONVERSATIONS_REF, conversationId);
-    await updateDoc(convRef, {
-        lastMessage: {
-            content: message.content,
-            senderId: message.senderId,
-            senderName: message.senderName,
-            createdAt: message.createdAt,
-            readBy: [message.senderId],
-            type: message.type
-        }
-    });
-    
-    return msgRef.id;
-};
-
-export const markConversationRead = async (conversationId: string, userId: string) => {
-    const convRef = doc(db, CONVERSATIONS_REF, conversationId);
-    const convSnap = await getDoc(convRef);
-    
-    if (convSnap.exists()) {
-        const data = convSnap.data() as Conversation;
-        if (data.lastMessage && !data.lastMessage.readBy.includes(userId)) {
-            await updateDoc(convRef, {
-                "lastMessage.readBy": arrayUnion(userId)
-            });
-        }
-    }
 };
 
 // --- ACTUAL SHIFTS (Time Tracking) ---

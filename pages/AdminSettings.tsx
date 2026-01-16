@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile } from '../services/api';
 import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useBlocker } from 'react-router-dom';
@@ -10,7 +10,7 @@ import { APP_NAME } from '../constants';
 
 export const AdminSettings = () => {
   const { user, refreshSession } = useAuth();
-  const { setBrandColor } = useTheme();
+  const { theme, setTheme, setBrandColor } = useTheme();
   const navigate = useNavigate();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
@@ -250,8 +250,8 @@ export const AdminSettings = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
         <div>
-            <h1 className="text-3xl font-bold text-white">Company Settings</h1>
-            <p className="text-slate-400">Manage your organization preferences.</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Company Settings</h1>
+            <p className="text-slate-500 dark:text-slate-400">Manage your organization preferences.</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -292,14 +292,14 @@ export const AdminSettings = () => {
 
                 <div className="space-y-2">
                     {isDirty && (
-                        <div className="bg-amber-900/20 text-amber-400 px-4 py-2 rounded-lg text-sm font-medium text-center animate-in fade-in slide-in-from-bottom-2 border border-amber-900/30">
+                        <div className="bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-lg text-sm font-medium text-center animate-in fade-in slide-in-from-bottom-2 border border-amber-200 dark:border-amber-900/30">
                             Unsaved changes
                         </div>
                     )}
                     <button 
                         onClick={handleSave}
                         disabled={saving}
-                        className={`w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-bold transition disabled:opacity-70 shadow-lg ${isDirty ? 'bg-brand-600 hover:bg-brand-700 text-white animate-pulse' : 'glass-panel hover:bg-white/10 text-white'}`}
+                        className={`w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-bold transition disabled:opacity-70 shadow-lg ${isDirty ? 'bg-brand-600 hover:bg-brand-700 text-white animate-pulse' : 'glass-panel hover:bg-white/10 text-slate-900 dark:text-white'}`}
                     >
                         <Save className="w-5 h-5" />
                         <span>{saving ? 'Saving...' : (isDirty ? 'Save Changes' : 'Save All Changes')}</span>
@@ -311,46 +311,129 @@ export const AdminSettings = () => {
             <div className="lg:col-span-2 space-y-6">
                 
                 {/* Profile & Info */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-white/10 mb-4">
-                        <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
                             <User className="w-5 h-5" />
                         </div>
-                        <h3 className="font-bold text-lg text-white">Identity</h3>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Identity</h3>
                     </div>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Company Name</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Company Name</label>
                             <input 
                                 type="text"
                                 value={companyName}
                                 onChange={(e) => setCompanyName(e.target.value)}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Your Full Name</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Your Full Name</label>
                             <input 
                                 type="text"
                                 value={personalName}
                                 onChange={(e) => setPersonalName(e.target.value)}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                     </div>
                 </div>
 
+                {/* Appearance */}
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
+                            <Palette className="w-5 h-5" />
+                        </div>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Appearance & Branding</h3>
+                    </div>
+                    
+                    <div className="space-y-6">
+                        {/* Theme Toggle */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">App Theme</label>
+                            <div className="grid grid-cols-3 gap-3">
+                                <button 
+                                    onClick={() => setTheme('light')}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'light' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                >
+                                    <Sun className="w-6 h-6 mb-2" />
+                                    <span className="text-xs font-bold">Light</span>
+                                </button>
+                                <button 
+                                    onClick={() => setTheme('dark')}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'dark' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                >
+                                    <Moon className="w-6 h-6 mb-2" />
+                                    <span className="text-xs font-bold">Dark</span>
+                                </button>
+                                <button 
+                                    onClick={() => setTheme('system')}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'system' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                >
+                                    <Laptop className="w-6 h-6 mb-2" />
+                                    <span className="text-xs font-bold">System</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                Primary Brand Color
+                            </label>
+                            <div className="flex items-center space-x-3">
+                                <div className="relative">
+                                    <input 
+                                        type="color"
+                                        value={primaryColor}
+                                        onChange={handleColorChange}
+                                        className="h-12 w-12 rounded-lg border-0 cursor-pointer overflow-hidden p-0 shadow-sm"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <input 
+                                        type="text" 
+                                        value={primaryColor}
+                                        onChange={handleColorChange}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none font-mono text-sm uppercase transition-colors"
+                                        placeholder="#000000"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                Company Logo URL
+                            </label>
+                            <div className="flex items-center space-x-3">
+                                <div className="relative flex-1">
+                                    <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                    <input 
+                                        type="url"
+                                        value={logoUrl}
+                                        onChange={(e) => setLogoUrl(e.target.value)}
+                                        placeholder="https://example.com/logo.png"
+                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
+                                    />
+                                </div>
+                                {logoUrl && <img src={logoUrl} alt="Preview" className="h-10 w-10 object-contain rounded bg-white shadow-sm" />}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* General */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-white/10 mb-4">
-                        <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
                             <Building className="w-5 h-5" />
                         </div>
-                        <h3 className="font-bold text-lg text-white">General & Security</h3>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">General & Security</h3>
                     </div>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                 GPS Geofence Radius (meters)
                             </label>
                             <input 
@@ -358,12 +441,12 @@ export const AdminSettings = () => {
                                 min="20"
                                 value={radius}
                                 onChange={(e) => setRadius(parseInt(e.target.value))}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                         <div className="flex items-center justify-between pt-2">
                             <div className="pr-4">
-                                <h4 className="font-medium text-white text-sm">Require Admin Approval</h4>
+                                <h4 className="font-medium text-slate-900 dark:text-white text-sm">Require Admin Approval</h4>
                                 <p className="text-xs text-slate-500">New staff must be approved before they can clock in.</p>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -373,19 +456,19 @@ export const AdminSettings = () => {
                                     onChange={(e) => setRequireApproval(e.target.checked)}
                                     className="sr-only peer" 
                                 />
-                                <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                             </label>
                         </div>
                     </div>
                 </div>
 
                 {/* Audit Settings */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-white/10 mb-4">
-                        <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
                             <AlertTriangle className="w-5 h-5" />
                         </div>
-                        <h3 className="font-bold text-lg text-white">Attendance Auditing</h3>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Attendance Auditing</h3>
                     </div>
                     <p className="text-sm text-slate-500 mb-6">Configure when to flag shifts for review.</p>
                     
@@ -397,7 +480,7 @@ export const AdminSettings = () => {
                                 min="0"
                                 value={auditLateIn}
                                 onChange={(e) => setAuditLateIn(parseInt(e.target.value))}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                         <div>
@@ -407,7 +490,7 @@ export const AdminSettings = () => {
                                 min="0"
                                 value={auditEarlyOut}
                                 onChange={(e) => setAuditEarlyOut(parseInt(e.target.value))}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                         <div>
@@ -417,7 +500,7 @@ export const AdminSettings = () => {
                                 min="0"
                                 value={auditLateOut}
                                 onChange={(e) => setAuditLateOut(parseInt(e.target.value))}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                         <div>
@@ -427,7 +510,7 @@ export const AdminSettings = () => {
                                 min="0"
                                 value={auditShortShift}
                                 onChange={(e) => setAuditShortShift(parseInt(e.target.value))}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                         <div className="md:col-span-2">
@@ -437,20 +520,20 @@ export const AdminSettings = () => {
                                 min="0"
                                 value={auditLongShift}
                                 onChange={(e) => setAuditLongShift(parseInt(e.target.value))}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
                     </div>
                 </div>
 
                 {/* Rota System Settings */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10">
-                    <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-4">
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
                         <div className="flex items-center space-x-3">
-                             <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
+                             <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
                                 <CalendarDays className="w-5 h-5" />
                             </div>
-                            <h3 className="font-bold text-lg text-white">Rota System</h3>
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Rota System</h3>
                         </div>
                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input 
@@ -459,7 +542,7 @@ export const AdminSettings = () => {
                                 onChange={(e) => setRotaEnabled(e.target.checked)}
                                 className="sr-only peer" 
                             />
-                            <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                         </label>
                     </div>
                     
@@ -467,7 +550,7 @@ export const AdminSettings = () => {
                         <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                              <div className="flex items-center justify-between">
                                 <div className="pr-4">
-                                    <h4 className="font-medium text-white text-sm">Show Finish Times</h4>
+                                    <h4 className="font-medium text-slate-900 dark:text-white text-sm">Show Finish Times</h4>
                                     <p className="text-xs text-slate-500">Display shift end times on rota. Useful for fixed shifts.</p>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -477,13 +560,13 @@ export const AdminSettings = () => {
                                         onChange={(e) => setRotaShowFinishTimes(e.target.checked)}
                                         className="sr-only peer" 
                                     />
-                                    <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
 
                              <div className="flex items-center justify-between">
                                 <div className="pr-4">
-                                    <h4 className="font-medium text-white text-sm">Allow Shift Bidding</h4>
+                                    <h4 className="font-medium text-slate-900 dark:text-white text-sm">Allow Shift Bidding</h4>
                                     <p className="text-xs text-slate-500">Staff can request to take Open shifts.</p>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -493,13 +576,13 @@ export const AdminSettings = () => {
                                         onChange={(e) => setAllowShiftBidding(e.target.checked)}
                                         className="sr-only peer" 
                                     />
-                                    <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
 
                              <div className="flex items-center justify-between">
                                 <div className="pr-4">
-                                    <h4 className="font-medium text-white text-sm">Require Time Off Approval</h4>
+                                    <h4 className="font-medium text-slate-900 dark:text-white text-sm">Require Time Off Approval</h4>
                                     <p className="text-xs text-slate-500">Requests need admin review.</p>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -509,7 +592,7 @@ export const AdminSettings = () => {
                                         onChange={(e) => setRequireTimeOffApproval(e.target.checked)}
                                         className="sr-only peer" 
                                     />
-                                    <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
                         </div>
@@ -519,16 +602,16 @@ export const AdminSettings = () => {
                 </div>
 
                 {/* Payroll & Localization */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-white/10 mb-4">
-                        <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
                             <DollarSign className="w-5 h-5" />
                         </div>
-                        <h3 className="font-bold text-lg text-white">Payroll & Currency</h3>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Payroll & Currency</h3>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                 Currency
                             </label>
                             <div className="relative">
@@ -536,7 +619,7 @@ export const AdminSettings = () => {
                                 <select 
                                     value={currency}
                                     onChange={(e) => setCurrency(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none transition-colors"
                                 >
                                     <option value="£">GBP (£)</option>
                                     <option value="$">USD ($)</option>
@@ -548,7 +631,7 @@ export const AdminSettings = () => {
                             </div>
                         </div>
                          <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                 Default Hourly Rate
                             </label>
                             <div className="relative">
@@ -559,17 +642,17 @@ export const AdminSettings = () => {
                                     step="0.01"
                                     value={defaultRate}
                                     onChange={(e) => setDefaultRate(parseFloat(e.target.value))}
-                                    className="w-full pl-8 pr-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                    className="w-full pl-8 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                                 />
                             </div>
                             <p className="text-xs text-slate-500 mt-1">Applied to new staff automatically.</p>
                         </div>
                     </div>
 
-                    <div className="mt-6 border-t border-white/10 pt-4">
+                    <div className="mt-6 border-t border-slate-200 dark:border-white/10 pt-4">
                         <div className="flex items-center justify-between mb-4">
                             <div className="pr-4">
-                                <h4 className="font-medium text-white text-sm">Calculate Holiday Pay</h4>
+                                <h4 className="font-medium text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
                                 <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -579,12 +662,12 @@ export const AdminSettings = () => {
                                     onChange={(e) => setHolidayPayEnabled(e.target.checked)}
                                     className="sr-only peer" 
                                 />
-                                <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                             </label>
                         </div>
                         {holidayPayEnabled && (
                             <div className="animate-in fade-in slide-in-from-top-2">
-                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                     Holiday Pay Rate (%)
                                 </label>
                                 <div className="relative">
@@ -594,7 +677,7 @@ export const AdminSettings = () => {
                                         step="0.01"
                                         value={holidayPayRate}
                                         onChange={(e) => setHolidayPayRate(parseFloat(e.target.value))}
-                                        className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                                     />
                                     <Percent className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                                 </div>
@@ -604,76 +687,22 @@ export const AdminSettings = () => {
                     </div>
                 </div>
 
-                {/* Branding */}
-                 <div className="glass-panel rounded-2xl p-6 shadow-sm border border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-white/10 mb-4">
-                        <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
-                            <Palette className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-bold text-lg text-white">App Branding</h3>
-                    </div>
-                    <div className="space-y-4">
-                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Primary Brand Color
-                            </label>
-                            <div className="flex items-center space-x-3">
-                                <div className="relative">
-                                    <input 
-                                        type="color"
-                                        value={primaryColor}
-                                        onChange={handleColorChange}
-                                        className="h-12 w-12 rounded-lg border-0 cursor-pointer overflow-hidden p-0"
-                                    />
-                                </div>
-                                <div className="flex-1">
-                                    <input 
-                                        type="text" 
-                                        value={primaryColor}
-                                        onChange={handleColorChange}
-                                        className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none font-mono text-sm"
-                                        placeholder="#000000"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Company Logo URL
-                            </label>
-                            <div className="flex items-center space-x-3">
-                                <div className="relative flex-1">
-                                    <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                                    <input 
-                                        type="url"
-                                        value={logoUrl}
-                                        onChange={(e) => setLogoUrl(e.target.value)}
-                                        placeholder="https://example.com/logo.png"
-                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-brand-500 outline-none"
-                                    />
-                                </div>
-                                {logoUrl && <img src={logoUrl} alt="Preview" className="h-10 w-10 object-contain rounded bg-white" />}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Danger Zone */}
-                <div className="bg-red-900/10 rounded-2xl p-6 border border-red-900/30">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-red-900/30 mb-4">
-                        <div className="bg-red-900/30 p-2 rounded-lg text-red-500">
+                <div className="bg-red-50 dark:bg-red-900/10 rounded-2xl p-6 border border-red-200 dark:border-red-900/30">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-red-200 dark:border-red-900/30 mb-4">
+                        <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-lg text-red-500">
                             <AlertOctagon className="w-5 h-5" />
                         </div>
-                        <h3 className="font-bold text-lg text-red-400">Danger Zone</h3>
+                        <h3 className="font-bold text-lg text-red-500 dark:text-red-400">Danger Zone</h3>
                     </div>
                     <div className="flex items-center justify-between">
                         <div>
-                            <h4 className="font-bold text-red-400">Delete Company</h4>
-                            <p className="text-sm text-red-400/70">Permanently delete this organization, all locations, and remove staff associations. This cannot be undone.</p>
+                            <h4 className="font-bold text-red-500 dark:text-red-400">Delete Company</h4>
+                            <p className="text-sm text-red-600/70 dark:text-red-400/70">Permanently delete this organization, all locations, and remove staff associations. This cannot be undone.</p>
                         </div>
                         <button 
                             onClick={handleDeleteCompany}
-                            className="px-4 py-2 bg-red-900/50 hover:bg-red-800 text-red-200 border border-red-800 rounded-lg font-bold text-sm transition"
+                            className="px-4 py-2 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-800 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800 rounded-lg font-bold text-sm transition"
                         >
                             Delete Company
                         </button>
