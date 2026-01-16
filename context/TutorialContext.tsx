@@ -87,7 +87,7 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
                   targetId: 'shift-save-btn',
                   title: 'Configure & Save',
                   content: 'Customize the shift details (Role, Time, Staff) using the form. When you are ready, press **Save** to create the draft.',
-                  position: 'right', 
+                  position: 'left', 
                   action: 'click',
                   transparentBackdrop: true
               },

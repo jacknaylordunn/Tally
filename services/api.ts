@@ -14,10 +14,12 @@ import {
     writeBatch,
     deleteField,
     arrayUnion,
-    arrayRemove
+    arrayRemove,
+    onSnapshot,
+    addDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest } from '../types';
+import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest, Conversation, ChatMessage } from '../types';
 
 // Collection References
 const USERS_REF = 'users';
@@ -26,6 +28,7 @@ const LOCATIONS_REF = 'locations';
 const SHIFTS_REF = 'shifts';
 const SCHEDULE_REF = 'schedule_shifts';
 const TIMEOFF_REF = 'time_off_requests';
+const CONVERSATIONS_REF = 'conversations';
 
 // --- USER ---
 
@@ -47,6 +50,12 @@ export const createUserProfile = async (user: User): Promise<void> => {
 export const updateUserProfile = async (userId: string, updates: Partial<User>): Promise<void> => {
     const docRef = doc(db, USERS_REF, userId);
     await updateDoc(docRef, updates);
+};
+
+export const sendHeartbeat = async (userId: string): Promise<void> => {
+    // Lightweight update for online status
+    const docRef = doc(db, USERS_REF, userId);
+    await updateDoc(docRef, { lastActive: Date.now() });
 };
 
 export const deleteUser = async (userId: string): Promise<void> => {
@@ -74,6 +83,7 @@ export const getCompanyStaff = async (companyId: string): Promise<User[]> => {
     return querySnapshot.docs.map(doc => doc.data() as User);
 };
 
+// --- JOINING LOGIC WITH AUTO-JOIN CHATS ---
 export const switchUserCompany = async (userId: string, inviteCode: string): Promise<{ success: boolean, message: string }> => {
     const company = await getCompanyByCode(inviteCode);
     if (!company) {
@@ -82,6 +92,7 @@ export const switchUserCompany = async (userId: string, inviteCode: string): Pro
 
     const isApproved = !company.settings.requireApproval;
 
+    // 1. Update Profile
     await updateUserProfile(userId, { 
         currentCompanyId: company.id,
         activeShiftId: null,
@@ -90,6 +101,35 @@ export const switchUserCompany = async (userId: string, inviteCode: string): Pro
         role: UserRole.STAFF, 
         isApproved: isApproved
     });
+
+    // 2. Auto-Join Channels
+    // Find all channels for this company where autoJoin is true
+    try {
+        const q = query(
+            collection(db, CONVERSATIONS_REF),
+            where("companyId", "==", company.id),
+            where("settings.autoJoin", "==", true)
+        );
+        const autoJoinSnapshot = await getDocs(q);
+        
+        if (!autoJoinSnapshot.empty) {
+            const batch = writeBatch(db);
+            const userProfile = await getUserProfile(userId);
+            const userName = userProfile?.name || "New Staff";
+
+            autoJoinSnapshot.docs.forEach(docSnap => {
+                const ref = doc(db, CONVERSATIONS_REF, docSnap.id);
+                batch.update(ref, {
+                    participants: arrayUnion(userId),
+                    [`participantNames.${userId}`]: userName
+                });
+            });
+            await batch.commit();
+        }
+    } catch (e) {
+        console.error("Failed to auto-join channels", e);
+        // Don't fail the whole join process for this
+    }
 
     const msg = isApproved ? `Joined ${company.name}` : `Joined ${company.name}. Approval Pending.`;
     return { success: true, message: msg };
@@ -139,6 +179,29 @@ export const deleteCompanyFull = async (companyId: string): Promise<void> => {
     await batch.commit();
 };
 
+export const deleteCompanyChatData = async (companyId: string): Promise<void> => {
+    // Note: This is a heavy operation. In production, this should be a Cloud Function.
+    // Client-side batch deletion is limited to 500 ops and can fail if dataset is large.
+    // For this prototype, we'll delete top-level conversations. Messages subcollections 
+    // are harder to delete client-side without iterating everything.
+    
+    const q = query(collection(db, CONVERSATIONS_REF), where("companyId", "==", companyId));
+    const snapshot = await getDocs(q);
+    
+    // Deleting documents in a batch (limit 500)
+    const batch = writeBatch(db);
+    let count = 0;
+    
+    snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        count++;
+    });
+    
+    if (count > 0) {
+        await batch.commit();
+    }
+};
+
 // --- LOCATIONS ---
 
 export const getLocations = async (companyId: string): Promise<Location[]> => {
@@ -181,6 +244,15 @@ export const createBatchScheduleShifts = async (shifts: ScheduleShift[]): Promis
 
 export const updateScheduleShift = async (shiftId: string, updates: Partial<ScheduleShift>): Promise<void> => {
     await updateDoc(doc(db, SCHEDULE_REF, shiftId), updates);
+};
+
+export const updateBatchScheduleShifts = async (updates: { id: string, data: Partial<ScheduleShift> }[]): Promise<void> => {
+    const batch = writeBatch(db);
+    updates.forEach(u => {
+        const ref = doc(db, SCHEDULE_REF, u.id);
+        batch.update(ref, u.data);
+    });
+    await batch.commit();
 };
 
 export const deleteScheduleShift = async (shiftId: string): Promise<void> => {
@@ -333,6 +405,96 @@ export const getMyTimeOff = async (userId: string): Promise<TimeOffRequest[]> =>
     );
     const snap = await getDocs(q);
     return snap.docs.map(d => d.data() as TimeOffRequest);
+};
+
+// --- CHAT SYSTEM (Real-time) ---
+
+export const subscribeToConversations = (userId: string, companyId: string, callback: (convs: Conversation[]) => void) => {
+    const q = query(
+        collection(db, CONVERSATIONS_REF),
+        where("companyId", "==", companyId),
+        where("participants", "array-contains", userId),
+        orderBy("lastMessage.createdAt", "desc")
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const conversations = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Conversation));
+        callback(conversations);
+    });
+};
+
+export const subscribeToMessages = (conversationId: string, callback: (msgs: ChatMessage[]) => void) => {
+    const q = query(
+        collection(db, CONVERSATIONS_REF, conversationId, "messages"),
+        orderBy("createdAt", "asc"),
+        limit(100)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const messages = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChatMessage));
+        callback(messages);
+    });
+};
+
+export const findDirectConversation = async (companyId: string, user1: string, user2: string): Promise<string | null> => {
+    // This is a client-side filter because Firestore doesn't support 'array-equals-exact' easily without composite keys.
+    // Given the scale, fetching all user conversations and filtering is acceptable.
+    const q = query(
+        collection(db, CONVERSATIONS_REF),
+        where("companyId", "==", companyId),
+        where("type", "==", "direct"),
+        where("participants", "array-contains", user1)
+    );
+    
+    const snap = await getDocs(q);
+    const match = snap.docs.find(d => {
+        const data = d.data() as Conversation;
+        return data.participants.includes(user2);
+    });
+
+    return match ? match.id : null;
+};
+
+export const createConversation = async (conversation: Omit<Conversation, 'id'>): Promise<string> => {
+    const docRef = await addDoc(collection(db, CONVERSATIONS_REF), conversation);
+    return docRef.id;
+};
+
+export const sendMessage = async (conversationId: string, message: Omit<ChatMessage, 'id' | 'conversationId'>) => {
+    // 1. Add message
+    const msgRef = await addDoc(collection(db, CONVERSATIONS_REF, conversationId, "messages"), {
+        ...message,
+        conversationId
+    });
+
+    // 2. Update conversation lastMessage
+    const convRef = doc(db, CONVERSATIONS_REF, conversationId);
+    await updateDoc(convRef, {
+        lastMessage: {
+            content: message.content,
+            senderId: message.senderId,
+            senderName: message.senderName,
+            createdAt: message.createdAt,
+            readBy: [message.senderId],
+            type: message.type
+        }
+    });
+    
+    return msgRef.id;
+};
+
+export const markConversationRead = async (conversationId: string, userId: string) => {
+    const convRef = doc(db, CONVERSATIONS_REF, conversationId);
+    const convSnap = await getDoc(convRef);
+    
+    if (convSnap.exists()) {
+        const data = convSnap.data() as Conversation;
+        if (data.lastMessage && !data.lastMessage.readBy.includes(userId)) {
+            await updateDoc(convRef, {
+                "lastMessage.readBy": arrayUnion(userId)
+            });
+        }
+    }
 };
 
 // --- ACTUAL SHIFTS (Time Tracking) ---

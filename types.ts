@@ -123,3 +123,37 @@ export interface TutorialStep {
   action?: 'click' | 'next'; // 'click' means user must click target to advance
   transparentBackdrop?: boolean; // If true, the dark overlay is removed
 }
+
+// --- CHAT SYSTEM TYPES ---
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  createdAt: number;
+  type: 'text' | 'image' | 'system';
+  readBy?: string[];
+}
+
+export interface Conversation {
+  id: string;
+  companyId: string;
+  type: 'direct' | 'group' | 'channel';
+  name?: string;
+  participants: string[];
+  participantNames: Record<string, string>;
+  lastMessage?: {
+    content: string;
+    senderId: string;
+    senderName: string;
+    createdAt: number;
+    type: 'text' | 'image' | 'system';
+    readBy: string[];
+  };
+  settings?: {
+    autoJoin?: boolean;
+  };
+  createdAt?: number;
+}

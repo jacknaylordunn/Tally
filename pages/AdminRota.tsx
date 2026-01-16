@@ -1,14 +1,16 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts } from '../services/api';
+import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts, updateBatchScheduleShifts } from '../services/api';
 import { ScheduleShift, User, Location, TimeOffRequest, Company, Shift } from '../types';
-import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer, Settings, Check, LayoutTemplate, AlignJustify, Table, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer, Settings, Check, LayoutTemplate, AlignJustify, Table, ChevronDown, MousePointer2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export const AdminRota = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
   const [company, setCompany] = useState<Company | null>(null);
@@ -36,6 +38,9 @@ export const AdminRota = () => {
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isTimeOffModalOpen, setIsTimeOffModalOpen] = useState(false);
   
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, shift: ScheduleShift } | null>(null);
+  
   // Expanded Group State
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   
@@ -50,9 +55,19 @@ export const AdminRota = () => {
   const [shiftLocation, setShiftLocation] = useState<string>('');
   const [shiftQuantity, setShiftQuantity] = useState(1);
 
+  // Drag State
+  const dragItem = useRef<ScheduleShift | null>(null);
+
   useEffect(() => {
     loadData();
   }, [user, currentDate]);
+
+  // Close context menu on global click
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
 
   const getWeekRange = (date: Date) => {
     const start = new Date(date);
@@ -203,8 +218,8 @@ export const AdminRota = () => {
     setIsShiftModalOpen(true);
   };
 
-  const handleEditShift = (shift: ScheduleShift, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleEditShift = (shift: ScheduleShift, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setEditingShift(shift);
     setSelectedDay(new Date(shift.startTime));
     setShiftRole(shift.role);
@@ -214,8 +229,58 @@ export const AdminRota = () => {
     setShiftEnd(eTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}));
     setShiftUser(shift.userId || 'open');
     setShiftLocation(shift.locationId || '');
-    setShiftQuantity(1); // Editing implies single shift
+    setShiftQuantity(1); 
     setIsShiftModalOpen(true);
+  };
+
+  const handleDuplicateShift = async (shift: ScheduleShift, e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      
+      const newShift = {
+          ...shift,
+          id: `sch_${Date.now()}_dup_${Math.random().toString(36).substr(2,5)}`,
+          status: 'draft',
+          userId: null, 
+          userName: undefined,
+          bids: [],
+          isOffered: false
+      };
+      
+      await createScheduleShift(newShift as ScheduleShift);
+      loadData();
+  };
+
+  const handleRepeatShift = async (shift: ScheduleShift) => {
+      if (!confirm("Repeat this shift for the rest of the week?")) return;
+      
+      const { end } = getWeekRange(currentDate);
+      const batch = [];
+      let nextStart = new Date(shift.startTime);
+      const duration = shift.endTime - shift.startTime;
+      
+      // Move to next day
+      nextStart.setDate(nextStart.getDate() + 1);
+      
+      while (nextStart.getTime() < end.getTime()) {
+          batch.push({
+              ...shift,
+              id: `sch_${Date.now()}_rep_${Math.random().toString(36).substr(2,5)}`,
+              startTime: nextStart.getTime(),
+              endTime: nextStart.getTime() + duration,
+              status: 'draft',
+              userId: null,
+              userName: undefined,
+              bids: [],
+              isOffered: false
+          });
+          nextStart.setDate(nextStart.getDate() + 1);
+      }
+      
+      if (batch.length > 0) {
+          setLoading(true);
+          await createBatchScheduleShifts(batch);
+          loadData();
+      }
   };
 
   const getShiftDataFromForm = (overrideDay?: Date): any => {
@@ -287,11 +352,13 @@ export const AdminRota = () => {
     loadData();
   };
 
-  const handleDeleteShift = async () => {
-    if (!editingShift) return;
+  const handleDeleteShift = async (id?: string) => {
+    const targetId = id || editingShift?.id;
+    if (!targetId) return;
     if (confirm("Delete this shift?")) {
-        await deleteScheduleShift(editingShift.id);
+        await deleteScheduleShift(targetId);
         setIsShiftModalOpen(false);
+        setEditingShift(null);
         loadData();
     }
   };
@@ -321,11 +388,102 @@ export const AdminRota = () => {
       if (bidder) {
           if(!confirm(`Assign ${bidder.name} to this shift?`)) return;
           const safeUserName = bidder.name || 'Staff';
-          await assignShiftToUser(shift.id, bidder.id, safeUserName);
+          
+          // 1. Identify Siblings (Same role, time, location)
+          const siblings = schedule.filter(s => 
+              s.id !== shift.id &&
+              s.role === shift.role &&
+              s.startTime === shift.startTime &&
+              s.endTime === shift.endTime &&
+              s.locationId === shift.locationId
+          );
+
+          const updates: { id: string, data: Partial<ScheduleShift> }[] = [];
+
+          // 2. Prepare update for target shift (Assign, clear bids, set DRAFT)
+          updates.push({
+              id: shift.id,
+              data: {
+                  userId: bidder.id,
+                  userName: safeUserName,
+                  bids: [],
+                  isOffered: false,
+                  status: 'draft' 
+              }
+          });
+
+          // 3. Prepare updates for siblings (Remove this bidder from their bid lists)
+          siblings.forEach(s => {
+              if (s.bids?.includes(bidder.id)) {
+                  updates.push({
+                      id: s.id,
+                      data: {
+                          bids: s.bids.filter(b => b !== bidder.id)
+                      }
+                  });
+              }
+          });
+
+          // 4. Execute Batch
+          await updateBatchScheduleShifts(updates);
+
           setIsShiftModalOpen(false);
           setEditingShift(null);
           loadData();
       }
+  };
+
+  // --- DRAG AND DROP ---
+  const handleDragStart = (e: React.DragEvent, shift: ScheduleShift) => {
+      e.dataTransfer.setData('text/plain', JSON.stringify(shift));
+      e.dataTransfer.effectAllowed = 'copyMove';
+      dragItem.current = shift;
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetDate: Date) => {
+      e.preventDefault();
+      const data = e.dataTransfer.getData('text/plain');
+      if (!data) return;
+      
+      const sourceShift: ScheduleShift = JSON.parse(data);
+      const isCopy = e.altKey;
+
+      const duration = sourceShift.endTime - sourceShift.startTime;
+      
+      const newStart = new Date(targetDate);
+      const originalStart = new Date(sourceShift.startTime);
+      newStart.setHours(originalStart.getHours(), originalStart.getMinutes());
+      
+      const newStartTime = newStart.getTime();
+      const newEndTime = newStartTime + duration;
+
+      if (isCopy) {
+          const newShift = {
+              ...sourceShift,
+              id: `sch_${Date.now()}_drag_${Math.random().toString(36).substr(2,5)}`,
+              startTime: newStartTime,
+              endTime: newEndTime,
+              status: 'draft',
+              userId: null, 
+              userName: undefined,
+              bids: [],
+              isOffered: false
+          };
+          await createScheduleShift(newShift as ScheduleShift);
+      } else {
+          await updateScheduleShift(sourceShift.id, {
+              startTime: newStartTime,
+              endTime: newEndTime,
+              status: 'draft' 
+          });
+      }
+      
+      loadData();
   };
 
   const handlePrintClick = () => {
@@ -349,11 +507,9 @@ export const AdminRota = () => {
       const firstShift = shifts[0];
       const showFinishTimes = company?.settings.rotaShowFinishTimes !== false;
 
-      const getProgressColor = () => {
-          if (isEmpty) return 'bg-red-500';
-          if (isFull) return 'bg-green-500';
-          return 'bg-amber-500';
-      };
+      const brandColor = company?.settings.primaryColor || '#4f46e5';
+      const progressColor = isFull ? 'bg-green-500' : isEmpty ? 'bg-red-500' : ''; 
+      const customStyle = (!isFull && !isEmpty) ? { backgroundColor: brandColor } : {};
 
       if (!isExpanded && shifts.length > 1) {
           return (
@@ -363,8 +519,8 @@ export const AdminRota = () => {
               >
                   <div className="absolute bottom-0 left-0 h-1 bg-slate-900 w-full">
                       <div 
-                        className={`h-full ${getProgressColor()} transition-all duration-500`} 
-                        style={{ width: `${(assignedCount / totalCount) * 100}%` }}
+                        className={`h-full ${progressColor} transition-all duration-500`} 
+                        style={{ width: `${(assignedCount / totalCount) * 100}%`, ...customStyle }}
                       ></div>
                   </div>
 
@@ -413,7 +569,13 @@ export const AdminRota = () => {
       return (
         <div 
             draggable
+            onDragStart={(e) => handleDragStart(e, shift)}
             onClick={(e) => handleEditShift(shift, e)}
+            onContextMenu={(e) => { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                setContextMenu({ x: e.clientX, y: e.clientY, shift }); 
+            }}
             className={`
                 group relative p-2.5 rounded-xl border text-left cursor-pointer transition-all shadow-sm hover:shadow-lg hover:scale-[1.02]
                 ${shift.status === 'draft' 
@@ -660,7 +822,6 @@ export const AdminRota = () => {
 
     {/* WEB APP VIEW */}
     <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col print:hidden">
-        {/* ... (Existing Toolbar and Grid) ... */}
         {/* Toolbar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
             <div>
@@ -773,7 +934,7 @@ export const AdminRota = () => {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
             {viewMode === 'week' ? (
                 // --- WEEK VIEW ---
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-4 min-h-full">
@@ -786,6 +947,8 @@ export const AdminRota = () => {
                         return (
                             <div 
                                 key={i} 
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDrop(e, date)}
                                 className={`flex flex-col rounded-xl overflow-hidden border transition-colors ${
                                     isToday ? 'border-brand-500/50 bg-brand-900/10' : 'border-white/5 bg-white/5'
                                 }`}
@@ -855,23 +1018,42 @@ export const AdminRota = () => {
                     })()}
                 </div>
             )}
+            
+            {/* Context Menu */}
+            {contextMenu && (
+                <div 
+                    className="fixed z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 w-48 animate-in fade-in zoom-in-95 duration-100"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                >
+                    <button onClick={() => { handleEditShift(contextMenu.shift); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                        <MousePointer2 className="w-4 h-4" /> Edit Details
+                    </button>
+                    <button onClick={() => { handleDuplicateShift(contextMenu.shift); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                        <Copy className="w-4 h-4" /> Duplicate
+                    </button>
+                    <button onClick={() => { handleRepeatShift(contextMenu.shift); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                        <Repeat className="w-4 h-4" /> Repeat Remainder
+                    </button>
+                    <div className="h-px bg-slate-700 my-1"></div>
+                    <button onClick={() => { handleDeleteShift(contextMenu.shift.id); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition">
+                        <Trash2 className="w-4 h-4" /> Delete
+                    </button>
+                </div>
+            )}
         </div>
 
         {/* --- MODALS --- */}
         {isPrintSettingsOpen && (
-            // ... (Existing Print Settings Modal) ...
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
                 <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
-                    {/* ... Content ... */}
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-lg text-white flex items-center gap-2">
                             <Settings className="w-5 h-5" /> Print Settings
                         </h3>
                         <button onClick={() => setIsPrintSettingsOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-white" /></button>
                     </div>
-                    {/* ... Rest of modal ... */}
+                    
                     <div className="space-y-6">
-                        {/* Layout Selection */}
                         <div className="grid grid-cols-3 gap-3">
                             <button 
                                 onClick={() => setPrintConfig({...printConfig, layout: 'list'})}
@@ -896,7 +1078,6 @@ export const AdminRota = () => {
                             </button>
                         </div>
 
-                        {/* Options */}
                         <div className="bg-slate-800/50 rounded-xl p-4 space-y-3 border border-white/5">
                             <label className="flex items-center justify-between cursor-pointer">
                                 <span className="text-sm text-slate-300">Show Locations</span>
@@ -1062,11 +1243,12 @@ export const AdminRota = () => {
                             </div>
                         )}
 
-                        <div className="flex gap-3 pt-4">
+                        <div className="flex gap-3 pt-4 items-center">
                             {editingShift && (
-                                <button type="button" onClick={handleDeleteShift} className="px-4 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg font-bold transition">Delete</button>
+                                <button type="button" onClick={() => handleDeleteShift()} className="px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg font-bold transition">Delete</button>
                             )}
                             <div className="flex-1"></div>
+                            
                             <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold hover:text-white transition">Cancel</button>
                             <button id="shift-save-btn" type="submit" className="px-6 py-2 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition">Save</button>
                         </div>
