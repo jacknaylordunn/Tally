@@ -39,7 +39,9 @@ export const AdminRota = () => {
   const [isTimeOffModalOpen, setIsTimeOffModalOpen] = useState(false);
   
   // Context Menu State
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, shift: ScheduleShift } | null>(null);
+  // Type discriminates between clicking a specific shift or a general day area
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'shift' | 'day', data: any } | null>(null);
+  const [clipboard, setClipboard] = useState<ScheduleShift | null>(null);
   
   // Expanded Group State
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
@@ -233,24 +235,58 @@ export const AdminRota = () => {
     setIsShiftModalOpen(true);
   };
 
+  // Safe Duplication Logic - Ensure undefined keys are removed
   const handleDuplicateShift = async (shift: ScheduleShift, e?: React.MouseEvent) => {
       e?.stopPropagation();
       
-      const newShift = {
-          ...shift,
-          id: `sch_${Date.now()}_dup_${Math.random().toString(36).substr(2,5)}`,
-          status: 'draft',
-          userId: null, 
-          userName: undefined,
-          bids: [],
-          isOffered: false
-      };
+      const newShift: any = { ...shift };
+      newShift.id = `sch_${Date.now()}_dup_${Math.random().toString(36).substr(2,5)}`;
+      newShift.status = 'draft';
+      newShift.userId = null; 
+      // Firestore throws error on 'undefined', so delete the key
+      delete newShift.userName; 
+      newShift.bids = [];
+      newShift.isOffered = false;
       
       await createScheduleShift(newShift as ScheduleShift);
       loadData();
   };
 
-  const handleRepeatShift = async (shift: ScheduleShift) => {
+  const handleCopyShift = (shift: ScheduleShift, e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setClipboard(shift);
+      setContextMenu(null);
+  };
+
+  const handlePasteShift = async (targetDate: Date) => {
+      if (!clipboard) return;
+      
+      // Calculate times relative to target date
+      const duration = clipboard.endTime - clipboard.startTime;
+      const newStart = new Date(targetDate);
+      const originalStart = new Date(clipboard.startTime);
+      newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
+      
+      const startTime = newStart.getTime();
+      const endTime = startTime + duration;
+
+      const newShift: any = { ...clipboard };
+      newShift.id = `sch_${Date.now()}_paste_${Math.random().toString(36).substr(2,5)}`;
+      newShift.startTime = startTime;
+      newShift.endTime = endTime;
+      newShift.status = 'draft';
+      newShift.userId = null;
+      delete newShift.userName; // Safety
+      newShift.bids = [];
+      newShift.isOffered = false;
+
+      await createScheduleShift(newShift);
+      loadData();
+      setContextMenu(null);
+  };
+
+  const handleRepeatShift = async (shift: ScheduleShift, e?: React.MouseEvent) => {
+      e?.stopPropagation();
       if (!confirm("Repeat this shift for the rest of the week?")) return;
       
       const { end } = getWeekRange(currentDate);
@@ -262,17 +298,18 @@ export const AdminRota = () => {
       nextStart.setDate(nextStart.getDate() + 1);
       
       while (nextStart.getTime() < end.getTime()) {
-          batch.push({
+          const newItem: any = {
               ...shift,
               id: `sch_${Date.now()}_rep_${Math.random().toString(36).substr(2,5)}`,
               startTime: nextStart.getTime(),
               endTime: nextStart.getTime() + duration,
               status: 'draft',
-              userId: null,
-              userName: undefined,
+              userId: null, // Reset assignment for repeated shifts
               bids: [],
               isOffered: false
-          });
+          };
+          delete newItem.userName; 
+          batch.push(newItem);
           nextStart.setDate(nextStart.getDate() + 1);
       }
       
@@ -463,18 +500,17 @@ export const AdminRota = () => {
       const newEndTime = newStartTime + duration;
 
       if (isCopy) {
-          const newShift = {
-              ...sourceShift,
-              id: `sch_${Date.now()}_drag_${Math.random().toString(36).substr(2,5)}`,
-              startTime: newStartTime,
-              endTime: newEndTime,
-              status: 'draft',
-              userId: null, 
-              userName: undefined,
-              bids: [],
-              isOffered: false
-          };
-          await createScheduleShift(newShift as ScheduleShift);
+          const newShift: any = { ...sourceShift };
+          newShift.id = `sch_${Date.now()}_drag_${Math.random().toString(36).substr(2,5)}`;
+          newShift.startTime = newStartTime;
+          newShift.endTime = newEndTime;
+          newShift.status = 'draft';
+          newShift.userId = null;
+          delete newShift.userName; // Fix invalid data
+          newShift.bids = [];
+          newShift.isOffered = false;
+          
+          await createScheduleShift(newShift);
       } else {
           await updateScheduleShift(sourceShift.id, {
               startTime: newStartTime,
@@ -574,7 +610,7 @@ export const AdminRota = () => {
             onContextMenu={(e) => { 
                 e.preventDefault(); 
                 e.stopPropagation();
-                setContextMenu({ x: e.clientX, y: e.clientY, shift }); 
+                setContextMenu({ x: e.clientX, y: e.clientY, type: 'shift', data: shift }); 
             }}
             className={`
                 group relative p-2.5 rounded-xl border text-left cursor-pointer transition-all shadow-sm hover:shadow-lg hover:scale-[1.02]
@@ -949,6 +985,10 @@ export const AdminRota = () => {
                                 key={i} 
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDrop(e, date)}
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setContextMenu({ x: e.clientX, y: e.clientY, type: 'day', data: date });
+                                }}
                                 className={`flex flex-col rounded-xl overflow-hidden border transition-colors ${
                                     isToday ? 'border-brand-500/50 bg-brand-900/10' : 'border-white/5 bg-white/5'
                                 }`}
@@ -978,7 +1018,13 @@ export const AdminRota = () => {
                 </div>
             ) : (
                 // --- DAY VIEW ---
-                <div className="glass-panel rounded-xl p-6 min-h-full border border-white/10">
+                <div 
+                    className="glass-panel rounded-xl p-6 min-h-full border border-white/10"
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, type: 'day', data: currentDate });
+                    }}
+                >
                     {(() => {
                         const dayShifts = getShiftsForDay(currentDate);
                         const groups = groupShifts(dayShifts);
@@ -1025,19 +1071,37 @@ export const AdminRota = () => {
                     className="fixed z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 w-48 animate-in fade-in zoom-in-95 duration-100"
                     style={{ top: contextMenu.y, left: contextMenu.x }}
                 >
-                    <button onClick={() => { handleEditShift(contextMenu.shift); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
-                        <MousePointer2 className="w-4 h-4" /> Edit Details
-                    </button>
-                    <button onClick={() => { handleDuplicateShift(contextMenu.shift); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
-                        <Copy className="w-4 h-4" /> Duplicate
-                    </button>
-                    <button onClick={() => { handleRepeatShift(contextMenu.shift); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
-                        <Repeat className="w-4 h-4" /> Repeat Remainder
-                    </button>
-                    <div className="h-px bg-slate-700 my-1"></div>
-                    <button onClick={() => { handleDeleteShift(contextMenu.shift.id); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition">
-                        <Trash2 className="w-4 h-4" /> Delete
-                    </button>
+                    {contextMenu.type === 'shift' ? (
+                        <>
+                            <button onClick={() => { handleEditShift(contextMenu.data); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                                <MousePointer2 className="w-4 h-4" /> Edit Details
+                            </button>
+                            <button onClick={() => { handleCopyShift(contextMenu.data); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                                <ClipboardCopy className="w-4 h-4" /> Copy
+                            </button>
+                            <button onClick={() => { handleDuplicateShift(contextMenu.data); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                                <Copy className="w-4 h-4" /> Duplicate
+                            </button>
+                            <button onClick={() => { handleRepeatShift(contextMenu.data); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                                <Repeat className="w-4 h-4" /> Repeat Remainder
+                            </button>
+                            <div className="h-px bg-slate-700 my-1"></div>
+                            <button onClick={() => { handleDeleteShift(contextMenu.data.id); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition">
+                                <Trash2 className="w-4 h-4" /> Delete
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={() => { handleAddShift(contextMenu.data); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                                <Plus className="w-4 h-4" /> Add Shift
+                            </button>
+                            {clipboard && (
+                                <button onClick={() => { handlePasteShift(contextMenu.data); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition">
+                                    <ClipboardPaste className="w-4 h-4" /> Paste
+                                </button>
+                            )}
+                        </>
+                    )}
                 </div>
             )}
         </div>
