@@ -821,10 +821,10 @@ export const AdminRota = () => {
                                     setContextMenu({ x: e.clientX, y: e.clientY, type: 'day', data: date });
                                 }}
                                 className={`flex flex-col rounded-xl overflow-hidden border transition-colors ${
-                                    isToday ? 'border-brand-500/50 bg-brand-50 dark:bg-brand-900/10' : 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5'
+                                    isToday ? 'border-brand-500/50 bg-slate-50 dark:bg-slate-900/10' : 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5'
                                 }`}
                             >
-                                <div className={`text-center p-3 border-b ${isToday ? 'bg-brand-100 dark:bg-brand-900/20 border-brand-200 dark:border-brand-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5'}`}>
+                                <div className={`text-center p-3 border-b ${isToday ? 'bg-slate-200 dark:bg-slate-700 border-brand-200 dark:border-brand-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5'}`}>
                                     <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{WEEK_DAYS[i]}</div>
                                     <div className={`text-lg font-bold ${isToday ? 'text-brand-600 dark:text-brand-400' : 'text-slate-900 dark:text-white'}`}>
                                         {date.getDate()}

@@ -132,7 +132,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         to={item.path}
                         id={`mobile-${getNavId(item.name)}`}
                         className={`flex flex-col items-center justify-center p-3 rounded-2xl w-full transition-all ${
-                            isActive ? 'text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-500/10' : 'text-slate-500'
+                            isActive ? 'text-brand-600 dark:text-brand-400 bg-slate-100 dark:bg-white/10' : 'text-slate-500'
                         }`}
                     >
                         <item.icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-current' : ''}`} />

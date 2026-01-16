@@ -356,21 +356,21 @@ export const AdminSettings = () => {
                             <div className="grid grid-cols-3 gap-3">
                                 <button 
                                     onClick={() => setTheme('light')}
-                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'light' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'light' ? 'border-brand-500 bg-slate-100 dark:bg-slate-800 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
                                 >
                                     <Sun className="w-6 h-6 mb-2" />
                                     <span className="text-xs font-bold">Light</span>
                                 </button>
                                 <button 
                                     onClick={() => setTheme('dark')}
-                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'dark' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'dark' ? 'border-brand-500 bg-slate-100 dark:bg-slate-800 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
                                 >
                                     <Moon className="w-6 h-6 mb-2" />
                                     <span className="text-xs font-bold">Dark</span>
                                 </button>
                                 <button 
                                     onClick={() => setTheme('system')}
-                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'system' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'system' ? 'border-brand-500 bg-slate-100 dark:bg-slate-800 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
                                 >
                                     <Laptop className="w-6 h-6 mb-2" />
                                     <span className="text-xs font-bold">System</span>
