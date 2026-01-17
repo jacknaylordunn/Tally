@@ -456,7 +456,9 @@ export const createManualShift = async (
     userName: string, 
     startTime: number, 
     endTime: number,
-    hourlyRate: number
+    hourlyRate: number,
+    creatorName?: string,
+    creatorId?: string
 ): Promise<void> => {
     const shiftId = `shift_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const newShift: Shift = {
@@ -467,7 +469,9 @@ export const createManualShift = async (
         startTime,
         endTime,
         startMethod: 'manual_entry',
-        hourlyRate
+        hourlyRate,
+        createdByName: creatorName,
+        createdById: creatorId
     };
     await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
 };

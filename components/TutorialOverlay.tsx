@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { useTutorial } from '../context/TutorialContext';
 import { X, ArrowRight, HelpCircle, Check } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { TutorialStep } from '../types';
 
 export const TutorialOverlay = () => {
   const { 
@@ -29,9 +30,12 @@ export const TutorialOverlay = () => {
 
     const findTarget = () => {
         // For tour mode, route check is strict. For guide, navigation happens on step change.
-        if (mode === 'tour' && currentStep.requiredRoute && !location.pathname.includes(currentStep.requiredRoute)) {
-            setTargetRect(null);
-            return;
+        if (mode === 'tour') {
+            const tourStep = currentStep as TutorialStep;
+            if (tourStep.requiredRoute && !location.pathname.includes(tourStep.requiredRoute)) {
+                setTargetRect(null);
+                return;
+            }
         }
 
         // If Guide Step has no targetId, it's an informational step (null rect)
@@ -262,7 +266,7 @@ export const TutorialOverlay = () => {
                     <div className="flex items-center gap-2">
                         {mode === 'guide' && <HelpCircle className="w-4 h-4 text-brand-500" />}
                         <h3 className={`font-bold text-slate-900 dark:text-white leading-tight ${mode === 'guide' ? 'text-sm' : 'text-xl'}`}>
-                            {mode === 'guide' && activeGuide ? activeGuide.title : currentStep.title}
+                            {mode === 'guide' && activeGuide ? activeGuide.title : (currentStep as TutorialStep).title}
                         </h3>
                     </div>
                     <button 

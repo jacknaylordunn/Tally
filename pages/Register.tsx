@@ -199,23 +199,23 @@ export const Register = () => {
                 </div>
             )}
 
-            {/* Tabs */}
-            <div className="grid grid-cols-2 gap-4 mb-8">
+            {/* Tabs - Mobile Responsive Layout: Stacks vertically on small screens */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-8">
                 <button
                     type="button"
                     onClick={() => setActiveTab(UserRole.STAFF)}
-                    className={`flex items-center justify-center space-x-2 py-4 rounded-xl border-2 transition-all ${activeTab === UserRole.STAFF ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'border-slate-100 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-500'}`}
+                    className={`flex flex-col sm:flex-row items-center justify-center sm:space-x-2 space-y-1 sm:space-y-0 py-3 sm:py-4 rounded-xl border-2 transition-all ${activeTab === UserRole.STAFF ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'border-slate-100 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-500'}`}
                 >
                     <User className="w-5 h-5" />
-                    <span className="font-semibold">Join a Team</span>
+                    <span className="font-semibold text-sm sm:text-base">Join a Team</span>
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab(UserRole.ADMIN)}
-                    className={`flex items-center justify-center space-x-2 py-4 rounded-xl border-2 transition-all ${activeTab === UserRole.ADMIN ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'border-slate-100 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-500'}`}
+                    className={`flex flex-col sm:flex-row items-center justify-center sm:space-x-2 space-y-1 sm:space-y-0 py-3 sm:py-4 rounded-xl border-2 transition-all ${activeTab === UserRole.ADMIN ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'border-slate-100 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-500'}`}
                 >
                     <Building className="w-5 h-5" />
-                    <span className="font-semibold">Start Company</span>
+                    <span className="font-semibold text-sm sm:text-base">Start Company</span>
                 </button>
             </div>
 

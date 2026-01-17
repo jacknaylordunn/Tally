@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getShifts, updateShift, deleteShift, getCompany, getCompanyStaff, createManualShift } from '../services/api';
 import { Shift, Company, User } from '../types';
-import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadShiftsCSV } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -116,16 +116,19 @@ export const AdminTimesheets = () => {
       
       const flags = [];
       const auditLateIn = company.settings.auditLateInThreshold || 15;
+      const auditEarlyIn = company.settings.auditEarlyInThreshold || 30;
       const auditEarlyOut = company.settings.auditEarlyOutThreshold || 15;
       const auditLateOut = company.settings.auditLateOutThreshold || 15;
       const auditShortShift = company.settings.auditShortShiftThreshold || 5;
       const auditLongShift = company.settings.auditLongShiftThreshold || 14;
 
-      // 1. Check Late In
+      // 1. Check Late In / Early In
       if (shift.scheduledStartTime) {
           const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
           if (diffMins > auditLateIn) {
               flags.push({ type: 'red', label: `Late In (+${Math.round(diffMins)}m)` });
+          } else if (diffMins < -auditEarlyIn) {
+              flags.push({ type: 'amber', label: `Early In (${Math.abs(Math.round(diffMins))}m)` });
           }
       }
 
@@ -133,7 +136,7 @@ export const AdminTimesheets = () => {
       if (shift.scheduledEndTime && shift.endTime) {
           const diffMins = (shift.endTime - shift.scheduledEndTime) / 60000;
           if (diffMins < -auditEarlyOut) {
-              flags.push({ type: 'amber', label: `Early Out (${Math.round(diffMins)}m)` });
+              flags.push({ type: 'amber', label: `Early Out (${Math.abs(Math.round(diffMins))}m)` });
           } else if (diffMins > auditLateOut) {
               flags.push({ type: 'amber', label: `Late Out (+${Math.round(diffMins)}m)` });
           }
@@ -160,17 +163,21 @@ export const AdminTimesheets = () => {
       if (!shift.scheduledStartTime) return 'text-slate-600 dark:text-slate-300'; // Manual / Unmatched
 
       const auditLateIn = company?.settings.auditLateInThreshold || 15;
+      const auditEarlyIn = company?.settings.auditEarlyInThreshold || 30;
       const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
 
-      if (diffMins <= 5) {
-          // On Time (or early, or slightly late within 5 mins "grace")
-          return 'text-emerald-600 dark:text-emerald-400';
-      } else if (diffMins > 5 && diffMins <= auditLateIn) {
-          // Late but within audit threshold
+      if (diffMins > auditLateIn) {
+          // Late In (Red)
+          return 'text-red-600 dark:text-red-400 font-bold';
+      } else if (diffMins < -auditEarlyIn) {
+          // Too Early (Amber)
+          return 'text-amber-600 dark:text-amber-400 font-bold';
+      } else if (diffMins > 5) {
+          // Slightly Late (Amber)
           return 'text-amber-600 dark:text-amber-400';
       } else {
-          // Very Late (flagged) - Matches LATE IN (Red)
-          return 'text-red-600 dark:text-red-400 font-bold';
+          // On Time (Green)
+          return 'text-emerald-600 dark:text-emerald-400';
       }
   };
 
@@ -243,7 +250,7 @@ export const AdminTimesheets = () => {
   };
 
   const handleSaveEdit = async () => {
-      if (!editingShift) return;
+      if (!editingShift || !user) return;
       setSaving(true);
       
       const startTs = new Date(editStartTime).getTime();
@@ -252,7 +259,11 @@ export const AdminTimesheets = () => {
       try {
           await updateShift(editingShift.id, {
               startTime: startTs,
-              endTime: endTs
+              endTime: endTs,
+              startMethod: 'manual_entry', // Override method to manual on edit
+              editedByName: user.name,
+              editedById: user.id,
+              editedAt: Date.now()
           });
           setEditingShift(null);
           loadData(); 
@@ -283,7 +294,9 @@ export const AdminTimesheets = () => {
               selectedStaff.name,
               startTs,
               endTs,
-              rate
+              rate,
+              user.name, // Creator Name
+              user.id    // Creator ID
           );
           setIsAddModalOpen(false);
           setNewShiftUser('');
@@ -397,7 +410,7 @@ export const AdminTimesheets = () => {
 
         {/* Table */}
         <div className="glass-panel rounded-2xl shadow-sm border border-slate-200 dark:border-white/10 overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto min-h-[300px]">
                 <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
                     <thead className="bg-slate-50 dark:bg-white/5 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
                         <tr>
@@ -407,6 +420,7 @@ export const AdminTimesheets = () => {
                             <th className="px-6 py-4">Time Out</th>
                             <th className="px-6 py-4">Total</th>
                             <th className="px-6 py-4">Est. Pay</th>
+                            <th className="px-6 py-4">Method</th>
                             <th className="px-6 py-4"></th>
                         </tr>
                     </thead>
@@ -418,7 +432,7 @@ export const AdminTimesheets = () => {
                                 <TableRowSkeleton />
                             </>
                         ) : filteredShifts.length === 0 ? (
-                            <tr><td colSpan={7} className="p-8 text-center text-slate-500">No shifts found for this period.</td></tr>
+                            <tr><td colSpan={8} className="p-8 text-center text-slate-500">No shifts found for this period.</td></tr>
                         ) : filteredShifts.map((shift) => {
                             const flags = getAuditFlags(shift);
                             const timeInColor = getTimeInColorClass(shift);
@@ -477,6 +491,39 @@ export const AdminTimesheets = () => {
                                     </td>
                                     <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
                                         {calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="group/audit relative inline-block cursor-default">
+                                            {/* Method Badge */}
+                                            {shift.startMethod === 'manual_entry' ? (
+                                                <span className="text-[10px] uppercase font-bold text-orange-600 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-300 px-2 py-1 rounded-md flex items-center gap-1 w-fit">
+                                                    <UserCog className="w-3 h-3" /> Manual
+                                                </span>
+                                            ) : shift.startMethod === 'static_gps' ? (
+                                                <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded-md w-fit">GPS</span>
+                                            ) : (
+                                                <span className="text-[10px] uppercase font-bold text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-1 rounded-md w-fit">Kiosk</span>
+                                            )}
+
+                                            {/* Tooltip Content */}
+                                            {(shift.editedByName || shift.createdByName) && (
+                                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-900 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover/audit:opacity-100 transition-opacity pointer-events-none z-10">
+                                                    {shift.startMethod === 'manual_entry' && shift.createdByName && (
+                                                        <div className="mb-1">
+                                                            <span className="opacity-70 block text-[9px] uppercase">Created By</span>
+                                                            <span className="font-bold">{shift.createdByName}</span>
+                                                        </div>
+                                                    )}
+                                                    {shift.editedByName && (
+                                                        <div>
+                                                            <span className="opacity-70 block text-[9px] uppercase">Edited By</span>
+                                                            <span className="font-bold">{shift.editedByName}</span>
+                                                            <span className="block opacity-50 text-[9px]">{new Date(shift.editedAt || 0).toLocaleDateString()}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 text-right flex justify-end space-x-1">
                                         <button 

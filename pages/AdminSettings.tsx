@@ -41,6 +41,7 @@ export const AdminSettings = () => {
 
   // Audit Settings
   const [auditLateIn, setAuditLateIn] = useState(15);
+  const [auditEarlyIn, setAuditEarlyIn] = useState(30); // New default
   const [auditEarlyOut, setAuditEarlyOut] = useState(15);
   const [auditLateOut, setAuditLateOut] = useState(15);
   const [auditShortShift, setAuditShortShift] = useState(5);
@@ -73,6 +74,7 @@ export const AdminSettings = () => {
         
         // Audit
         setAuditLateIn(data.settings.auditLateInThreshold || 15);
+        setAuditEarlyIn(data.settings.auditEarlyInThreshold || 30);
         setAuditEarlyOut(data.settings.auditEarlyOutThreshold || 15);
         setAuditLateOut(data.settings.auditLateOutThreshold || 15);
         setAuditShortShift(data.settings.auditShortShiftThreshold || 5);
@@ -105,6 +107,7 @@ export const AdminSettings = () => {
           allowShiftBidding !== clean(s.allowShiftBidding, true) ||
           requireTimeOffApproval !== clean(s.requireTimeOffApproval, true) ||
           auditLateIn !== (s.auditLateInThreshold || 15) ||
+          auditEarlyIn !== (s.auditEarlyInThreshold || 30) ||
           auditEarlyOut !== (s.auditEarlyOutThreshold || 15) ||
           auditLateOut !== (s.auditLateOutThreshold || 15) ||
           auditShortShift !== (s.auditShortShiftThreshold || 5) ||
@@ -113,7 +116,7 @@ export const AdminSettings = () => {
   }, [
       company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl,
       holidayPayEnabled, holidayPayRate, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
-      auditLateIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift
+      auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift
   ]);
 
   // Prevent Navigation if Dirty
@@ -198,6 +201,7 @@ export const AdminSettings = () => {
               allowShiftBidding,
               requireTimeOffApproval,
               auditLateInThreshold: auditLateIn,
+              auditEarlyInThreshold: auditEarlyIn,
               auditEarlyOutThreshold: auditEarlyOut,
               auditLateOutThreshold: auditLateOut,
               auditShortShiftThreshold: auditShortShift,
@@ -356,21 +360,33 @@ export const AdminSettings = () => {
                             <div className="grid grid-cols-3 gap-3">
                                 <button 
                                     onClick={() => setTheme('light')}
-                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'light' ? 'border-brand-500 bg-slate-100 dark:bg-slate-800 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
+                                        theme === 'light' 
+                                        ? 'border-brand-500 bg-slate-100 dark:bg-white/10 text-brand-600' // Neutral bg, brand border/text
+                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'
+                                    }`}
                                 >
                                     <Sun className="w-6 h-6 mb-2" />
                                     <span className="text-xs font-bold">Light</span>
                                 </button>
                                 <button 
                                     onClick={() => setTheme('dark')}
-                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'dark' ? 'border-brand-500 bg-slate-100 dark:bg-slate-800 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
+                                        theme === 'dark' 
+                                        ? 'border-brand-500 bg-slate-100 dark:bg-white/10 text-brand-600' // Neutral bg, brand border/text
+                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'
+                                    }`}
                                 >
                                     <Moon className="w-6 h-6 mb-2" />
                                     <span className="text-xs font-bold">Dark</span>
                                 </button>
                                 <button 
                                     onClick={() => setTheme('system')}
-                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${theme === 'system' ? 'border-brand-500 bg-slate-100 dark:bg-slate-800 dark:bg-brand-900/20 text-brand-600' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'}`}
+                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
+                                        theme === 'system' 
+                                        ? 'border-brand-500 bg-slate-100 dark:bg-white/10 text-brand-600' // Neutral bg, brand border/text
+                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500'
+                                    }`}
                                 >
                                     <Laptop className="w-6 h-6 mb-2" />
                                     <span className="text-xs font-bold">System</span>
@@ -474,6 +490,16 @@ export const AdminSettings = () => {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Early In Threshold (mins)</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                value={auditEarlyIn}
+                                onChange={(e) => setAuditEarlyIn(parseInt(e.target.value))}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
+                            />
+                        </div>
+                        <div>
                             <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Late In Threshold (mins)</label>
                             <input 
                                 type="number"
@@ -513,7 +539,7 @@ export const AdminSettings = () => {
                                 className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
                             />
                         </div>
-                        <div className="md:col-span-2">
+                        <div>
                             <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Long Shift / Forgotten Clock-out (hours)</label>
                             <input 
                                 type="number"

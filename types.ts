@@ -42,6 +42,7 @@ export interface Company {
     requireTimeOffApproval?: boolean;
     // Audit Settings
     auditLateInThreshold?: number; // mins
+    auditEarlyInThreshold?: number; // mins (New)
     auditEarlyOutThreshold?: number; // mins
     auditLateOutThreshold?: number; // mins
     auditShortShiftThreshold?: number; // mins
@@ -61,6 +62,13 @@ export interface Shift {
   scheduleShiftId?: string; // Link to the planned shift on the rota
   scheduledStartTime?: number; // Snapshot of planned start time
   scheduledEndTime?: number;   // Snapshot of planned end time
+  
+  // Audit Trail
+  createdByName?: string;
+  createdById?: string;
+  editedByName?: string;
+  editedById?: string;
+  editedAt?: number;
 }
 
 // --- ROTA SYSTEM TYPES ---

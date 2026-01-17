@@ -97,7 +97,7 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
                   targetId: 'shift-save-btn',
                   title: 'Configure & Save',
                   content: 'Customize the shift details (Role, Time, Staff) using the form. When you are ready, press **Save** to create the draft.',
-                  position: 'left', 
+                  position: 'right', 
                   action: 'click',
                   transparentBackdrop: true
               },
@@ -187,7 +187,7 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
               title: 'Static QR Security',
               content: 'Click "Generate Poster". Unlike the Kiosk, this code doesn\'t change. Instead, we use the phone\'s GPS to verify the employee is physically inside the geofence radius before accepting the scan.',
               requiredRoute: '/admin/locations',
-              position: 'top',
+              position: 'right',
               action: 'click'
           },
           {
