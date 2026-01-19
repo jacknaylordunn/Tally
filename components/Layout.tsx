@@ -16,6 +16,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [rotaEnabled, setRotaEnabled] = useState(false);
+  const [logo, setLogo] = useState(LOGO_URL);
 
   useEffect(() => {
     const checkSettings = async () => {
@@ -23,6 +24,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             try {
                 const company = await getCompany(user.currentCompanyId);
                 setRotaEnabled(!!company.settings.rotaEnabled);
+                if (company.settings.logoUrl) {
+                    setLogo(company.settings.logoUrl);
+                }
             } catch (e) {
                 console.error("Error fetching settings", e);
             }
@@ -63,7 +67,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex items-center gap-4 p-6 mb-4">
            <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-purple-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
-                <img src={LOGO_URL} alt="Logo" className="relative w-10 h-10 rounded-xl object-cover bg-white" />
+                <img src={logo} alt="Logo" className="relative w-10 h-10 rounded-xl object-contain bg-white" />
            </div>
            <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-white hidden lg:block">{APP_NAME}</span>
         </div>
@@ -114,7 +118,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* --- MOBILE HEADER & BOTTOM NAV --- */}
       <div className="md:hidden fixed top-0 left-0 right-0 glass-panel z-50 px-6 py-4 flex justify-between items-center border-b border-slate-200 dark:border-white/5 print:hidden bg-white/90 dark:bg-slate-900/90">
         <div className="flex items-center gap-3">
-           <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-lg bg-white shadow-sm" />
+           <img src={logo} alt="Logo" className="w-8 h-8 rounded-lg bg-white shadow-sm object-contain" />
            <span className="font-bold text-lg text-slate-900 dark:text-white">{APP_NAME}</span>
         </div>
         <button onClick={logout} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white">

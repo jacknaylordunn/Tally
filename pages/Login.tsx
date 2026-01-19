@@ -180,7 +180,10 @@ export const Login = () => {
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700 dark:text-slate-400 ml-1">Email</label>
                         <input 
+                            id="email"
+                            name="email"
                             type="email" 
+                            autoComplete="username"
                             required 
                             className="w-full px-5 py-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
                             placeholder="name@company.com"
@@ -191,7 +194,10 @@ export const Login = () => {
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700 dark:text-slate-400 ml-1">Password</label>
                         <input 
+                            id="password"
+                            name="password"
                             type="password" 
+                            autoComplete="current-password"
                             required 
                             className="w-full px-5 py-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
                             placeholder="••••••••"
