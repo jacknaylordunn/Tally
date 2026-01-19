@@ -178,7 +178,7 @@ export const Login = () => {
 
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-400 ml-1">Email</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-400 ml-1" htmlFor="email">Email</label>
                         <input 
                             id="email"
                             name="email"
@@ -192,7 +192,7 @@ export const Login = () => {
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-400 ml-1">Password</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-400 ml-1" htmlFor="password">Password</label>
                         <input 
                             id="password"
                             name="password"

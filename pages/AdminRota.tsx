@@ -45,6 +45,7 @@ export const AdminRota = () => {
   // Type discriminates between clicking a specific shift or a general day area
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'shift' | 'day', data: any } | null>(null);
   const [clipboard, setClipboard] = useState<ScheduleShift | null>(null);
+  const [dayClipboard, setDayClipboard] = useState<ScheduleShift[] | null>(null);
   
   // Expanded Group State
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
@@ -284,6 +285,50 @@ export const AdminRota = () => {
       newShift.isOffered = false;
 
       await createScheduleShift(newShift);
+      loadData();
+      setContextMenu(null);
+  };
+
+  const handleCopyDay = (date: Date) => {
+      const shifts = getShiftsForDay(date);
+      if (shifts.length === 0) {
+          alert("No shifts to copy on this day.");
+          setContextMenu(null);
+          return;
+      }
+      setDayClipboard(shifts);
+      setContextMenu(null);
+  };
+
+  const handlePasteDay = async (targetDate: Date) => {
+      if (!dayClipboard) return;
+      if (!confirm(`Paste ${dayClipboard.length} shifts to ${targetDate.toLocaleDateString()}?`)) return;
+      
+      setLoading(true);
+      const newShifts = dayClipboard.map(s => {
+          const sStart = new Date(s.startTime);
+          const sEnd = new Date(s.endTime);
+          
+          const nStart = new Date(targetDate);
+          nStart.setHours(sStart.getHours(), sStart.getMinutes(), 0, 0);
+          
+          const duration = sEnd.getTime() - sStart.getTime();
+          const nEnd = new Date(nStart.getTime() + duration);
+          
+          return {
+              ...s,
+              id: `sch_${Date.now()}_pd_${Math.random().toString(36).substr(2,5)}_${Math.floor(Math.random()*1000)}`,
+              startTime: nStart.getTime(),
+              endTime: nEnd.getTime(),
+              status: 'draft',
+              userId: null,
+              userName: undefined,
+              bids: [],
+              isOffered: false
+          } as ScheduleShift;
+      });
+      
+      await createBatchScheduleShifts(newShifts);
       loadData();
       setContextMenu(null);
   };
@@ -900,7 +945,11 @@ export const AdminRota = () => {
                     ) : (
                         <>
                             <button onClick={() => { handleAddShift(contextMenu.data); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 transition"><Plus className="w-4 h-4" /> Add Shift</button>
-                            {clipboard && <button onClick={() => { handlePasteShift(contextMenu.data); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 transition"><ClipboardPaste className="w-4 h-4" /> Paste</button>}
+                            {clipboard && <button onClick={() => { handlePasteShift(contextMenu.data); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 transition"><ClipboardPaste className="w-4 h-4" /> Paste Shift</button>}
+                            
+                            <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
+                            <button onClick={() => { handleCopyDay(contextMenu.data); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 transition"><Copy className="w-4 h-4" /> Copy Day</button>
+                            {dayClipboard && <button onClick={() => { handlePasteDay(contextMenu.data); }} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 transition"><ClipboardPaste className="w-4 h-4" /> Paste Day ({dayClipboard.length})</button>}
                         </>
                     )}
                 </div>
