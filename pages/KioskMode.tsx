@@ -137,7 +137,7 @@ export const KioskMode = () => {
                         <img src={LOGO_URL} alt="Logo" className="w-24 h-24 rounded-xl shadow-xl object-contain bg-white p-1 opacity-90" />
                     )}
                  </div>
-                <h1 className="text-4xl font-bold tracking-tight mb-2 text-white">Scan to Clock In</h1>
+                <h1 className="text-4xl font-bold tracking-tight mb-2 text-white">Scan to Clock In & Out</h1>
                 <p className="text-slate-400 text-lg">Use your phone camera</p>
             </div>
 

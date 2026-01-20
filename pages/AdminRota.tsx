@@ -315,17 +315,18 @@ export const AdminRota = () => {
           const duration = sEnd.getTime() - sStart.getTime();
           const nEnd = new Date(nStart.getTime() + duration);
           
-          return {
+          const newShift: any = {
               ...s,
               id: `sch_${Date.now()}_pd_${Math.random().toString(36).substr(2,5)}_${Math.floor(Math.random()*1000)}`,
               startTime: nStart.getTime(),
               endTime: nEnd.getTime(),
               status: 'draft',
               userId: null,
-              userName: undefined,
               bids: [],
               isOffered: false
-          } as ScheduleShift;
+          };
+          delete newShift.userName;
+          return newShift as ScheduleShift;
       });
       
       await createBatchScheduleShifts(newShifts);
