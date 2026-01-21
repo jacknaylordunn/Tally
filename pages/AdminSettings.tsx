@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile } from '../services/api';
 import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useBlocker } from 'react-router-dom';
@@ -28,6 +28,7 @@ export const AdminSettings = () => {
   const [currency, setCurrency] = useState('£');
   const [primaryColor, setPrimaryColor] = useState('#0ea5e9');
   const [logoUrl, setLogoUrl] = useState('');
+  const [showStaffEarnings, setShowStaffEarnings] = useState(true);
   
   // Holiday Pay
   const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
@@ -63,6 +64,7 @@ export const AdminSettings = () => {
         setCurrency(data.settings.currency || '£');
         setPrimaryColor(data.settings.primaryColor || '#0ea5e9');
         setLogoUrl(data.settings.logoUrl || '');
+        setShowStaffEarnings(data.settings.showStaffEarnings !== false); // Default to true if undefined
         setHolidayPayEnabled(data.settings.holidayPayEnabled || false);
         setHolidayPayRate(data.settings.holidayPayRate || 12.07);
         
@@ -100,6 +102,7 @@ export const AdminSettings = () => {
           currency !== (s.currency || '£') ||
           primaryColor !== (s.primaryColor || '#0ea5e9') ||
           logoUrl !== (s.logoUrl || '') ||
+          showStaffEarnings !== clean(s.showStaffEarnings, true) ||
           holidayPayEnabled !== (s.holidayPayEnabled || false) ||
           holidayPayRate !== (s.holidayPayRate || 12.07) ||
           rotaEnabled !== (s.rotaEnabled || false) ||
@@ -114,7 +117,7 @@ export const AdminSettings = () => {
           auditLongShift !== (s.auditLongShiftThreshold || 14)
       );
   }, [
-      company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl,
+      company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl, showStaffEarnings,
       holidayPayEnabled, holidayPayRate, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
       auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift
   ]);
@@ -194,6 +197,7 @@ export const AdminSettings = () => {
               currency: currency,
               primaryColor,
               logoUrl,
+              showStaffEarnings,
               holidayPayEnabled,
               holidayPayRate,
               rotaEnabled,
@@ -675,8 +679,29 @@ export const AdminSettings = () => {
                         </div>
                     </div>
 
-                    <div className="mt-6 border-t border-slate-200 dark:border-white/10 pt-4">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="mt-4 border-t border-slate-200 dark:border-white/10 pt-4 space-y-4">
+                        {/* Staff Earnings Visibility */}
+                        <div className="flex items-center justify-between">
+                            <div className="pr-4">
+                                <h4 className="font-medium text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                                    {showStaffEarnings ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
+                                    Staff View Earnings
+                                </h4>
+                                <p className="text-xs text-slate-500">Allow staff to see their estimated pay in the app.</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                <input 
+                                    type="checkbox" 
+                                    checked={showStaffEarnings} 
+                                    onChange={(e) => setShowStaffEarnings(e.target.checked)}
+                                    className="sr-only peer" 
+                                />
+                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            </label>
+                        </div>
+
+                        {/* Holiday Pay Toggle */}
+                        <div className="flex items-center justify-between">
                             <div className="pr-4">
                                 <h4 className="font-medium text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
                                 <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
@@ -691,6 +716,7 @@ export const AdminSettings = () => {
                                 <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                             </label>
                         </div>
+                        
                         {holidayPayEnabled && (
                             <div className="animate-in fade-in slide-in-from-top-2">
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -704,6 +730,7 @@ export const AdminSettings = () => {
                                         value={holidayPayRate}
                                         onChange={(e) => setHolidayPayRate(parseFloat(e.target.value))}
                                         className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
+                                        placeholder="12.07"
                                     />
                                     <Percent className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                                 </div>

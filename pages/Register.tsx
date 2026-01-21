@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +8,7 @@ import { createUserProfile, createCompany, getCompanyByCode } from '../services/
 import { Company, User as UserType } from '../types';
 import { auth } from '../lib/firebase';
 import { APP_NAME, LOGO_URL } from '../constants';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
 export const Register = () => {
   const navigate = useNavigate();
@@ -67,13 +68,16 @@ export const Register = () => {
     let userCredential;
 
     try {
-        // 1. Create Authentication User FIRST
+        // 1. Force Persistence to LOCAL before creating user to ensure long-lived session
+        await setPersistence(auth, browserLocalPersistence);
+
+        // 2. Create Authentication User
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
         let companyId = '';
         let isApproved = true; // Default for Admins
 
-        // 2. Validate / Prepare Company Logic
+        // 3. Validate / Prepare Company Logic
         if (activeTab === UserRole.STAFF) {
             if (!companyCode) {
                  throw new Error("Please enter a Company Invite Code.");
@@ -107,7 +111,7 @@ export const Register = () => {
             await createCompany(newCompany);
         }
 
-        // 3. Create User Profile
+        // 4. Create User Profile
         const newUser: UserType = {
             id: uid,
             email,
@@ -119,7 +123,7 @@ export const Register = () => {
         };
         await createUserProfile(newUser);
         
-        // 4. Force Refresh Session
+        // 5. Force Refresh Session
         await refreshSession();
         navigate('/onboarding');
 

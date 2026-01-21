@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { useLocation, useNavigate } from 'react-router-dom';
 import { TutorialStep, UserRole, InteractiveGuide } from '../types';
 import { useAuth } from './AuthContext';
-import { getCompany } from '../services/api';
+import { getCompany, updateUserProfile } from '../services/api';
 
 interface TutorialContextType {
   // Main Tour
@@ -26,7 +26,7 @@ interface TutorialContextType {
 const TutorialContext = createContext<TutorialContextType | undefined>(undefined);
 
 export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -263,8 +263,8 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
       if (!user) return;
       if (isActive && !force) return;
 
-      const hasSeen = localStorage.getItem(`tally_tutorial_${user.id}`);
-      if (hasSeen && !force) return;
+      // Check user profile for completion status instead of local storage
+      if (user.tutorialSeen && !force) return;
 
       let companySettings = null;
       if (user.currentCompanyId) {
@@ -288,10 +288,17 @@ export const TutorialProvider = ({ children }: { children?: ReactNode }) => {
       else navigate('/staff');
   };
 
-  const endTutorial = () => {
+  const endTutorial = async () => {
       setIsActive(false);
       if (user) {
-          localStorage.setItem(`tally_tutorial_${user.id}`, 'true');
+          try {
+              // Update database to mark tutorial as seen
+              await updateUserProfile(user.id, { tutorialSeen: true });
+              // Refresh local session to reflect the change
+              await refreshSession();
+          } catch (e) {
+              console.error("Failed to mark tutorial seen", e);
+          }
       }
   };
 

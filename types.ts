@@ -14,6 +14,7 @@ export interface User {
   customHourlyRate?: number; // Override company default
   position?: string; // e.g. "Senior Medic"
   isApproved?: boolean; // If true, can clock in. If undefined, assume true (migration).
+  tutorialSeen?: boolean; // Tracks if the user has completed the welcome tour
 }
 
 export interface Company {
@@ -32,6 +33,7 @@ export interface Company {
     // Payroll
     defaultHourlyRate?: number;
     currency?: string;
+    showStaffEarnings?: boolean; // New: Toggle staff seeing their pay
     // Holiday Pay
     holidayPayEnabled?: boolean;
     holidayPayRate?: number; // Percentage (e.g. 12.07)

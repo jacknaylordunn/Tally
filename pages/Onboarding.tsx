@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Company, Location } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent, Clock } from 'lucide-react';
+import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent, Clock, Eye, EyeOff } from 'lucide-react';
 import { updateCompanySettings, getCompany, createLocation } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
 import { APP_NAME } from '../constants';
@@ -29,6 +29,7 @@ export const Onboarding = () => {
   const [hourlyRate, setHourlyRate] = useState('15.00');
   const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
   const [holidayPayRate, setHolidayPayRate] = useState('12.07');
+  const [showStaffEarnings, setShowStaffEarnings] = useState(true);
 
   // Step 3: Security & Features
   const [requireApproval, setRequireApproval] = useState(false);
@@ -136,7 +137,8 @@ export const Onboarding = () => {
               defaultHourlyRate: parseFloat(hourlyRate),
               currency: currency,
               holidayPayEnabled,
-              holidayPayRate: parseFloat(holidayPayRate)
+              holidayPayRate: parseFloat(holidayPayRate),
+              showStaffEarnings
           });
           setStep(3);
       } catch (e) {
@@ -337,6 +339,21 @@ export const Onboarding = () => {
                     </div>
 
                     <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
+
+                    {/* Staff Earnings Toggle */}
+                    <div className="flex items-center justify-between text-left">
+                        <div className="pr-4">
+                            <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                                {showStaffEarnings ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
+                                Staff View Earnings
+                            </h4>
+                            <p className="text-xs text-slate-500">Allow staff to see estimated pay in their dashboard.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input type="checkbox" checked={showStaffEarnings} onChange={(e) => setShowStaffEarnings(e.target.checked)} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                    </div>
 
                     {/* Holiday Pay Toggle */}
                     <div className="flex items-center justify-between text-left">

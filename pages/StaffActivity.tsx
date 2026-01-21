@@ -30,6 +30,9 @@ export const StaffActivity = () => {
 
   // Fallback to £ if company settings are missing currency
   const currency = company?.settings.currency || '£';
+  
+  // Check setting, default to true for backward compatibility
+  const showEarnings = company?.settings.showStaffEarnings !== false;
 
   // --- FILTER LOGIC ---
   const filteredShifts = shifts.filter(s => {
@@ -80,7 +83,7 @@ export const StaffActivity = () => {
     <div className="max-w-3xl mx-auto space-y-6 pb-20">
        <header>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Your Activity</h1>
-          <p className="text-slate-500 dark:text-slate-400">History of your shifts and earnings.</p>
+          <p className="text-slate-500 dark:text-slate-400">History of your shifts {showEarnings && 'and earnings'}.</p>
        </header>
 
        {/* Filter */}
@@ -97,7 +100,7 @@ export const StaffActivity = () => {
        </div>
 
        {/* Summary Cards */}
-       <div className="grid grid-cols-2 gap-4">
+       <div className={`grid ${showEarnings ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
            <div className="bg-white dark:bg-white/5 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-white/10">
                <div className="flex items-center space-x-2 text-slate-400 mb-2">
                    <Clock className="w-4 h-4" />
@@ -112,20 +115,23 @@ export const StaffActivity = () => {
                    </span>
                </div>
            </div>
-           <div className="bg-white dark:bg-white/5 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-white/10">
-               <div className="flex items-center space-x-2 text-brand-600 dark:text-brand-400 mb-2">
-                   <DollarSign className="w-4 h-4" />
-                   <span className="text-xs font-bold uppercase tracking-wider">Est. Earnings</span>
+           
+           {showEarnings && (
+               <div className="bg-white dark:bg-white/5 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-white/10">
+                   <div className="flex items-center space-x-2 text-brand-600 dark:text-brand-400 mb-2">
+                       <DollarSign className="w-4 h-4" />
+                       <span className="text-xs font-bold uppercase tracking-wider">Est. Earnings</span>
+                   </div>
+                   <div className="flex flex-col">
+                       <span className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                           {currency}{totalStats.earnings.toFixed(2)}
+                       </span>
+                       <span className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-1">
+                           Gross Pay
+                       </span>
+                   </div>
                </div>
-               <div className="flex flex-col">
-                   <span className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
-                       {currency}{totalStats.earnings.toFixed(2)}
-                   </span>
-                   <span className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-1">
-                       Gross Pay
-                   </span>
-               </div>
-           </div>
+           )}
        </div>
 
        {/* List */}
@@ -170,12 +176,15 @@ export const StaffActivity = () => {
                                     : 'Tracking...'}
                             </div>
                         </div>
-                        <div className="text-right min-w-[5rem]">
-                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Earned</div>
-                            <div className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
-                                {currency}{calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
+                        
+                        {showEarnings && (
+                            <div className="text-right min-w-[5rem]">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Earned</div>
+                                <div className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
+                                    {currency}{calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
+                                </div>
                             </div>
-                        </div>
+                        )}
                    </div>
                </div>
            ))}
