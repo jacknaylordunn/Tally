@@ -55,6 +55,7 @@ export const AdminRota = () => {
 
   // Form States
   const [shiftRole, setShiftRole] = useState('Staff');
+  const [isNewRoleMode, setIsNewRoleMode] = useState(false);
   const [shiftStart, setShiftStart] = useState('09:00');
   const [shiftEnd, setShiftEnd] = useState('17:00');
   const [shiftUser, setShiftUser] = useState<string>('open'); 
@@ -130,6 +131,9 @@ export const AdminRota = () => {
           </div>
       );
   }
+
+  // Derive unique existing roles from staff list
+  const existingRoles = Array.from(new Set(staff.map(u => u.position).filter(Boolean))).sort() as string[];
 
   // --- GROUPING LOGIC ---
   const getGroupKey = (s: ScheduleShift) => {
@@ -223,6 +227,7 @@ export const AdminRota = () => {
     setSelectedDay(dayDate);
     setEditingShift(null);
     setShiftRole('Staff');
+    setIsNewRoleMode(false);
     setShiftStart('09:00');
     setShiftEnd('17:00');
     setShiftUser('open');
@@ -236,6 +241,7 @@ export const AdminRota = () => {
     setEditingShift(shift);
     setSelectedDay(new Date(shift.startTime));
     setShiftRole(shift.role);
+    setIsNewRoleMode(false);
     const s = new Date(shift.startTime);
     const eTime = new Date(shift.endTime);
     setShiftStart(s.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}));
@@ -1060,12 +1066,46 @@ export const AdminRota = () => {
                     <form onSubmit={handleSaveShift} className="space-y-4">
                         <div>
                             <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Role / Position</label>
-                            <input 
-                                type="text" required
-                                value={shiftRole} onChange={e => setShiftRole(e.target.value)}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600"
-                                placeholder="e.g. Bar Staff"
-                            />
+                            {isNewRoleMode ? (
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" required
+                                        value={shiftRole} onChange={e => setShiftRole(e.target.value)}
+                                        className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        placeholder="e.g. Bar Staff"
+                                        autoFocus
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsNewRoleMode(false)}
+                                        className="px-3 py-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <select 
+                                        value={shiftRole} 
+                                        onChange={(e) => {
+                                            if (e.target.value === '__NEW__') {
+                                                setShiftRole('');
+                                                setIsNewRoleMode(true);
+                                            } else {
+                                                setShiftRole(e.target.value);
+                                            }
+                                        }}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="Staff">Staff (Default)</option>
+                                        {Array.from(new Set(staff.map(u => u.position).filter(Boolean))).sort().map(pos => (
+                                            <option key={pos} value={pos}>{pos}</option>
+                                        ))}
+                                        <option value="__NEW__" className="font-bold text-brand-600">+ Create New Role...</option>
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                </div>
+                            )}
                         </div>
 
                         {!editingShift && (

@@ -1,12 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { AlertCircle, Loader2, ArrowRight, Check, Calendar, MapPin, DollarSign } from 'lucide-react';
 import { UserRole } from '../types';
 import { LOGO_URL, APP_NAME } from '../constants';
-import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 
 const FEATURES = [
     {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,8 +6,8 @@ import { Building, User, ArrowRight, Check, AlertCircle, Loader2, X } from 'luci
 import { createUserProfile, createCompany, getCompanyByCode } from '../services/api';
 import { Company, User as UserType } from '../types';
 import { auth } from '../lib/firebase';
-import { createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import { APP_NAME, LOGO_URL } from '../constants';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 export const Register = () => {
   const navigate = useNavigate();
@@ -128,7 +127,7 @@ export const Register = () => {
         console.error("Registration Error:", err);
         
         if (userCredential && userCredential.user) {
-            await deleteUser(userCredential.user).catch(cleanupErr => 
+            await userCredential.user.delete().catch(cleanupErr => 
                 console.error("Failed to cleanup orphaned user", cleanupErr)
             );
         }

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getCompanyStaff, updateUserProfile, removeUserFromCompany, getCompany } from '../services/api';
 import { User, Company, UserRole } from '../types';
-import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock } from 'lucide-react';
+import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { TableRowSkeleton } from '../components/Skeleton';
 import { deleteField } from 'firebase/firestore';
@@ -18,6 +18,7 @@ export const AdminStaff = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editRate, setEditRate] = useState('');
   const [editPosition, setEditPosition] = useState('');
+  const [isNewPositionMode, setIsNewPositionMode] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Bulk Update Modal
@@ -46,10 +47,14 @@ export const AdminStaff = () => {
     s.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Derive unique existing positions for the dropdown
+  const existingPositions = Array.from(new Set(staff.map(u => u.position).filter(Boolean))).sort() as string[];
+
   const handleEdit = (u: User) => {
       setEditingUser(u);
       setEditRate(u.customHourlyRate?.toString() || '');
       setEditPosition(u.position || '');
+      setIsNewPositionMode(false);
   };
 
   const handleSave = async () => {
@@ -253,7 +258,11 @@ export const AdminStaff = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {u.position || <span className="text-slate-400 italic">None</span>}
+                                        {u.position ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                                {u.position}
+                                            </span>
+                                        ) : <span className="text-slate-400 italic">None</span>}
                                     </td>
                                     <td className="px-6 py-4 font-mono text-slate-700 dark:text-slate-300">
                                         {currency}{effectiveRate.toFixed(2)}
@@ -332,16 +341,51 @@ export const AdminStaff = () => {
                         
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Position / Title</label>
-                            <div className="relative">
-                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                                <input 
-                                    type="text"
-                                    value={editPosition}
-                                    onChange={(e) => setEditPosition(e.target.value)}
-                                    placeholder="e.g. Senior Medic"
-                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
-                                />
-                            </div>
+                            {isNewPositionMode ? (
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                        <input 
+                                            type="text"
+                                            value={editPosition}
+                                            onChange={(e) => setEditPosition(e.target.value)}
+                                            placeholder="e.g. Senior Medic"
+                                            autoFocus
+                                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsNewPositionMode(false)}
+                                        className="px-3 py-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                    <select 
+                                        value={editPosition}
+                                        onChange={(e) => {
+                                            if (e.target.value === '__NEW__') {
+                                                setEditPosition('');
+                                                setIsNewPositionMode(true);
+                                            } else {
+                                                setEditPosition(e.target.value);
+                                            }
+                                        }}
+                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Select Role...</option>
+                                        {existingPositions.map((pos) => (
+                                            <option key={pos} value={pos}>{pos}</option>
+                                        ))}
+                                        <option value="__NEW__" className="font-bold text-brand-600">+ Create New Role...</option>
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                </div>
+                            )}
                         </div>
 
                          <div>

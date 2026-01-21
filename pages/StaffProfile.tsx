@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, Mail, Building, LogOut, Shield, Edit2, Key, Trash2, X, AlertTriangle } from 'lucide-react';

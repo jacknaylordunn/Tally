@@ -107,8 +107,18 @@ export const StaffRota = () => {
 
   const myShifts = schedule.filter(s => s.userId === user?.id).sort((a,b) => a.startTime - b.startTime);
   
-  // Logic to Group Open Shifts
-  const openShifts = schedule.filter(s => s.userId === null || (s.userId !== user?.id && s.isOffered)).sort((a,b) => a.startTime - b.startTime);
+  // Logic to Group Open Shifts with Role Filtering
+  const openShifts = schedule.filter(s => {
+      const isOpen = s.userId === null || (s.userId !== user?.id && s.isOffered);
+      if (!isOpen) return false;
+
+      // Visibility Rule: If shift has a role, user must match it.
+      // If user has no position set, they only see shifts with no role or 'Staff' role (assuming 'Staff' is default/generic)
+      if (s.role && s.role !== 'Staff' && s.role !== 'Open' && s.role !== user?.position) {
+          return false;
+      }
+      return true;
+  }).sort((a,b) => a.startTime - b.startTime);
 
   // Group by Date -> Group Key
   const groupedOpenShifts: Record<string, Record<string, ScheduleShift[]>> = {};
@@ -306,7 +316,7 @@ export const StaffRota = () => {
                              {Object.keys(groupedOpenShifts).length === 0 ? (
                                 <div className="text-center py-12 text-slate-500">
                                     <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                    <p>No open shifts available right now.</p>
+                                    <p>No open shifts available for your role.</p>
                                 </div>
                             ) : (
                                 Object.entries(groupedOpenShifts).map(([date, roleGroups]) => (
