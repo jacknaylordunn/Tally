@@ -47,6 +47,18 @@ export const Register = () => {
 
   const isPasswordValid = Object.values(passwordCriteria).every(Boolean);
 
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // 1. Remove anything that isn't alphanumeric
+      const raw = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      
+      // 2. Insert hyphen after 3 chars
+      let formatted = raw;
+      if (raw.length > 3) {
+          formatted = raw.slice(0, 3) + '-' + raw.slice(3);
+      }
+      setCompanyCode(formatted);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -283,7 +295,7 @@ export const Register = () => {
                         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Company Invite Code</label>
                         <input 
                             type="text" required
-                            value={companyCode} onChange={(e) => setCompanyCode(e.target.value)}
+                            value={companyCode} onChange={handleCodeChange}
                             className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none uppercase tracking-widest placeholder:normal-case placeholder:tracking-normal" 
                             placeholder="e.g. AMS-999"
                         />
