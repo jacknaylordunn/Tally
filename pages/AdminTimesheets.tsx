@@ -172,11 +172,8 @@ export const AdminTimesheets = () => {
       } else if (diffMins < -auditEarlyIn) {
           // Too Early (Amber)
           return 'text-amber-600 dark:text-amber-400 font-bold';
-      } else if (diffMins > 5) {
-          // Slightly Late (Amber)
-          return 'text-amber-600 dark:text-amber-400';
       } else {
-          // On Time (Green)
+          // On Time (Green) - matches configured thresholds
           return 'text-emerald-600 dark:text-emerald-400';
       }
   };
@@ -184,24 +181,24 @@ export const AdminTimesheets = () => {
   const getTimeOutColorClass = (shift: Shift) => {
       if (!shift.scheduledEndTime || !shift.endTime) return 'text-slate-400';
 
+      const auditEarlyOut = company?.settings.auditEarlyOutThreshold || 15;
+      const auditLateOut = company?.settings.auditLateOutThreshold || 15;
       const diffMins = (shift.endTime - shift.scheduledEndTime) / 60000;
 
-      // On time (within 5 mins either side)
-      if (Math.abs(diffMins) <= 5) return 'text-emerald-600 dark:text-emerald-400';
-
       // Early Out (Negative diff)
-      if (diffMins < -5) {
+      if (diffMins < -auditEarlyOut) {
           // Matches EARLY OUT flag (Amber)
           return 'text-amber-600 dark:text-amber-400 font-bold';
       }
 
       // Late Out (Positive diff)
-      if (diffMins > 5) {
+      if (diffMins > auditLateOut) {
           // Matches LATE OUT flag (Amber)
           return 'text-amber-600 dark:text-amber-400 font-bold';
       }
       
-      return 'text-slate-400';
+      // On time (within configured thresholds)
+      return 'text-emerald-600 dark:text-emerald-400';
   };
 
   const handleExport = (groupByStaff: boolean) => {
