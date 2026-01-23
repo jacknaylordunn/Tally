@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Building, LogOut, Shield, Edit2, Key, Trash2, X, AlertTriangle } from 'lucide-react';
+import { User, Mail, Building, LogOut, Shield, Edit2, Key, Trash2, X, AlertTriangle, MapPin, Camera, Check, Settings } from 'lucide-react';
 import { updateUserProfile, deleteUser, switchUserCompany, getCompany } from '../services/api';
 import { auth } from '../lib/firebase';
 import { sendPasswordResetEmail, deleteUser as deleteAuthUser } from 'firebase/auth';
@@ -18,6 +19,10 @@ export const StaffProfile = () => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
+  // Permissions State
+  const [locStatus, setLocStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [camStatus, setCamStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  
   const [companyName, setCompanyName] = useState('Loading...');
 
   useEffect(() => {
@@ -34,7 +39,19 @@ export const StaffProfile = () => {
         }
     };
     fetchCompany();
+    checkPermissions();
   }, [user]);
+
+  const checkPermissions = async () => {
+      // Best effort initial check
+      if (navigator.permissions && navigator.permissions.query) {
+          try {
+              const loc = await navigator.permissions.query({ name: 'geolocation' });
+              if (loc.state === 'granted') setLocStatus('granted');
+              // Don't set denied automatically here to allow retry
+          } catch(e) {}
+      }
+  };
 
   const handleEditProfile = async () => {
       if (!user) return;
@@ -106,6 +123,29 @@ export const StaffProfile = () => {
       }
   };
 
+  const testLocation = () => {
+      setLocStatus('unknown');
+      navigator.geolocation.getCurrentPosition(
+          () => setLocStatus('granted'),
+          (err) => {
+              console.error(err);
+              setLocStatus('denied');
+          },
+          { timeout: 10000, enableHighAccuracy: true }
+      );
+  };
+
+  const testCamera = async () => {
+      setCamStatus('unknown');
+      try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(t => t.stop());
+          setCamStatus('granted');
+      } catch (e) {
+          setCamStatus('denied');
+      }
+  };
+
   return (
     <div className="max-w-xl mx-auto space-y-6 pb-20">
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white">My Profile</h1>
@@ -158,17 +198,68 @@ export const StaffProfile = () => {
                     Switch Team
                 </button>
             </div>
-
-             <div className="flex items-center space-x-4 p-3 hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg transition">
-                <div className="bg-slate-100 dark:bg-slate-900 p-2 rounded-lg text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/5">
-                    <Shield className="w-5 h-5" />
-                </div>
-                <div>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Access Level</p>
-                    <p className="text-slate-900 dark:text-slate-200 font-medium capitalize">{user?.role}</p>
-                </div>
-            </div>
         </div>
+      </div>
+
+      {/* Permissions Card */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+          <div className="flex items-center space-x-2 mb-4">
+              <Settings className="w-5 h-5 text-slate-400" />
+              <h3 className="font-bold text-slate-900 dark:text-white">Device Permissions</h3>
+          </div>
+          
+          <div className="space-y-4">
+              {/* Location Row */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
+                  <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-lg ${locStatus === 'granted' ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'} dark:bg-slate-800`}>
+                          <MapPin className="w-5 h-5" />
+                      </div>
+                      <div>
+                          <p className="font-bold text-sm text-slate-900 dark:text-white">Location</p>
+                          <p className="text-xs text-slate-500">Required for GPS clock-in</p>
+                      </div>
+                  </div>
+                  <button 
+                    onClick={testLocation}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${locStatus === 'granted' ? 'bg-green-100 text-green-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
+                  >
+                      {locStatus === 'granted' ? 'Active' : 'Enable'}
+                  </button>
+              </div>
+              
+              {/* Safari Help Text for Location */}
+              {locStatus === 'denied' && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg text-xs text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-900/30">
+                      <p className="font-bold mb-1">Location blocked?</p>
+                      <p>If you are on an iPhone (Safari):</p>
+                      <ol className="list-decimal pl-4 mt-1 space-y-1">
+                          <li>Tap the <strong>'Aa'</strong> or <strong>Lock</strong> icon in the address bar.</li>
+                          <li>Select <strong>Website Settings</strong>.</li>
+                          <li>Set Location to <strong>Allow</strong>.</li>
+                      </ol>
+                  </div>
+              )}
+
+              {/* Camera Row */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
+                  <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-lg ${camStatus === 'granted' ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'} dark:bg-slate-800`}>
+                          <Camera className="w-5 h-5" />
+                      </div>
+                      <div>
+                          <p className="font-bold text-sm text-slate-900 dark:text-white">Camera</p>
+                          <p className="text-xs text-slate-500">Required for scanning</p>
+                      </div>
+                  </div>
+                  <button 
+                    onClick={testCamera}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${camStatus === 'granted' ? 'bg-green-100 text-green-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
+                  >
+                      {camStatus === 'granted' ? 'Active' : 'Enable'}
+                  </button>
+              </div>
+          </div>
       </div>
 
       {/* Security & Settings */}

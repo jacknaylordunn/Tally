@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { verifyToken } from '../services/api';
-import { CheckCircle, XCircle, Loader2, RefreshCw, Home, MapPin } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, RefreshCw, Home, MapPin, Settings } from 'lucide-react';
 import { UserRole } from '../types';
 
 export const ActionHandler = () => {
@@ -176,18 +176,29 @@ export const ActionHandler = () => {
                 <h2 className={`text-3xl font-bold mb-2 ${styles.title}`}>{permissionDenied ? 'Permission Denied' : 'Failed'}</h2>
                 <p className={`text-lg mb-8 ${styles.text}`}>
                     {permissionDenied 
-                        ? 'Please allow location access to verify you are on site.' 
+                        ? 'We cannot verify your location. Please check your browser settings.' 
                         : message}
                 </p>
                 
                 <div className="flex flex-col gap-3 w-full max-w-xs">
-                    <button 
-                        onClick={() => processScan()}
-                        className="bg-white dark:bg-black/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-red-50 dark:hover:bg-black/30 transition flex items-center justify-center space-x-2"
-                    >
-                        {permissionDenied ? <MapPin className="w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
-                        <span>{permissionDenied ? 'Ask for Location' : 'Try Again'}</span>
-                    </button>
+                    {permissionDenied ? (
+                        <button 
+                            onClick={() => navigate('/staff/profile')}
+                            className="bg-white dark:bg-black/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-red-50 dark:hover:bg-black/30 transition flex items-center justify-center space-x-2"
+                        >
+                            <Settings className="w-5 h-5" />
+                            <span>Fix in Profile Settings</span>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => processScan()}
+                            className="bg-white dark:bg-black/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-red-50 dark:hover:bg-black/30 transition flex items-center justify-center space-x-2"
+                        >
+                            <RefreshCw className="w-5 h-5" />
+                            <span>Try Again</span>
+                        </button>
+                    )}
+                    
                     <button 
                         onClick={() => navigate(user?.role === UserRole.ADMIN ? '/admin' : '/staff')}
                         className="bg-red-600 dark:bg-white text-white dark:text-red-900 px-6 py-3 rounded-xl font-bold shadow-lg hover:opacity-90 transition flex items-center justify-center space-x-2"
@@ -196,17 +207,6 @@ export const ActionHandler = () => {
                         <span>Go to Dashboard</span>
                     </button>
                 </div>
-                
-                {permissionDenied && (
-                    <div className="mt-6 p-4 bg-white/50 dark:bg-black/20 rounded-xl text-sm text-red-800 dark:text-red-200 text-left">
-                        <p className="font-bold mb-1">Still not working?</p>
-                        <ol className="list-decimal pl-4 space-y-1 opacity-90">
-                            <li>Check your browser address bar for a blocked location icon.</li>
-                            <li>Go to your device <strong>Settings</strong> &gt; <strong>Privacy</strong> &gt; <strong>Location Services</strong> and ensure your browser has access.</li>
-                            <li>Reload the page.</li>
-                        </ol>
-                    </div>
-                )}
             </div>
         )}
       </div>
