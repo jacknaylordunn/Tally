@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Building, LogOut, Shield, Edit2, Key, Trash2, X, AlertTriangle, MapPin, Camera, Check, Settings } from 'lucide-react';
+import { User, Mail, Building, LogOut, Edit2, Key, Trash2, X, AlertTriangle, MapPin, Camera, Check, Settings, RefreshCw } from 'lucide-react';
 import { updateUserProfile, deleteUser, switchUserCompany, getCompany } from '../services/api';
 import { auth } from '../lib/firebase';
 import { sendPasswordResetEmail, deleteUser as deleteAuthUser } from 'firebase/auth';
@@ -48,7 +48,7 @@ export const StaffProfile = () => {
           try {
               const loc = await navigator.permissions.query({ name: 'geolocation' });
               if (loc.state === 'granted') setLocStatus('granted');
-              // Don't set denied automatically here to allow retry
+              else if (loc.state === 'denied') setLocStatus('denied');
           } catch(e) {}
       }
   };
@@ -210,36 +210,40 @@ export const StaffProfile = () => {
           
           <div className="space-y-4">
               {/* Location Row */}
-              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
-                  <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-lg ${locStatus === 'granted' ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'} dark:bg-slate-800`}>
-                          <MapPin className="w-5 h-5" />
+              <div className="flex flex-col space-y-3 p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
+                  <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${locStatus === 'granted' ? 'bg-green-100 text-green-600' : (locStatus === 'denied' ? 'bg-red-100 text-red-600' : 'bg-slate-200 text-slate-500')} dark:bg-slate-800`}>
+                              <MapPin className="w-5 h-5" />
+                          </div>
+                          <div>
+                              <p className="font-bold text-sm text-slate-900 dark:text-white">Location</p>
+                              <p className="text-xs text-slate-500">Required for GPS clock-in</p>
+                          </div>
                       </div>
-                      <div>
-                          <p className="font-bold text-sm text-slate-900 dark:text-white">Location</p>
-                          <p className="text-xs text-slate-500">Required for GPS clock-in</p>
-                      </div>
+                      <button 
+                        onClick={testLocation}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${locStatus === 'granted' ? 'bg-green-100 text-green-700' : (locStatus === 'denied' ? 'bg-red-100 text-red-700' : 'bg-brand-600 text-white hover:bg-brand-700')}`}
+                      >
+                          {locStatus === 'granted' ? 'Active' : (locStatus === 'denied' ? 'Check Again' : 'Enable')}
+                      </button>
                   </div>
-                  <button 
-                    onClick={testLocation}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${locStatus === 'granted' ? 'bg-green-100 text-green-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
-                  >
-                      {locStatus === 'granted' ? 'Active' : 'Enable'}
-                  </button>
+
+                  {/* Enhanced Help Text for Denied State */}
+                  {locStatus === 'denied' && (
+                      <div className="text-xs text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-200 dark:border-white/10">
+                          <p className="font-bold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> Permission Blocked
+                          </p>
+                          <ol className="list-decimal pl-4 space-y-1">
+                              <li>Tap the <strong>'Aa'</strong> or <strong>Lock</strong> icon in the address bar.</li>
+                              <li>Select <strong>Website Settings</strong>.</li>
+                              <li>Change Location to <strong>Allow</strong>.</li>
+                              <li>Come back here and tap <strong>Check Again</strong>.</li>
+                          </ol>
+                      </div>
+                  )}
               </div>
-              
-              {/* Safari Help Text for Location */}
-              {locStatus === 'denied' && (
-                  <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg text-xs text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-900/30">
-                      <p className="font-bold mb-1">Location blocked?</p>
-                      <p>If you are on an iPhone (Safari):</p>
-                      <ol className="list-decimal pl-4 mt-1 space-y-1">
-                          <li>Tap the <strong>'Aa'</strong> or <strong>Lock</strong> icon in the address bar.</li>
-                          <li>Select <strong>Website Settings</strong>.</li>
-                          <li>Set Location to <strong>Allow</strong>.</li>
-                      </ol>
-                  </div>
-              )}
 
               {/* Camera Row */}
               <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
