@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { verifyToken } from '../services/api';
-import { CheckCircle, XCircle, Loader2, RefreshCw, Home, MapPin, Settings, AlertTriangle, Navigation } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, RefreshCw, Home, MapPin, Settings, AlertTriangle, Navigation, Signal } from 'lucide-react';
 import { UserRole } from '../types';
 
 export const ActionHandler = () => {
@@ -15,6 +15,7 @@ export const ActionHandler = () => {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying...');
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [detailedError, setDetailedError] = useState('');
 
   // Extract query params once
   const searchParams = new URLSearchParams(location.search);
@@ -22,9 +23,39 @@ export const ActionHandler = () => {
   const token = searchParams.get('t');
   const locId = searchParams.get('lid');
 
+  const getGeoLocation = async (): Promise<GeolocationPosition> => {
+      // 1. Try High Accuracy (GPS)
+      try {
+          setMessage('Requesting precision GPS...');
+          return await new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                  enableHighAccuracy: true,
+                  timeout: 6000, // Short timeout for GPS
+                  maximumAge: 0
+              });
+          });
+      } catch (e: any) {
+          console.warn("High accuracy failed, trying low accuracy...", e);
+          
+          // If permission denied immediately, don't bother retrying
+          if (e.code === 1) throw e;
+
+          // 2. Try Low Accuracy / Cached (Wi-Fi/Cell)
+          setMessage('Acquiring network location...');
+          return await new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                  enableHighAccuracy: false,
+                  timeout: 10000, // Longer timeout for fallback
+                  maximumAge: 60000 // Accept positions up to 1 min old
+              });
+          });
+      }
+  };
+
   const processScan = useCallback(async () => {
       setStatus('loading');
       setPermissionDenied(false); 
+      setDetailedError('');
       
       // 1. Auth Check
       if (!isAuthenticated) {
@@ -44,16 +75,8 @@ export const ActionHandler = () => {
       let locationData = undefined;
       if (type === 'static') {
         try {
-          setMessage('Acquiring GPS location...');
-          
-          // CRITICAL: This must happen after a user gesture on iOS
-          const pos: GeolocationPosition = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 20000, 
-                maximumAge: 0
-            });
-          });
+          // Use the robust fallback strategy
+          const pos = await getGeoLocation();
 
           if (pos.coords.accuracy > 2000) {
               console.warn("Low GPS accuracy:", pos.coords.accuracy);
@@ -71,10 +94,20 @@ export const ActionHandler = () => {
           if (e.code === 1) { // PERMISSION_DENIED
               setPermissionDenied(true);
               setMessage('Location access denied.');
+              setDetailedError('Browser blocked the request.');
           }
-          else if (e.code === 2) setMessage('Position unavailable. GPS signal weak.');
-          else if (e.code === 3) setMessage('GPS timed out. Please try again.');
-          else setMessage('Could not verify location.');
+          else if (e.code === 2) { // POSITION_UNAVAILABLE
+              setMessage('Position unavailable.');
+              setDetailedError('Check if Device Location Services are enabled.');
+          }
+          else if (e.code === 3) { // TIMEOUT
+              setMessage('Location timed out.');
+              setDetailedError('Signal too weak. Move outside or connect to Wi-Fi.');
+          }
+          else {
+              setMessage('Could not verify location.');
+              setDetailedError(e.message || 'Unknown error');
+          }
           return;
         }
       }
@@ -202,12 +235,13 @@ export const ActionHandler = () => {
                     <XCircle className={`w-24 h-24 mb-6 ${styles.icon}`} />
                 )}
                 
-                <h2 className={`text-3xl font-bold mb-2 ${styles.title}`}>{permissionDenied ? 'Permission Blocked' : 'Failed'}</h2>
-                <p className={`text-lg mb-6 ${styles.text}`}>
-                    {permissionDenied 
-                        ? 'Your browser denied location access.' 
-                        : message}
+                <h2 className={`text-3xl font-bold mb-2 ${styles.title}`}>{permissionDenied ? 'Permission Blocked' : 'Verification Failed'}</h2>
+                <p className={`text-lg mb-2 ${styles.text}`}>
+                    {message}
                 </p>
+                {detailedError && (
+                    <p className="text-xs font-mono bg-black/10 dark:bg-white/10 px-2 py-1 rounded mb-6">{detailedError}</p>
+                )}
                 
                 {permissionDenied && (
                     <div className="bg-white dark:bg-black/20 rounded-xl p-5 mb-8 text-left border border-red-200 dark:border-white/10 shadow-sm w-full">
@@ -216,9 +250,10 @@ export const ActionHandler = () => {
                             How to fix this:
                         </h4>
                         <ul className="list-disc pl-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-                            <li>Check browser address bar settings (Aa or Lock icon).</li>
-                            <li>Ensure Location is set to <strong>Ask</strong> or <strong>Allow</strong>.</li>
-                            <li>If "Ask" is set, tap Retry below and look for a popup.</li>
+                            <li>Tap the <strong>'Aa'</strong> or <strong>Lock</strong> icon in the address bar.</li>
+                            <li>Tap <strong>Website Settings</strong>.</li>
+                            <li>Change Location to <strong>Allow</strong>.</li>
+                            <li>Reload the page and try again.</li>
                         </ul>
                     </div>
                 )}
