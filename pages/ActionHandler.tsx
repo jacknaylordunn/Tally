@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { verifyToken } from '../services/api';
-import { CheckCircle, XCircle, Loader2, RefreshCw, Home, MapPin, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, RefreshCw, Home, MapPin } from 'lucide-react';
 import { UserRole } from '../types';
 
 export const ActionHandler = () => {
@@ -16,7 +16,7 @@ export const ActionHandler = () => {
 
   const processScan = useCallback(async () => {
       setStatus('loading');
-      setPermissionDenied(false); // Reset on retry
+      setPermissionDenied(false); 
       
       // 1. Auth Check (Bounce Logic)
       if (!isAuthenticated) {
@@ -42,28 +42,23 @@ export const ActionHandler = () => {
       let locationData = undefined;
       if (type === 'static') {
         try {
-          setMessage('Verifying your location...');
+          setMessage('Requesting location access...');
           
-          // Force permission check if API available
-          if (navigator.permissions && navigator.permissions.query) {
-              try {
-                  const result = await navigator.permissions.query({ name: 'geolocation' });
-                  if (result.state === 'denied') {
-                      throw { code: 1, message: 'Permission previously denied' };
-                  }
-              } catch(e) { /* Ignore permission query errors */ }
-          }
+          // We intentionally do NOT check navigator.permissions.query here.
+          // Checking it might return 'denied' prematurely or incorrectly in some contexts.
+          // By calling getCurrentPosition directly (especially via the button click retry),
+          // we utilize the user gesture to force the browser prompt if possible.
 
           const pos: GeolocationPosition = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
                 enableHighAccuracy: true,
-                timeout: 15000, 
+                timeout: 20000, 
                 maximumAge: 0
             });
           });
 
           // Security: Check Accuracy
-          if (pos.coords.accuracy > 1000) {
+          if (pos.coords.accuracy > 2000) {
               console.warn("Low GPS accuracy:", pos.coords.accuracy);
           }
 
@@ -74,7 +69,7 @@ export const ActionHandler = () => {
           };
         } catch (e: any) {
           setStatus('error');
-          if (e.code === 1) {
+          if (e.code === 1) { // PERMISSION_DENIED
               setPermissionDenied(true);
               setMessage('Location access is required.');
           }
@@ -178,10 +173,10 @@ export const ActionHandler = () => {
                     <XCircle className={`w-24 h-24 mb-6 ${styles.icon}`} />
                 )}
                 
-                <h2 className={`text-3xl font-bold mb-2 ${styles.title}`}>{permissionDenied ? 'Location Needed' : 'Failed'}</h2>
+                <h2 className={`text-3xl font-bold mb-2 ${styles.title}`}>{permissionDenied ? 'Permission Denied' : 'Failed'}</h2>
                 <p className={`text-lg mb-8 ${styles.text}`}>
                     {permissionDenied 
-                        ? 'We need your GPS location to verify you are at the correct site. Please tap "Allow Location" below.' 
+                        ? 'Please allow location access to verify you are on site.' 
                         : message}
                 </p>
                 
@@ -191,7 +186,7 @@ export const ActionHandler = () => {
                         className="bg-white dark:bg-black/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-red-50 dark:hover:bg-black/30 transition flex items-center justify-center space-x-2"
                     >
                         {permissionDenied ? <MapPin className="w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
-                        <span>{permissionDenied ? 'Allow Location' : 'Try Again'}</span>
+                        <span>{permissionDenied ? 'Ask for Location' : 'Try Again'}</span>
                     </button>
                     <button 
                         onClick={() => navigate(user?.role === UserRole.ADMIN ? '/admin' : '/staff')}
@@ -203,9 +198,14 @@ export const ActionHandler = () => {
                 </div>
                 
                 {permissionDenied && (
-                    <p className="mt-6 text-xs text-red-700 dark:text-red-300 opacity-80 max-w-xs">
-                        If the prompt does not appear, please enable Location Services in your browser settings or device settings.
-                    </p>
+                    <div className="mt-6 p-4 bg-white/50 dark:bg-black/20 rounded-xl text-sm text-red-800 dark:text-red-200 text-left">
+                        <p className="font-bold mb-1">Still not working?</p>
+                        <ol className="list-decimal pl-4 space-y-1 opacity-90">
+                            <li>Check your browser address bar for a blocked location icon.</li>
+                            <li>Go to your device <strong>Settings</strong> &gt; <strong>Privacy</strong> &gt; <strong>Location Services</strong> and ensure your browser has access.</li>
+                            <li>Reload the page.</li>
+                        </ol>
+                    </div>
                 )}
             </div>
         )}
