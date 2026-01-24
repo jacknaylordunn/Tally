@@ -23,47 +23,65 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Key for local storage backup
+const CACHE_KEY = 'tally_user_backup';
+
 export const AuthProvider = ({ children }: { children?: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize Persistence immediately
   useEffect(() => {
-    // Ensure we default to local persistence for existing sessions to prevent Safari drift
-    setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence init error:", err));
-  }, []);
+    // 1. Enforce Long-Term Persistence
+    setPersistence(auth, browserLocalPersistence).catch(console.error);
 
-  useEffect(() => {
+    // 2. Auth Listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
+            // A. Optimistic Load: Check Local Storage first to prevent UI flicker/redirect
+            const cachedData = localStorage.getItem(CACHE_KEY);
+            if (cachedData) {
+                try {
+                    const parsedUser = JSON.parse(cachedData);
+                    // Only use cache if it matches current auth user
+                    if (parsedUser.id === firebaseUser.uid) {
+                        setUser(parsedUser);
+                    }
+                } catch (e) {
+                    console.error("Cache parse error", e);
+                }
+            }
+
+            // B. Network/Firestore Fetch (The Source of Truth)
             try {
-                // Fetch internal profile
                 const profile = await getUserProfile(firebaseUser.uid);
                 
                 if (profile) {
                     setUser(profile);
+                    // Update cache with fresh data
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
                 } else {
-                    // Retry once after a delay if profile is missing (race condition fix)
-                    console.warn("Profile not found immediately, retrying...");
+                    // Rare edge case: Auth exists but Firestore profile missing
+                    console.warn("User authenticated but profile not found.");
+                    
+                    // Retry once after delay (fixes race conditions on new account creation)
                     setTimeout(async () => {
-                        try {
-                            const retryProfile = await getUserProfile(firebaseUser.uid);
-                            if (retryProfile) setUser(retryProfile);
-                            else console.error("User authenticated but profile permanently missing.");
-                        } catch (e) {
-                            console.error("Retry profile fetch failed", e);
+                        const retry = await getUserProfile(firebaseUser.uid);
+                        if (retry) {
+                            setUser(retry);
+                            localStorage.setItem(CACHE_KEY, JSON.stringify(retry));
                         }
-                    }, 1000);
+                    }, 2000);
                 }
             } catch (e) {
                 console.error("Error fetching profile", e);
-                // Important: We do NOT force logout here. 
-                // If offline persistence works, we get the profile. 
-                // If it fails, we keep the user logged in but maybe with limited data, 
-                // though usually the UI will just wait or retry.
+                // If fetch fails (offline), we rely on the cached user set in step A.
+                // If no cache and no network, user stays technically logged in via Firebase SDK
+                // but might lack profile data until connection restores.
             }
         } else {
+            // User definitely logged out
             setUser(null);
+            localStorage.removeItem(CACHE_KEY);
         }
         setLoading(false);
     });
@@ -74,24 +92,32 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
   const login = async (email: string, password?: string, remember: boolean = true) => {
     if (!password) throw new Error("Password required");
     
-    // Set Persistence based on 'Remember Me' choice
-    const persistence = remember 
-        ? browserLocalPersistence 
-        : browserSessionPersistence;
-        
+    const persistence = remember ? browserLocalPersistence : browserSessionPersistence;
     await setPersistence(auth, persistence);
-    await signInWithEmailAndPassword(auth, email, password);
+    
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    
+    // Immediate fetch to prime state
+    const profile = await getUserProfile(credential.user.uid);
+    if (profile) {
+        setUser(profile);
+        localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
+    }
   };
 
   const logout = async () => {
     await signOut(auth);
     setUser(null);
+    localStorage.removeItem(CACHE_KEY);
   };
 
   const refreshSession = async () => {
     if (auth.currentUser) {
         const profile = await getUserProfile(auth.currentUser.uid);
-        setUser(profile);
+        if (profile) {
+            setUser(profile);
+            localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
+        }
     }
   };
 
