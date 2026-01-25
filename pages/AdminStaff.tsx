@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import { getCompanyStaff, updateUserProfile, removeUserFromCompany, getCompany } from '../services/api';
+import { getCompanyStaff, updateUserProfile, updateUserRateAndActiveShift, removeUserFromCompany, getCompany } from '../services/api';
 import { User, Company, UserRole } from '../types';
-import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus } from 'lucide-react';
+import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus, UserMinus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { TableRowSkeleton } from '../components/Skeleton';
 import { deleteField } from 'firebase/firestore';
@@ -58,22 +58,24 @@ export const AdminStaff = () => {
   };
 
   const handleSave = async () => {
-      if (!editingUser) return;
+      if (!editingUser || !user?.currentCompanyId) return;
       setSaving(true);
       try {
           const updates: any = {
               position: editPosition
           };
 
-          // Handle Custom Rate (Set or Unset)
-          if (editRate && editRate.trim() !== '' && !isNaN(parseFloat(editRate))) {
-              updates.customHourlyRate = parseFloat(editRate);
-          } else {
-              // If empty, remove the field to revert to company default
-              updates.customHourlyRate = deleteField();
-          }
+          let newRate: number | null = null;
 
-          await updateUserProfile(editingUser.id, updates);
+          // Handle Custom Rate Logic
+          if (editRate && editRate.trim() !== '' && !isNaN(parseFloat(editRate))) {
+              newRate = parseFloat(editRate);
+          } 
+          // If empty, newRate remains null, effectively deleting the custom rate
+
+          // Use the smart update function that handles active shifts
+          await updateUserRateAndActiveShift(editingUser.id, user.currentCompanyId, newRate, updates);
+          
           await loadData();
           setEditingUser(null);
       } catch (e) {
@@ -135,8 +137,27 @@ export const AdminStaff = () => {
       }
   };
 
+  const handleDemote = async () => {
+      if (!editingUser) return;
+      if (!confirm(`Are you sure you want to remove Admin rights from ${editingUser.name}? They will return to Staff level.`)) return;
+      
+      setSaving(true);
+      try {
+          await updateUserProfile(editingUser.id, { 
+              role: UserRole.STAFF 
+          });
+          await loadData();
+          setEditingUser(null);
+      } catch (e) {
+          console.error(e);
+          alert("Failed to demote user.");
+      } finally {
+          setSaving(false);
+      }
+  };
+
   const handleBulkUpdate = async () => {
-      if (!bulkOldRate || !bulkNewRate || !company) return;
+      if (!bulkOldRate || !bulkNewRate || !company || !user?.currentCompanyId) return;
       
       const oldR = parseFloat(bulkOldRate);
       const newR = parseFloat(bulkNewRate);
@@ -156,8 +177,9 @@ export const AdminStaff = () => {
 
       setSaving(true);
       try {
+          // Use the smart update for bulk actions too
           await Promise.all(affectedUsers.map(u => 
-             updateUserProfile(u.id, { customHourlyRate: newR })
+             updateUserRateAndActiveShift(u.id, user.currentCompanyId!, newR)
           ));
           await loadData();
           setIsBulkOpen(false);
@@ -316,13 +338,21 @@ export const AdminStaff = () => {
                                 <p className="text-sm font-medium text-slate-500">Employee</p>
                                 <p className="font-bold text-lg text-slate-900 dark:text-white">{editingUser.name}</p>
                             </div>
-                            {editingUser.role !== 'admin' && (
+                            {editingUser.role !== 'admin' ? (
                                 <button 
                                     onClick={handlePromote}
                                     className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 px-3 py-1.5 rounded-lg transition flex items-center space-x-1 border border-purple-200 dark:border-purple-500/20"
                                 >
                                     <ShieldCheck className="w-3 h-3" />
                                     <span>Make Admin</span>
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={handleDemote}
+                                    className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/50 px-3 py-1.5 rounded-lg transition flex items-center space-x-1 border border-amber-200 dark:border-amber-500/20"
+                                >
+                                    <UserMinus className="w-3 h-3" />
+                                    <span>Demote to Staff</span>
                                 </button>
                             )}
                         </div>

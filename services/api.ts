@@ -53,6 +53,48 @@ export const updateUserProfile = async (userId: string, updates: Partial<User>):
     await updateDoc(docRef, updates);
 };
 
+// SPECIAL: Update Rate and Active Shift
+export const updateUserRateAndActiveShift = async (userId: string, companyId: string, newRate: number | null, otherUpdates: Partial<User> = {}): Promise<void> => {
+    const batch = writeBatch(db);
+    const userRef = doc(db, USERS_REF, userId);
+
+    // 1. Prepare User Update
+    const userUpdates: any = { ...otherUpdates };
+    if (newRate !== null) {
+        userUpdates.customHourlyRate = newRate;
+    } else {
+        userUpdates.customHourlyRate = deleteField();
+    }
+    batch.update(userRef, userUpdates);
+
+    // 2. Determine Effective Rate for Active Shift
+    let effectiveRate = 0;
+    if (newRate !== null) {
+        effectiveRate = newRate;
+    } else {
+        // Fallback to company default if custom rate is removed
+        const company = await getCompany(companyId);
+        effectiveRate = company.settings.defaultHourlyRate || 0;
+    }
+
+    // 3. Find Active Shift
+    const q = query(
+        collection(db, SHIFTS_REF),
+        where("userId", "==", userId),
+        where("endTime", "==", null)
+    );
+    const snap = await getDocs(q);
+
+    // 4. Update Active Shift if exists
+    if (!snap.empty) {
+        const shiftDoc = snap.docs[0];
+        const shiftRef = doc(db, SHIFTS_REF, shiftDoc.id);
+        batch.update(shiftRef, { hourlyRate: effectiveRate });
+    }
+
+    await batch.commit();
+};
+
 export const sendHeartbeat = async (userId: string): Promise<void> => {
     // Lightweight update for online status
     const docRef = doc(db, USERS_REF, userId);
@@ -584,6 +626,7 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
             startTime: Date.now(),
             endTime: null,
             startMethod: method,
+            // Use Custom Rate if exists, else Company Default
             hourlyRate: user.customHourlyRate || company.settings.defaultHourlyRate || 15,
             ...rotaData 
         };
