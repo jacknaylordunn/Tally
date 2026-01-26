@@ -286,8 +286,6 @@ export const AdminSettings = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
-        {/* ... (Previous code remains, skipping to Payroll Section updates) ... */}
-        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column code remains unchanged */}
             <div className="space-y-6">
@@ -327,7 +325,7 @@ export const AdminSettings = () => {
             {/* Right Column: Settings Forms */}
             <div className="lg:col-span-2 space-y-6">
                 
-                {/* Identity & Appearance Sections (Unchanged, just rendering for context placement) */}
+                {/* Identity */}
                 <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
                     <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
                         <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><User className="w-5 h-5" /></div>
@@ -336,6 +334,88 @@ export const AdminSettings = () => {
                     <div className="space-y-4">
                         <div><label className="block text-sm font-medium mb-2">Company Name</label><input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" /></div>
                         <div><label className="block text-sm font-medium mb-2">Your Full Name</label><input type="text" value={personalName} onChange={(e) => setPersonalName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" /></div>
+                    </div>
+                </div>
+
+                {/* Branding & Appearance */}
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
+                            <Palette className="w-5 h-5" />
+                        </div>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Branding & Appearance</h3>
+                    </div>
+                    
+                    <div className="space-y-6">
+                        {/* Theme Toggle */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Interface Theme</span>
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setTheme('light')}
+                                    className={`p-2 rounded-md transition ${theme === 'light' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                                    title="Light Mode"
+                                >
+                                    <Sun className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setTheme('dark')}
+                                    className={`p-2 rounded-md transition ${theme === 'dark' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                                    title="Dark Mode"
+                                >
+                                    <Moon className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setTheme('system')}
+                                    className={`p-2 rounded-md transition ${theme === 'system' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                                    title="System Default"
+                                >
+                                    <Laptop className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Brand Color */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Brand Color</label>
+                            <div className="flex items-center space-x-3">
+                                <input 
+                                    type="color" 
+                                    value={primaryColor}
+                                    onChange={handleColorChange}
+                                    className="h-10 w-14 rounded cursor-pointer bg-transparent"
+                                />
+                                <input 
+                                    type="text" 
+                                    value={primaryColor} 
+                                    onChange={handleColorChange}
+                                    className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none uppercase font-mono" 
+                                />
+                            </div>
+                        </div>
+
+                        {/* Logo URL */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Logo URL</label>
+                            <div className="flex items-center space-x-3">
+                                <div className="relative flex-1">
+                                    <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                    <input 
+                                        type="url" 
+                                        value={logoUrl} 
+                                        onChange={(e) => setLogoUrl(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" 
+                                        placeholder="https://example.com/logo.png"
+                                    />
+                                </div>
+                                {logoUrl && (
+                                    <div className="h-10 w-10 bg-white rounded-lg border border-slate-200 p-1 flex items-center justify-center">
+                                        <img src={logoUrl} alt="Preview" className="max-h-full max-w-full object-contain" />
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">Direct link to image (PNG/JPG).</p>
+                        </div>
                     </div>
                 </div>
 

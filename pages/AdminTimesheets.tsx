@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { getShifts, updateShift, deleteShift, getCompany, getCompanyStaff, createManualShift } from '../services/api';
 import { Shift, Company, User } from '../types';
-import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet } from 'lucide-react';
+import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet, FileText, Table, Info } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadPayrollReport } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -22,8 +22,14 @@ export const AdminTimesheets = () => {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
-  // Export State
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  // Export Modal State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'matrix' | 'detailed' | 'grouped'>('matrix');
+  const [exportOptions, setExportOptions] = useState({
+      showTimes: true,
+      includeDeductions: false,
+      separateHoliday: false
+  });
 
   // Edit Modal State
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
@@ -52,6 +58,17 @@ export const AdminTimesheets = () => {
     setShifts(shiftsData);
     setCompany(companyData);
     setStaffList(staffData);
+    
+    // Initialize export defaults from settings
+    if (companyData) {
+        setExportOptions(prev => ({
+            ...prev,
+            showTimes: companyData.settings.exportShowShiftTimesWeekly !== false,
+            includeDeductions: !!companyData.settings.exportIncludeDeductions,
+            separateHoliday: !!companyData.settings.holidayPayEnabled
+        }));
+    }
+    
     setLoading(false);
   };
 
@@ -94,7 +111,19 @@ export const AdminTimesheets = () => {
       });
   };
 
-  const filteredShifts = getFilteredShifts();
+  const filteredShifts = useMemo(() => getFilteredShifts(), [shifts, dateRange, customStart, customEnd, searchTerm]);
+
+  // Derived Export Label
+  const getExportRangeLabel = () => {
+      if (dateRange === 'today') return 'Today';
+      if (dateRange !== 'custom') return `Last ${dateRange} Days`;
+      if (customStart) {
+          const s = new Date(customStart).toLocaleDateString();
+          const e = customEnd ? new Date(customEnd).toLocaleDateString() : 'Now';
+          return `${s} - ${e}`;
+      }
+      return 'All Time';
+  };
 
   const calculateDuration = (start: number, end: number | null) => {
       if (!end) return 'Active';
@@ -161,43 +190,21 @@ export const AdminTimesheets = () => {
       return 'text-emerald-600 dark:text-emerald-400';
   };
 
-  const handleExport = (type: 'detailed' | 'grouped' | 'matrix') => {
-    let rangeLabel = 'Custom Range';
-    let daysCount = 0;
-
-    if (dateRange === 'today') {
-        rangeLabel = 'Today';
-        daysCount = 1;
-    } else if (dateRange !== 'custom') {
-        daysCount = parseInt(dateRange);
-        rangeLabel = `Last ${dateRange} Days`;
-    } else if (customStart) {
-        const start = new Date(customStart).getTime();
-        const end = customEnd ? new Date(customEnd).getTime() : Date.now();
-        daysCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-        rangeLabel = `${new Date(customStart).toLocaleString()} - ${customEnd ? new Date(customEnd).toLocaleString() : 'Now'}`;
-    }
-
-    // Determine Matrix Settings
-    const isWeekly = daysCount <= 7;
-    const showTimes = isWeekly 
-        ? (company?.settings.exportShowShiftTimesWeekly !== false) 
-        : (company?.settings.exportShowShiftTimesMonthly || false);
-
+  const handleGenerateExport = () => {
     downloadPayrollReport(filteredShifts, {
-        filename: 'tally_timesheet', 
+        filename: `tally_payroll_${exportFormat}`, 
         currency,
-        dateRangeLabel: rangeLabel,
-        groupByStaff: type === 'grouped',
-        matrixView: type === 'matrix',
-        showTimesInMatrix: showTimes,
-        includeDeductions: company?.settings.exportIncludeDeductions,
-        holidayPayEnabled: company?.settings.holidayPayEnabled,
+        dateRangeLabel: getExportRangeLabel(),
+        groupByStaff: exportFormat === 'grouped',
+        matrixView: exportFormat === 'matrix',
+        showTimesInMatrix: exportOptions.showTimes,
+        includeDeductions: exportOptions.includeDeductions,
+        holidayPayEnabled: exportOptions.separateHoliday,
         holidayPayRate: company?.settings.holidayPayRate,
         companyName: company?.name,
         brandColor: company?.settings.primaryColor
     });
-    setIsExportMenuOpen(false);
+    setIsExportModalOpen(false);
   };
 
   // ... (Edit/Delete/Add Shift Handlers unchanged)
@@ -269,31 +276,13 @@ export const AdminTimesheets = () => {
                     <Plus className="w-4 h-4" /><span>Add Shift</span>
                  </button>
                  
-                 <div className="relative">
-                     <button 
-                        id="export-timesheets-btn"
-                        onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                        className="glass-panel text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-lg flex items-center space-x-2 font-medium hover:bg-slate-100 dark:hover:bg-white/10 transition"
-                     >
-                        <Download className="w-4 h-4" />
-                        <span>Export</span>
-                        <ChevronDown className="w-4 h-4" />
-                     </button>
-                     
-                     {isExportMenuOpen && (
-                         <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-white/10 z-20 overflow-hidden animate-fade-in">
-                             <button onClick={() => handleExport('matrix')} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium flex items-center gap-2">
-                                 <FileSpreadsheet className="w-4 h-4 text-green-600" /> Timesheet Matrix
-                             </button>
-                             <button onClick={() => handleExport('detailed')} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium border-t border-slate-200 dark:border-white/5">
-                                 Detailed List (CSV)
-                             </button>
-                             <button onClick={() => handleExport('grouped')} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium border-t border-slate-200 dark:border-white/5">
-                                 Staff Summary (CSV)
-                             </button>
-                         </div>
-                     )}
-                 </div>
+                 <button 
+                    onClick={() => setIsExportModalOpen(true)}
+                    className="glass-panel text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-lg flex items-center space-x-2 font-medium hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                 >
+                    <Download className="w-4 h-4" />
+                    <span>Export</span>
+                 </button>
             </div>
         </header>
 
@@ -489,6 +478,101 @@ export const AdminTimesheets = () => {
             </div>
         </div>
 
+        {/* --- EXPORT MODAL --- */}
+        {isExportModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Export Data</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Download report for {filteredShifts.length} records</p>
+                        </div>
+                        <button onClick={() => setIsExportModalOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white transition"><X className="w-6 h-6" /></button>
+                    </div>
+
+                    {/* Info Warning for Date Range */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl flex items-start gap-3 mb-6">
+                        <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                            <span className="font-bold text-blue-800 dark:text-blue-200 block mb-1">Current Range: {getExportRangeLabel()}</span>
+                            <p className="text-blue-700 dark:text-blue-300 opacity-90">
+                                The export includes only data currently visible in the table. To download a specific month or year, close this and adjust the date filters on the page.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Format Selection */}
+                    <div className="space-y-4">
+                        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Format</label>
+                        <div className="grid grid-cols-3 gap-3">
+                            <button 
+                                onClick={() => setExportFormat('matrix')}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'matrix' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                            >
+                                <FileSpreadsheet className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold text-center">Payroll Matrix</span>
+                            </button>
+                            <button 
+                                onClick={() => setExportFormat('detailed')}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'detailed' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                            >
+                                <FileText className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold text-center">Detailed List</span>
+                            </button>
+                            <button 
+                                onClick={() => setExportFormat('grouped')}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'grouped' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                            >
+                                <Table className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold text-center">Staff Summary</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Matrix Options */}
+                    {exportFormat === 'matrix' && (
+                        <div className="mt-6 space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5 animate-fade-in">
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">Options</label>
+                            
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Daily Times</span>
+                                <input type="checkbox" checked={exportOptions.showTimes} onChange={e => setExportOptions({...exportOptions, showTimes: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                            </label>
+                            
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Add Deduction Columns</span>
+                                    <span className="text-xs text-slate-500">Includes empty columns for Tax, NI, Net Pay</span>
+                                </div>
+                                <input type="checkbox" checked={exportOptions.includeDeductions} onChange={e => setExportOptions({...exportOptions, includeDeductions: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                            </label>
+
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Calculate Holiday Pay</span>
+                                <input type="checkbox" checked={exportOptions.separateHoliday} onChange={e => setExportOptions({...exportOptions, separateHoliday: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                            </label>
+                        </div>
+                    )}
+
+                    <div className="mt-8 flex gap-3">
+                        <button 
+                            onClick={() => setIsExportModalOpen(false)}
+                            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleGenerateExport}
+                            className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <Download className="w-5 h-5" />
+                            <span>Download Report</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* ... (Edit Modal and Add Modal code remains unchanged) ... */}
         {editingShift && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -533,7 +617,7 @@ export const AdminTimesheets = () => {
                     </div>
 
                     <div className="flex gap-3">
-                         <button onClick={() => setEditingShift(null)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition">Cancel</button>
+                         <button onClick={() => setEditingShift(null)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition">Cancel</button>
                         <button onClick={handleSaveEdit} disabled={saving} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2">
                             <Save className="w-4 h-4" />
                             <span>{saving ? 'Saving...' : 'Save Changes'}</span>

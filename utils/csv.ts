@@ -230,7 +230,8 @@ export const downloadPayrollReport = (
     // --- GROUPED SUMMARY VIEW ---
     csvRows.push(['REPORT SUMMARY']);
     csvRows.push(['Company', companyName]);
-    csvRows.push(['Range', dateRangeLabel]);
+    csvRows.push(['Period', dateRangeLabel]);
+    csvRows.push(['Generated', new Date().toLocaleString()]);
     csvRows.push([]);
 
     const shiftsByUser: Record<string, Shift[]> = {};
@@ -328,7 +329,8 @@ export const downloadPayrollReport = (
     // --- DETAILED VIEW ---
     csvRows.push(['REPORT SUMMARY']);
     csvRows.push(['Company', companyName]);
-    csvRows.push(['Range', dateRangeLabel]);
+    csvRows.push(['Period', dateRangeLabel]);
+    csvRows.push(['Generated', new Date().toLocaleString()]);
     csvRows.push([]);
 
     const headers = [

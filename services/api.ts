@@ -551,7 +551,7 @@ export const verifyToken = async (
         const timestamp = parseInt(token);
         const now = Date.now();
         // Reduced from 60000 (1 min) to 20000 (20 sec) to prevent photo replay attacks
-        if (isNaN(timestamp) || now - timestamp > 15000 || now - timestamp < -15000) {
+        if (isNaN(timestamp) || now - timestamp > 17500 || now - timestamp < -17500) {
             return { success: false, message: 'QR Code Expired. Please scan again.' };
         }
         return await performClockInOut(user, company, 'dynamic_qr');
