@@ -25,7 +25,7 @@ const escapeCSV = (str: any) => {
 
 // Helper to format date as DD.MM.YY for compact rate history
 const formatDateShort = (d: Date) => {
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '.');
 };
 
 // Logic to generate strings like "12.00 (until 12.01.26) -> 12.65 (from 12.01.26)"

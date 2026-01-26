@@ -286,10 +286,8 @@ export const AdminTimesheets = () => {
             </div>
         </header>
 
-        {/* ... (Rest of Filters and Table remains unchanged) ... */}
         {/* Filters Bar */}
         <div className="glass-panel p-4 rounded-xl shadow-sm border border-slate-200 dark:border-white/10 flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
-            {/* ... Date Picker & Search Logic from previous version ... */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -507,21 +505,21 @@ export const AdminTimesheets = () => {
                         <div className="grid grid-cols-3 gap-3">
                             <button 
                                 onClick={() => setExportFormat('matrix')}
-                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'matrix' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'matrix' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
                             >
                                 <FileSpreadsheet className="w-6 h-6 mb-2" />
                                 <span className="text-xs font-bold text-center">Payroll Matrix</span>
                             </button>
                             <button 
                                 onClick={() => setExportFormat('detailed')}
-                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'detailed' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'detailed' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
                             >
                                 <FileText className="w-6 h-6 mb-2" />
                                 <span className="text-xs font-bold text-center">Detailed List</span>
                             </button>
                             <button 
                                 onClick={() => setExportFormat('grouped')}
-                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'grouped' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'grouped' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
                             >
                                 <Table className="w-6 h-6 mb-2" />
                                 <span className="text-xs font-bold text-center">Staff Summary</span>

@@ -550,7 +550,7 @@ export const verifyToken = async (
     if (type === 'kiosk') {
         const timestamp = parseInt(token);
         const now = Date.now();
-        // Reduced from 60000 (1 min) to 20000 (20 sec) to prevent photo replay attacks
+        // Reduced from 60000 (1 min) to 17500 (17.5 sec) to prevent photo replay attacks
         if (isNaN(timestamp) || now - timestamp > 17500 || now - timestamp < -17500) {
             return { success: false, message: 'QR Code Expired. Please scan again.' };
         }
