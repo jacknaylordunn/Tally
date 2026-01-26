@@ -110,7 +110,11 @@ export const downloadPayrollReport = (
       }
 
       const daysCount = dates.length;
-      const colsPerDay = showTimesInMatrix ? 2 : 1;
+      
+      // Determine columns per day
+      // If showing times: IN, OUT, HRS (3 cols)
+      // If not showing times: HRS (1 col)
+      const colsPerDay = showTimesInMatrix ? 3 : 1;
       
       // 2. Data Grouping
       const staffMap: Record<string, { name: string, shifts: Shift[] }> = {};
@@ -122,10 +126,15 @@ export const downloadPayrollReport = (
       // 3. Construct HTML Table
       let tableRows = '';
 
+      // Define Summary Column Count
+      // Default: Total Hrs, Rate, Gross (3 cols)
+      // Holiday Enabled: Total Hrs, Rate, Base, Holiday, Total (5 cols)
+      const summaryColCount = holidayPayEnabled ? 5 : 3;
+
       // --- HEADER ROW 1: Title ---
-      // Colspan = Name (1) + Days (totalDayCols) + Summary (3) + Deductions (4 optional)
+      // Colspan = Name (1) + Days (totalDayCols) + Summary (summaryColCount) + Deductions (4 optional)
       const totalDayCols = daysCount * colsPerDay;
-      const totalWidth = 1 + totalDayCols + 3 + (includeDeductions ? 4 : 0);
+      const totalWidth = 1 + totalDayCols + summaryColCount + (includeDeductions ? 4 : 0);
       
       tableRows += `
         <tr>
@@ -151,7 +160,7 @@ export const downloadPayrollReport = (
                 const bg = isWeekend ? '#fee2e2' : '#f3f4f6';
                 return `<td colspan="${colsPerDay}" style="border:1px solid #000; text-align:center; background-color:${bg};">${dayName}</td>`;
             }).join('')}
-            <td colspan="3" style="border:1px solid #000; text-align:center; background-color:#9ca3af; color:white;">SUMMARY</td>
+            <td colspan="${summaryColCount}" style="border:1px solid #000; text-align:center; background-color:#9ca3af; color:white;">SUMMARY</td>
             ${includeDeductions ? `<td colspan="4" style="border:1px solid #000; text-align:center; background-color:#fca5a5;">OFFICE USE</td>` : ''}
         </tr>
       `;
@@ -165,6 +174,7 @@ export const downloadPayrollReport = (
           if (showTimesInMatrix) {
               tableRows += `<td style="border:1px solid #ccc; width:60px; background-color:${bg};">IN</td>`;
               tableRows += `<td style="border:1px solid #ccc; width:60px; background-color:${bg};">OUT</td>`;
+              tableRows += `<td style="border:1px solid #ccc; width:50px; background-color:${bg}; font-weight:bold;">HRS</td>`;
           } else {
               tableRows += `<td style="border:1px solid #ccc; background-color:${bg};">HRS</td>`;
           }
@@ -173,7 +183,14 @@ export const downloadPayrollReport = (
       // Summary Headers
       tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">TOTAL HRS</td>`;
       tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">RATE (${currency})</td>`;
-      tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">GROSS (${currency})</td>`;
+      
+      if (holidayPayEnabled) {
+          tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">BASE (${currency})</td>`;
+          tableRows += `<td style="border:1px solid #000; background-color:#e0e7ff;">HOLIDAY (${holidayPayRate}%)</td>`;
+          tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">TOTAL (${currency})</td>`;
+      } else {
+          tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">GROSS (${currency})</td>`;
+      }
       
       if (includeDeductions) {
           tableRows += `<td style="border:1px solid #000; background-color:#fff1f2;">TAX</td>`;
@@ -186,7 +203,7 @@ export const downloadPayrollReport = (
       // 4. Data Rows
       Object.values(staffMap).forEach((staff, index) => {
           let totalHours = 0;
-          let totalPay = 0;
+          let totalBasePay = 0;
           let dayCells = '';
           const rowBg = index % 2 === 0 ? '#ffffff' : '#fafafa';
 
@@ -210,7 +227,7 @@ export const downloadPayrollReport = (
                           const h = (s.endTime - s.startTime) / 3600000;
                           dayHours += h;
                           totalHours += h;
-                          totalPay += (h * (s.hourlyRate || 0));
+                          totalBasePay += (h * (s.hourlyRate || 0));
                           
                           if (showTimesInMatrix) {
                               ins.push(new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
@@ -224,6 +241,7 @@ export const downloadPayrollReport = (
                       const outStr = outs.join('\n');
                       dayCells += `<td style="border:1px solid #ddd; text-align:center; white-space:pre-wrap; font-size:11px; background-color:${cellBg}; vertical-align:middle;">${inStr}</td>`;
                       dayCells += `<td style="border:1px solid #ddd; text-align:center; white-space:pre-wrap; font-size:11px; background-color:${cellBg}; vertical-align:middle;">${outStr}</td>`;
+                      dayCells += `<td style="border:1px solid #ddd; text-align:center; font-weight:bold; font-size:11px; background-color:${cellBg}; vertical-align:middle;">${dayHours > 0 ? dayHours.toFixed(2) : ''}</td>`;
                   } else {
                       dayCells += `<td style="border:1px solid #ddd; text-align:center; background-color:${cellBg}; font-weight:bold; vertical-align:middle;">${dayHours.toFixed(2)}</td>`;
                   }
@@ -231,7 +249,9 @@ export const downloadPayrollReport = (
               } else {
                   // Empty Day
                   if (showTimesInMatrix) {
-                      dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td><td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
+                      dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
+                      dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
+                      dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
                   } else {
                       dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
                   }
@@ -241,9 +261,13 @@ export const downloadPayrollReport = (
           // Calculate Rate String using new logic
           const rateDisplay = formatRateHistory(staff.shifts);
 
-          // Holiday Pay Calc
+          // Calculate Finals
+          let finalHolidayPay = 0;
+          let finalTotalPay = totalBasePay;
+
           if (holidayPayEnabled) {
-              totalPay += (totalPay * (holidayPayRate / 100));
+              finalHolidayPay = totalBasePay * (holidayPayRate / 100);
+              finalTotalPay = totalBasePay + finalHolidayPay;
           }
 
           tableRows += `
@@ -252,7 +276,15 @@ export const downloadPayrollReport = (
                 ${dayCells}
                 <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold; text-align:center; vertical-align:middle;">${totalHours.toFixed(2)}</td>
                 <td style="border:1px solid #ddd; background-color:#f3f4f6; text-align:center; vertical-align:middle; white-space:pre-wrap; font-size:11px;">${rateDisplay}</td>
-                <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold; text-align:right; padding-right:5px; vertical-align:middle;">${totalPay.toFixed(2)}</td>
+                
+                ${holidayPayEnabled ? `
+                    <td style="border:1px solid #ddd; background-color:#f3f4f6; text-align:right; padding-right:5px; vertical-align:middle;">${totalBasePay.toFixed(2)}</td>
+                    <td style="border:1px solid #ddd; background-color:#e0e7ff; text-align:right; padding-right:5px; vertical-align:middle; font-weight:bold;">${finalHolidayPay.toFixed(2)}</td>
+                    <td style="border:1px solid #ddd; background-color:#f3f4f6; text-align:right; padding-right:5px; vertical-align:middle; font-weight:bold;">${finalTotalPay.toFixed(2)}</td>
+                ` : `
+                    <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold; text-align:right; padding-right:5px; vertical-align:middle;">${totalBasePay.toFixed(2)}</td>
+                `}
+
                 ${includeDeductions ? `
                     <td style="border:1px solid #ddd;"></td>
                     <td style="border:1px solid #ddd;"></td>
