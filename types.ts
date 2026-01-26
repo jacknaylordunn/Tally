@@ -34,6 +34,9 @@ export interface Company {
     defaultHourlyRate?: number;
     currency?: string;
     showStaffEarnings?: boolean; // New: Toggle staff seeing their pay
+    // Payroll Export Settings
+    exportShowShiftTimesWeekly?: boolean;
+    exportShowShiftTimesMonthly?: boolean;
     // Holiday Pay
     holidayPayEnabled?: boolean;
     holidayPayRate?: number; // Percentage (e.g. 12.07)

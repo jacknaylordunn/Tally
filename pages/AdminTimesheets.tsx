@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getShifts, updateShift, deleteShift, getCompany, getCompanyStaff, createManualShift } from '../services/api';
 import { Shift, Company, User } from '../types';
-import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog } from 'lucide-react';
+import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadShiftsCSV } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -110,10 +110,9 @@ export const AdminTimesheets = () => {
       return `${currency}${(hours * rate).toFixed(2)}`;
   };
 
-  // --- Audit Logic ---
+  // ... (Audit Logic & Color functions remain unchanged)
   const getAuditFlags = (shift: Shift) => {
       if (!company) return [];
-      
       const flags = [];
       const auditLateIn = company.settings.auditLateInThreshold || 15;
       const auditEarlyIn = company.settings.auditEarlyInThreshold || 30;
@@ -122,7 +121,6 @@ export const AdminTimesheets = () => {
       const auditShortShift = company.settings.auditShortShiftThreshold || 5;
       const auditLongShift = company.settings.auditLongShiftThreshold || 14;
 
-      // 1. Check Late In / Early In
       if (shift.scheduledStartTime) {
           const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
           if (diffMins > auditLateIn) {
@@ -131,8 +129,6 @@ export const AdminTimesheets = () => {
               flags.push({ type: 'amber', label: `Early In (${Math.abs(Math.round(diffMins))}m)` });
           }
       }
-
-      // 2. Check Early Out / Late Out
       if (shift.scheduledEndTime && shift.endTime) {
           const diffMins = (shift.endTime - shift.scheduledEndTime) / 60000;
           if (diffMins < -auditEarlyOut) {
@@ -141,96 +137,73 @@ export const AdminTimesheets = () => {
               flags.push({ type: 'amber', label: `Late Out (+${Math.round(diffMins)}m)` });
           }
       }
-
-      // 3. Short Shift (Accidental)
       if (shift.endTime) {
           const durationMins = (shift.endTime - shift.startTime) / 60000;
-          if (durationMins < auditShortShift) {
-              flags.push({ type: 'red', label: 'Short Shift' });
-          }
-          
-          // 4. Long Shift (Forgotten)
-          const durationHours = durationMins / 60;
-          if (durationHours > auditLongShift) {
-              flags.push({ type: 'red', label: `Over ${auditLongShift}h` });
-          }
+          if (durationMins < auditShortShift) flags.push({ type: 'red', label: 'Short Shift' });
+          if ((durationMins / 60) > auditLongShift) flags.push({ type: 'red', label: `Over ${auditLongShift}h` });
       }
-
       return flags;
   };
 
   const getTimeInColorClass = (shift: Shift) => {
-      if (!shift.scheduledStartTime) return 'text-slate-600 dark:text-slate-300'; // Manual / Unmatched
-
-      const auditLateIn = company?.settings.auditLateInThreshold || 15;
-      const auditEarlyIn = company?.settings.auditEarlyInThreshold || 30;
+      if (!shift.scheduledStartTime) return 'text-slate-600 dark:text-slate-300';
       const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
-
-      if (diffMins > auditLateIn) {
-          // Late In (Red)
-          return 'text-red-600 dark:text-red-400 font-bold';
-      } else if (diffMins < -auditEarlyIn) {
-          // Too Early (Amber)
-          return 'text-amber-600 dark:text-amber-400 font-bold';
-      } else {
-          // On Time (Green) - matches configured thresholds
-          return 'text-emerald-600 dark:text-emerald-400';
-      }
+      if (diffMins > (company?.settings.auditLateInThreshold || 15)) return 'text-red-600 dark:text-red-400 font-bold';
+      else if (diffMins < -(company?.settings.auditEarlyInThreshold || 30)) return 'text-amber-600 dark:text-amber-400 font-bold';
+      else return 'text-emerald-600 dark:text-emerald-400';
   };
 
   const getTimeOutColorClass = (shift: Shift) => {
       if (!shift.scheduledEndTime || !shift.endTime) return 'text-slate-400';
-
-      const auditEarlyOut = company?.settings.auditEarlyOutThreshold || 15;
-      const auditLateOut = company?.settings.auditLateOutThreshold || 15;
       const diffMins = (shift.endTime - shift.scheduledEndTime) / 60000;
-
-      // Early Out (Negative diff)
-      if (diffMins < -auditEarlyOut) {
-          // Matches EARLY OUT flag (Amber)
-          return 'text-amber-600 dark:text-amber-400 font-bold';
-      }
-
-      // Late Out (Positive diff)
-      if (diffMins > auditLateOut) {
-          // Matches LATE OUT flag (Amber)
-          return 'text-amber-600 dark:text-amber-400 font-bold';
-      }
-      
-      // On time (within configured thresholds)
+      if (diffMins < -(company?.settings.auditEarlyOutThreshold || 15)) return 'text-amber-600 dark:text-amber-400 font-bold';
+      if (diffMins > (company?.settings.auditLateOutThreshold || 15)) return 'text-amber-600 dark:text-amber-400 font-bold';
       return 'text-emerald-600 dark:text-emerald-400';
   };
 
-  const handleExport = (groupByStaff: boolean) => {
+  const handleExport = (type: 'detailed' | 'grouped' | 'matrix') => {
     let rangeLabel = 'Custom Range';
+    let daysCount = 0;
+
     if (dateRange === 'today') {
         rangeLabel = 'Today';
+        daysCount = 1;
     } else if (dateRange !== 'custom') {
+        daysCount = parseInt(dateRange);
         rangeLabel = `Last ${dateRange} Days`;
     } else if (customStart) {
+        const start = new Date(customStart).getTime();
+        const end = customEnd ? new Date(customEnd).getTime() : Date.now();
+        daysCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
         rangeLabel = `${new Date(customStart).toLocaleString()} - ${customEnd ? new Date(customEnd).toLocaleString() : 'Now'}`;
     }
+
+    // Determine Matrix Settings
+    const isWeekly = daysCount <= 7;
+    const showTimes = isWeekly 
+        ? (company?.settings.exportShowShiftTimesWeekly !== false) 
+        : (company?.settings.exportShowShiftTimesMonthly || false);
 
     downloadShiftsCSV(filteredShifts, {
         filename: 'tally_timesheet', 
         currency,
         dateRangeLabel: rangeLabel,
-        groupByStaff,
+        groupByStaff: type === 'grouped',
+        matrixView: type === 'matrix',
+        showTimesInMatrix: showTimes,
         holidayPayEnabled: company?.settings.holidayPayEnabled,
         holidayPayRate: company?.settings.holidayPayRate
     });
     setIsExportMenuOpen(false);
   };
 
+  // ... (Edit/Delete/Add Shift Handlers unchanged)
   const handleDelete = async (shiftId: string) => {
       if (window.confirm("Are you sure you want to delete this shift entry? This cannot be undone.")) {
           try {
               await deleteShift(shiftId);
               setShifts(prev => prev.filter(s => s.id !== shiftId));
-          } catch (e) {
-              console.error(e);
-              alert("Failed to delete shift.");
-          }
+          } catch (e) { console.error(e); alert("Failed to delete shift."); }
       }
   };
 
@@ -249,63 +222,36 @@ export const AdminTimesheets = () => {
   const handleSaveEdit = async () => {
       if (!editingShift || !user) return;
       setSaving(true);
-      
       const startTs = new Date(editStartTime).getTime();
       const endTs = editEndTime ? new Date(editEndTime).getTime() : null;
-
       try {
           await updateShift(editingShift.id, {
               startTime: startTs,
               endTime: endTs,
-              startMethod: 'manual_entry', // Override method to manual on edit
+              startMethod: 'manual_entry', 
               editedByName: user.name,
               editedById: user.id,
               editedAt: Date.now()
           });
           setEditingShift(null);
           loadData(); 
-      } catch (e) {
-          console.error(e);
-          alert("Failed to update shift");
-      } finally {
-          setSaving(false);
-      }
+      } catch (e) { console.error(e); alert("Failed to update shift"); } finally { setSaving(false); }
   };
 
   const handleAddShift = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user?.currentCompanyId || !newShiftUser || !newShiftStart || !newShiftEnd) return;
-      
       setSaving(true);
       const selectedStaff = staffList.find(u => u.id === newShiftUser);
       if (!selectedStaff) return;
-
       const startTs = new Date(newShiftStart).getTime();
       const endTs = new Date(newShiftEnd).getTime();
       const rate = selectedStaff.customHourlyRate || company?.settings.defaultHourlyRate || 0;
-
       try {
-          await createManualShift(
-              user.currentCompanyId,
-              selectedStaff.id,
-              selectedStaff.name,
-              startTs,
-              endTs,
-              rate,
-              user.name, // Creator Name
-              user.id    // Creator ID
-          );
-          setIsAddModalOpen(false);
-          setNewShiftUser('');
-          setNewShiftStart('');
-          setNewShiftEnd('');
+          await createManualShift(user.currentCompanyId, selectedStaff.id, selectedStaff.name, startTs, endTs, rate, user.name, user.id);
+          setIsAddModalOpen(false); setNewShiftUser(''); setNewShiftStart(''); setNewShiftEnd('');
           loadData();
-      } catch (e) {
-          console.error(e);
-          alert("Failed to create shift");
-      } finally {
-          setSaving(false);
-      }
+      } catch (e) { console.error(e); alert("Failed to create shift"); } finally { setSaving(false); }
   };
 
   return (
@@ -316,12 +262,8 @@ export const AdminTimesheets = () => {
                 <p className="text-slate-500 dark:text-slate-400">Review and manage staff hours.</p>
             </div>
             <div className="flex space-x-3">
-                 <button 
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition flex items-center space-x-2"
-                 >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Shift</span>
+                 <button onClick={() => setIsAddModalOpen(true)} className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition flex items-center space-x-2">
+                    <Plus className="w-4 h-4" /><span>Add Shift</span>
                  </button>
                  
                  <div className="relative">
@@ -336,18 +278,15 @@ export const AdminTimesheets = () => {
                      </button>
                      
                      {isExportMenuOpen && (
-                         <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-white/10 z-20 overflow-hidden animate-fade-in">
-                             <button 
-                                onClick={() => handleExport(false)} 
-                                className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium"
-                             >
-                                 Detailed CSV
+                         <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-white/10 z-20 overflow-hidden animate-fade-in">
+                             <button onClick={() => handleExport('matrix')} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium flex items-center gap-2">
+                                 <FileSpreadsheet className="w-4 h-4 text-green-600" /> Timesheet Matrix
                              </button>
-                             <button 
-                                onClick={() => handleExport(true)} 
-                                className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium border-t border-slate-200 dark:border-white/5"
-                             >
-                                 Grouped by Staff
+                             <button onClick={() => handleExport('detailed')} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium border-t border-slate-200 dark:border-white/5">
+                                 Detailed List (CSV)
+                             </button>
+                             <button onClick={() => handleExport('grouped')} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-medium border-t border-slate-200 dark:border-white/5">
+                                 Staff Summary (CSV)
                              </button>
                          </div>
                      )}
@@ -355,8 +294,10 @@ export const AdminTimesheets = () => {
             </div>
         </header>
 
+        {/* ... (Rest of Filters and Table remains unchanged) ... */}
         {/* Filters Bar */}
         <div className="glass-panel p-4 rounded-xl shadow-sm border border-slate-200 dark:border-white/10 flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
+            {/* ... Date Picker & Search Logic from previous version ... */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -440,7 +381,6 @@ export const AdminTimesheets = () => {
                                     <td className="px-6 py-4">
                                         <div className="flex items-center space-x-2">
                                             <span>{new Date(shift.startTime).toLocaleDateString()}</span>
-                                            {/* Visual Link for Rota Integration */}
                                             {shift.scheduleShiftId && (
                                                 <div className="group/tooltip relative">
                                                     <CalendarCheck className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 cursor-help" />
@@ -546,7 +486,7 @@ export const AdminTimesheets = () => {
             </div>
         </div>
 
-        {/* Edit Modal */}
+        {/* ... (Edit Modal and Add Modal code remains unchanged) ... */}
         {editingShift && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
@@ -590,17 +530,8 @@ export const AdminTimesheets = () => {
                     </div>
 
                     <div className="flex gap-3">
-                         <button 
-                            onClick={() => setEditingShift(null)}
-                            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            onClick={handleSaveEdit}
-                            disabled={saving}
-                            className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2"
-                        >
+                         <button onClick={() => setEditingShift(null)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition">Cancel</button>
+                        <button onClick={handleSaveEdit} disabled={saving} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2">
                             <Save className="w-4 h-4" />
                             <span>{saving ? 'Saving...' : 'Save Changes'}</span>
                         </button>
@@ -609,72 +540,29 @@ export const AdminTimesheets = () => {
             </div>
         )}
 
-        {/* Add Shift Modal */}
+        {/* Add Shift Modal (Unchanged) */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
                      <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Add Timesheet Entry</h2>
-                        <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
-                            <X className="w-6 h-6" />
-                        </button>
+                        <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="w-6 h-6" /></button>
                     </div>
-
                     <form onSubmit={handleAddShift} className="space-y-4 mb-8">
                         <div>
                             <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Select Staff</label>
-                            <select 
-                                required
-                                value={newShiftUser} 
-                                onChange={(e) => setNewShiftUser(e.target.value)}
-                                className="w-full px-3 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                            >
+                            <select required value={newShiftUser} onChange={(e) => setNewShiftUser(e.target.value)} className="w-full px-3 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                                 <option value="">Select an employee...</option>
-                                {staffList.map(u => (
-                                    <option key={u.id} value={u.id}>{u.name}</option>
-                                ))}
+                                {staffList.map(u => (<option key={u.id} value={u.id}>{u.name}</option>))}
                             </select>
                         </div>
-                        
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Start Time</label>
-                                <input 
-                                    type="datetime-local"
-                                    required
-                                    value={newShiftStart}
-                                    onChange={(e) => setNewShiftStart(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">End Time</label>
-                                <input 
-                                    type="datetime-local"
-                                    required
-                                    value={newShiftEnd}
-                                    onChange={(e) => setNewShiftEnd(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
-                                />
-                            </div>
+                            <div><label className="block text-xs font-bold uppercase text-slate-500 mb-1">Start Time</label><input type="datetime-local" required value={newShiftStart} onChange={(e) => setNewShiftStart(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm" /></div>
+                            <div><label className="block text-xs font-bold uppercase text-slate-500 mb-1">End Time</label><input type="datetime-local" required value={newShiftEnd} onChange={(e) => setNewShiftEnd(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm" /></div>
                         </div>
-                        
                         <div className="flex gap-3 pt-4">
-                             <button 
-                                type="button"
-                                onClick={() => setIsAddModalOpen(false)}
-                                className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                type="submit"
-                                disabled={saving}
-                                className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2"
-                            >
-                                <CheckCircle className="w-4 h-4" />
-                                <span>{saving ? 'Creating...' : 'Create Entry'}</span>
-                            </button>
+                             <button type="button" onClick={() => setIsAddModalOpen(false)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition">Cancel</button>
+                            <button type="submit" disabled={saving} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2"><CheckCircle className="w-4 h-4" /><span>{saving ? 'Creating...' : 'Create Entry'}</span></button>
                         </div>
                     </form>
                 </div>

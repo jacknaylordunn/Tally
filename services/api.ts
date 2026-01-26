@@ -78,9 +78,11 @@ export const updateUserRateAndActiveShift = async (userId: string, companyId: st
     }
 
     // 3. Find Active Shift
+    // IMPORTANT: Include companyId to satisfy Firestore 'isCompanyAdmin' security rules
     const q = query(
         collection(db, SHIFTS_REF),
         where("userId", "==", userId),
+        where("companyId", "==", companyId),
         where("endTime", "==", null)
     );
     const snap = await getDocs(q);
