@@ -23,6 +23,55 @@ const escapeCSV = (str: any) => {
     return cellStr;
 };
 
+// Helper to format date as DD.MM.YY for compact rate history
+const formatDateShort = (d: Date) => {
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+};
+
+// Logic to generate strings like "12.00 (until 12.01.26) -> 12.65 (from 12.01.26)"
+const formatRateHistory = (shifts: Shift[]): string => {
+    if (shifts.length === 0) return "0.00";
+    
+    const sorted = [...shifts].sort((a, b) => a.startTime - b.startTime);
+    
+    const segments: { rate: number, startDate: Date, endDate: Date }[] = [];
+    let currentSegment = { 
+        rate: sorted[0].hourlyRate || 0, 
+        startDate: new Date(sorted[0].startTime),
+        endDate: new Date(sorted[0].startTime)
+    };
+    
+    for (let i = 1; i < sorted.length; i++) {
+        const s = sorted[i];
+        const rate = s.hourlyRate || 0;
+        // Check if rate changed significantly
+        if (Math.abs(rate - currentSegment.rate) < 0.01) {
+            currentSegment.endDate = new Date(s.startTime);
+        } else {
+            segments.push(currentSegment);
+            currentSegment = {
+                rate: rate,
+                startDate: new Date(s.startTime),
+                endDate: new Date(s.startTime)
+            };
+        }
+    }
+    segments.push(currentSegment);
+    
+    if (segments.length === 1) {
+        return segments[0].rate.toFixed(2);
+    }
+    
+    return segments.map((seg, index) => {
+        const rateStr = seg.rate.toFixed(2);
+        if (index === 0) {
+            return `${rateStr} (until ${formatDateShort(seg.endDate)})`;
+        } else {
+            return `${rateStr} (from ${formatDateShort(seg.startDate)})`;
+        }
+    }).join(' -> ');
+};
+
 export const downloadPayrollReport = (
   shifts: Shift[], 
   options: ExportOptions
@@ -61,7 +110,8 @@ export const downloadPayrollReport = (
       }
 
       const daysCount = dates.length;
-
+      const colsPerDay = showTimesInMatrix ? 2 : 1;
+      
       // 2. Data Grouping
       const staffMap: Record<string, { name: string, shifts: Shift[] }> = {};
       shifts.forEach(s => {
@@ -72,50 +122,64 @@ export const downloadPayrollReport = (
       // 3. Construct HTML Table
       let tableRows = '';
 
-      // Header Row 1: Title
+      // --- HEADER ROW 1: Title ---
+      // Colspan = Name (1) + Days (totalDayCols) + Summary (3) + Deductions (4 optional)
+      const totalDayCols = daysCount * colsPerDay;
+      const totalWidth = 1 + totalDayCols + 3 + (includeDeductions ? 4 : 0);
+      
       tableRows += `
         <tr>
-            <td colspan="${daysCount + (includeDeductions ? 8 : 4)}" style="background-color:${brandColor}; color:white; font-size:18px; font-weight:bold; padding:10px; border:1px solid #000;">
+            <td colspan="${totalWidth}" style="background-color:${brandColor}; color:white; font-size:18px; font-weight:bold; padding:10px; border:1px solid #000; text-align:center;">
                 ${companyName.toUpperCase()} - PAYROLL MATRIX
             </td>
         </tr>
         <tr>
-            <td colspan="${daysCount + (includeDeductions ? 8 : 4)}" style="font-style:italic; padding:5px; border:1px solid #ccc; background-color:#f9f9f9;">
+            <td colspan="${totalWidth}" style="font-style:italic; padding:5px; border:1px solid #ccc; background-color:#f9f9f9; text-align:center;">
                 Period: ${dateRangeLabel} | Generated: ${new Date().toLocaleString()}
             </td>
         </tr>
         <tr></tr>
       `;
 
-      // Header Row 2: Categories
+      // --- HEADER ROW 2: High Level Grouping ---
       tableRows += `
-        <tr style="font-weight:bold; background-color:#f3f4f6;">
-            <td style="border:1px solid #000; width:150px; background-color:#e5e7eb;">STAFF MEMBER</td>
-            <td colspan="${daysCount}" style="border:1px solid #000; text-align:center; background-color:#d1d5db;">HOURS WORKED</td>
+        <tr style="font-weight:bold; background-color:#e5e7eb;">
+            <td rowspan="2" style="border:1px solid #000; width:150px; background-color:#d1d5db; vertical-align:middle; text-align:center;">STAFF NAME</td>
+            ${dates.map(d => {
+                const dayName = d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'}).toUpperCase();
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                const bg = isWeekend ? '#fee2e2' : '#f3f4f6';
+                return `<td colspan="${colsPerDay}" style="border:1px solid #000; text-align:center; background-color:${bg};">${dayName}</td>`;
+            }).join('')}
             <td colspan="3" style="border:1px solid #000; text-align:center; background-color:#9ca3af; color:white;">SUMMARY</td>
-            ${includeDeductions ? `<td colspan="4" style="border:1px solid #000; text-align:center; background-color:#fca5a5;">OFFICE USE (DEDUCTIONS)</td>` : ''}
+            ${includeDeductions ? `<td colspan="4" style="border:1px solid #000; text-align:center; background-color:#fca5a5;">OFFICE USE</td>` : ''}
         </tr>
       `;
 
-      // Header Row 3: Columns
-      tableRows += `<tr style="font-weight:bold; font-size:11px;">`;
-      tableRows += `<td style="border:1px solid #ccc; background-color:#f3f4f6;">Name</td>`;
-      dates.forEach(d => {
-          const dayStr = d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'}).toUpperCase();
-          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-          tableRows += `<td style="border:1px solid #ccc; width:60px; text-align:center; ${isWeekend ? 'background-color:#fee2e2;' : 'background-color:#ffffff;'}">${dayStr}</td>`;
-      });
+      // --- HEADER ROW 3: Sub-columns (In/Out or Hours) ---
+      tableRows += `<tr style="font-weight:bold; font-size:10px; text-align:center;">`;
       
-      // Summary Headers
-      tableRows += `<td style="border:1px solid #ccc; background-color:#e5e7eb; font-weight:bold;">TOTAL HRS</td>`;
-      tableRows += `<td style="border:1px solid #ccc; background-color:#e5e7eb; font-weight:bold;">RATE</td>`;
-      tableRows += `<td style="border:1px solid #ccc; background-color:#e5e7eb; font-weight:bold;">GROSS</td>`;
+      dates.forEach(d => {
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+          const bg = isWeekend ? '#fff1f2' : '#ffffff';
+          if (showTimesInMatrix) {
+              tableRows += `<td style="border:1px solid #ccc; width:60px; background-color:${bg};">IN</td>`;
+              tableRows += `<td style="border:1px solid #ccc; width:60px; background-color:${bg};">OUT</td>`;
+          } else {
+              tableRows += `<td style="border:1px solid #ccc; background-color:${bg};">HRS</td>`;
+          }
+      });
 
+      // Summary Headers
+      tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">TOTAL HRS</td>`;
+      tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">RATE (${currency})</td>`;
+      tableRows += `<td style="border:1px solid #000; background-color:#e5e7eb;">GROSS (${currency})</td>`;
+      
       if (includeDeductions) {
-          tableRows += `<td style="border:1px solid #ccc; background-color:#fff1f2;">TAX</td>`;
-          tableRows += `<td style="border:1px solid #ccc; background-color:#fff1f2;">NI / SS</td>`;
-          tableRows += `<td style="border:1px solid #ccc; background-color:#fff1f2;">OTHER</td>`;
-          tableRows += `<td style="border:1px solid #ccc; font-weight:bold; background-color:#ecfdf5;">NET PAY</td>`;
+          tableRows += `<td style="border:1px solid #000; background-color:#fff1f2;">TAX</td>`;
+          tableRows += `<td style="border:1px solid #000; background-color:#fff1f2;">NI</td>`;
+          tableRows += `<td style="border:1px solid #000; background-color:#fff1f2;">OTHER</td>`;
+          tableRows += `<td style="border:1px solid #000; background-color:#ecfdf5;">NET</td>`;
       }
       tableRows += `</tr>`;
 
@@ -123,7 +187,6 @@ export const downloadPayrollReport = (
       Object.values(staffMap).forEach((staff, index) => {
           let totalHours = 0;
           let totalPay = 0;
-          let rate = 0;
           let dayCells = '';
           const rowBg = index % 2 === 0 ? '#ffffff' : '#fafafa';
 
@@ -131,16 +194,16 @@ export const downloadPayrollReport = (
               const daysShifts = staff.shifts.filter(s => {
                   const sDate = new Date(s.startTime);
                   return sDate.getDate() === date.getDate() && sDate.getMonth() === date.getMonth();
-              });
+              }).sort((a,b) => a.startTime - b.startTime);
 
               const isWeekend = date.getDay() === 0 || date.getDay() === 6;
               const cellBg = isWeekend ? '#fff1f2' : rowBg;
 
               if (daysShifts.length > 0) {
-                  let cellContent = '';
                   let dayHours = 0;
-                  // Use rate from last shift found
-                  rate = daysShifts[0].hourlyRate || rate || 0;
+                  
+                  let ins: string[] = [];
+                  let outs: string[] = [];
 
                   daysShifts.forEach(s => {
                       if (s.endTime) {
@@ -150,29 +213,46 @@ export const downloadPayrollReport = (
                           totalPay += (h * (s.hourlyRate || 0));
                           
                           if (showTimesInMatrix) {
-                              const timeStr = `${new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}-${new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-                              cellContent += (cellContent ? '\n' : '') + timeStr;
+                              ins.push(new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+                              outs.push(new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
                           }
                       }
                   });
-                  const val = showTimesInMatrix ? cellContent : dayHours.toFixed(2);
-                  dayCells += `<td style="border:1px solid #ddd; text-align:center; white-space:pre-wrap; background-color:${cellBg};">${val}</td>`;
+
+                  if (showTimesInMatrix) {
+                      const inStr = ins.join('\n');
+                      const outStr = outs.join('\n');
+                      dayCells += `<td style="border:1px solid #ddd; text-align:center; white-space:pre-wrap; font-size:11px; background-color:${cellBg}; vertical-align:middle;">${inStr}</td>`;
+                      dayCells += `<td style="border:1px solid #ddd; text-align:center; white-space:pre-wrap; font-size:11px; background-color:${cellBg}; vertical-align:middle;">${outStr}</td>`;
+                  } else {
+                      dayCells += `<td style="border:1px solid #ddd; text-align:center; background-color:${cellBg}; font-weight:bold; vertical-align:middle;">${dayHours.toFixed(2)}</td>`;
+                  }
+
               } else {
-                  dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
+                  // Empty Day
+                  if (showTimesInMatrix) {
+                      dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td><td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
+                  } else {
+                      dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
+                  }
               }
           });
 
+          // Calculate Rate String using new logic
+          const rateDisplay = formatRateHistory(staff.shifts);
+
+          // Holiday Pay Calc
           if (holidayPayEnabled) {
               totalPay += (totalPay * (holidayPayRate / 100));
           }
 
           tableRows += `
             <tr style="background-color:${rowBg};">
-                <td style="border:1px solid #ddd; font-weight:bold;">${staff.name}</td>
+                <td style="border:1px solid #ddd; font-weight:bold; padding:5px; vertical-align:middle;">${staff.name}</td>
                 ${dayCells}
-                <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold;">${totalHours.toFixed(2)}</td>
-                <td style="border:1px solid #ddd; background-color:#f3f4f6;">${currency}${rate.toFixed(2)}</td>
-                <td style="border:1px solid #ddd; background-color:#f3f4f6;">${currency}${totalPay.toFixed(2)}</td>
+                <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold; text-align:center; vertical-align:middle;">${totalHours.toFixed(2)}</td>
+                <td style="border:1px solid #ddd; background-color:#f3f4f6; text-align:center; vertical-align:middle; white-space:pre-wrap; font-size:11px;">${rateDisplay}</td>
+                <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold; text-align:right; padding-right:5px; vertical-align:middle;">${totalPay.toFixed(2)}</td>
                 ${includeDeductions ? `
                     <td style="border:1px solid #ddd;"></td>
                     <td style="border:1px solid #ddd;"></td>
@@ -281,36 +361,7 @@ export const downloadPayrollReport = (
       const stats = statsByUser[userId];
       const userShifts = shiftsByUser[userId];
 
-      let rateString = "0.00";
-      if (userShifts.length > 0) {
-          const sorted = [...userShifts].sort((a, b) => a.startTime - b.startTime);
-          const segments: { rate: number, start: number, end: number }[] = [];
-          let current = { rate: sorted[0].hourlyRate, start: sorted[0].startTime, end: sorted[0].startTime };
-
-          for (let i = 1; i < sorted.length; i++) {
-              const s = sorted[i];
-              if (Math.abs(s.hourlyRate - current.rate) < 0.01) {
-                  current.end = s.startTime;
-              } else {
-                  segments.push(current);
-                  current = { rate: s.hourlyRate, start: s.startTime, end: s.startTime };
-              }
-          }
-          segments.push(current);
-
-          if (segments.length === 1) {
-              rateString = segments[0].rate.toFixed(2);
-          } else {
-              rateString = segments.map((seg, idx) => {
-                  const r = seg.rate.toFixed(2);
-                  const dStart = new Date(seg.start).toLocaleDateString();
-                  const dEnd = new Date(seg.end).toLocaleDateString();
-                  if (idx === 0) return `${r} (until ${dEnd})`;
-                  if (idx === segments.length - 1) return ` -> ${r} (from ${dStart})`;
-                  return ` -> ${r} (from ${dStart} to ${dEnd})`;
-              }).join('');
-          }
-      }
+      const rateString = formatRateHistory(userShifts);
 
       const row = [
         stats.name,

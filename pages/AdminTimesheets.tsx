@@ -507,21 +507,21 @@ export const AdminTimesheets = () => {
                         <div className="grid grid-cols-3 gap-3">
                             <button 
                                 onClick={() => setExportFormat('matrix')}
-                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'matrix' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'matrix' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
                             >
                                 <FileSpreadsheet className="w-6 h-6 mb-2" />
                                 <span className="text-xs font-bold text-center">Payroll Matrix</span>
                             </button>
                             <button 
                                 onClick={() => setExportFormat('detailed')}
-                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'detailed' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'detailed' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
                             >
                                 <FileText className="w-6 h-6 mb-2" />
                                 <span className="text-xs font-bold text-center">Detailed List</span>
                             </button>
                             <button 
                                 onClick={() => setExportFormat('grouped')}
-                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'grouped' ? 'border-brand-500 bg-brand-50 dark:bg-slate-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${exportFormat === 'grouped' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 text-slate-600 dark:text-slate-400'}`}
                             >
                                 <Table className="w-6 h-6 mb-2" />
                                 <span className="text-xs font-bold text-center">Staff Summary</span>
@@ -535,7 +535,7 @@ export const AdminTimesheets = () => {
                             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">Options</label>
                             
                             <label className="flex items-center justify-between cursor-pointer">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Daily Times</span>
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Start/End Times (Split Columns)</span>
                                 <input type="checkbox" checked={exportOptions.showTimes} onChange={e => setExportOptions({...exportOptions, showTimes: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                             </label>
                             

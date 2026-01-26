@@ -12,6 +12,7 @@ const firebaseConfig = {
   measurementId: "G-3FRM69SG4X"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with offline persistence enabled
