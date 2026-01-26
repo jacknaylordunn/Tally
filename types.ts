@@ -37,6 +37,7 @@ export interface Company {
     // Payroll Export Settings
     exportShowShiftTimesWeekly?: boolean;
     exportShowShiftTimesMonthly?: boolean;
+    exportIncludeDeductions?: boolean; // New: Add tax/net columns to export
     // Holiday Pay
     holidayPayEnabled?: boolean;
     holidayPayRate?: number; // Percentage (e.g. 12.07)

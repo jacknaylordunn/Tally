@@ -1,5 +1,5 @@
 
-import { Shift, Company } from '../types';
+import { Shift } from '../types';
 
 interface ExportOptions {
   filename: string;
@@ -8,8 +8,11 @@ interface ExportOptions {
   groupByStaff?: boolean;
   matrixView?: boolean;
   showTimesInMatrix?: boolean;
+  includeDeductions?: boolean;
   holidayPayEnabled?: boolean;
   holidayPayRate?: number;
+  companyName?: string;
+  brandColor?: string;
 }
 
 const escapeCSV = (str: any) => {
@@ -20,7 +23,7 @@ const escapeCSV = (str: any) => {
     return cellStr;
 };
 
-export const downloadShiftsCSV = (
+export const downloadPayrollReport = (
   shifts: Shift[], 
   options: ExportOptions
 ) => {
@@ -33,35 +36,23 @@ export const downloadShiftsCSV = (
     groupByStaff = false,
     matrixView = false,
     showTimesInMatrix = false,
+    includeDeductions = false,
     holidayPayEnabled = false,
-    holidayPayRate = 0
+    holidayPayRate = 0,
+    companyName = 'Tallyd Report',
+    brandColor = '#0ea5e9'
   } = options;
 
-  let csvRows = [];
-
-  // 1. Report Header Summary
-  const generatedDate = new Date().toLocaleString();
-  csvRows.push(['REPORT SUMMARY']);
-  csvRows.push(['Generated On', generatedDate]);
-  csvRows.push(['Report Range', dateRangeLabel]);
-  csvRows.push(['Total Records', shifts.length.toString()]);
-  csvRows.push([]); // Empty row
-
-  // 2. Data Processing
-  
+  // --- HTML/EXCEL MATRIX VIEW (Rich Formatting) ---
   if (matrixView) {
-      // --- TIMESHEET MATRIX VIEW ---
       
-      // Determine Date Range from shifts if not explicit
-      // We iterate to find min/max
+      // 1. Determine Date Range
       const timestamps = shifts.map(s => s.startTime);
       const minDate = new Date(Math.min(...timestamps));
       const maxDate = new Date(Math.max(...timestamps));
-      // Normalize
       minDate.setHours(0,0,0,0);
       maxDate.setHours(0,0,0,0);
       
-      // Generate Dates Array
       const dates: Date[] = [];
       const cursor = new Date(minDate);
       while(cursor <= maxDate) {
@@ -69,39 +60,87 @@ export const downloadShiftsCSV = (
           cursor.setDate(cursor.getDate() + 1);
       }
 
-      // Group by Staff
+      const daysCount = dates.length;
+
+      // 2. Data Grouping
       const staffMap: Record<string, { name: string, shifts: Shift[] }> = {};
       shifts.forEach(s => {
           if(!staffMap[s.userId]) staffMap[s.userId] = { name: s.userName, shifts: [] };
           staffMap[s.userId].shifts.push(s);
       });
 
-      // Headers
-      const dateHeaders = dates.map(d => d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' }));
-      const headers = ['Staff Name', ...dateHeaders, 'Total Hours', `Hourly Rate (${currency})`, `Gross Pay (${currency})`];
-      csvRows.push(headers);
+      // 3. Construct HTML Table
+      let tableRows = '';
 
-      // Rows
-      Object.values(staffMap).forEach(staff => {
-          const rowData = [staff.name];
+      // Header Row 1: Title
+      tableRows += `
+        <tr>
+            <td colspan="${daysCount + (includeDeductions ? 8 : 4)}" style="background-color:${brandColor}; color:white; font-size:18px; font-weight:bold; padding:10px; border:1px solid #000;">
+                ${companyName.toUpperCase()} - PAYROLL MATRIX
+            </td>
+        </tr>
+        <tr>
+            <td colspan="${daysCount + (includeDeductions ? 8 : 4)}" style="font-style:italic; padding:5px; border:1px solid #ccc; background-color:#f9f9f9;">
+                Period: ${dateRangeLabel} | Generated: ${new Date().toLocaleString()}
+            </td>
+        </tr>
+        <tr></tr>
+      `;
+
+      // Header Row 2: Categories
+      tableRows += `
+        <tr style="font-weight:bold; background-color:#f3f4f6;">
+            <td style="border:1px solid #000; width:150px; background-color:#e5e7eb;">STAFF MEMBER</td>
+            <td colspan="${daysCount}" style="border:1px solid #000; text-align:center; background-color:#d1d5db;">HOURS WORKED</td>
+            <td colspan="3" style="border:1px solid #000; text-align:center; background-color:#9ca3af; color:white;">SUMMARY</td>
+            ${includeDeductions ? `<td colspan="4" style="border:1px solid #000; text-align:center; background-color:#fca5a5;">OFFICE USE (DEDUCTIONS)</td>` : ''}
+        </tr>
+      `;
+
+      // Header Row 3: Columns
+      tableRows += `<tr style="font-weight:bold; font-size:11px;">`;
+      tableRows += `<td style="border:1px solid #ccc; background-color:#f3f4f6;">Name</td>`;
+      dates.forEach(d => {
+          const dayStr = d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'}).toUpperCase();
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+          tableRows += `<td style="border:1px solid #ccc; width:60px; text-align:center; ${isWeekend ? 'background-color:#fee2e2;' : 'background-color:#ffffff;'}">${dayStr}</td>`;
+      });
+      
+      // Summary Headers
+      tableRows += `<td style="border:1px solid #ccc; background-color:#e5e7eb; font-weight:bold;">TOTAL HRS</td>`;
+      tableRows += `<td style="border:1px solid #ccc; background-color:#e5e7eb; font-weight:bold;">RATE</td>`;
+      tableRows += `<td style="border:1px solid #ccc; background-color:#e5e7eb; font-weight:bold;">GROSS</td>`;
+
+      if (includeDeductions) {
+          tableRows += `<td style="border:1px solid #ccc; background-color:#fff1f2;">TAX</td>`;
+          tableRows += `<td style="border:1px solid #ccc; background-color:#fff1f2;">NI / SS</td>`;
+          tableRows += `<td style="border:1px solid #ccc; background-color:#fff1f2;">OTHER</td>`;
+          tableRows += `<td style="border:1px solid #ccc; font-weight:bold; background-color:#ecfdf5;">NET PAY</td>`;
+      }
+      tableRows += `</tr>`;
+
+      // 4. Data Rows
+      Object.values(staffMap).forEach((staff, index) => {
           let totalHours = 0;
           let totalPay = 0;
           let rate = 0;
+          let dayCells = '';
+          const rowBg = index % 2 === 0 ? '#ffffff' : '#fafafa';
 
-          // Cells for each date
           dates.forEach(date => {
-              // Find shifts on this date
               const daysShifts = staff.shifts.filter(s => {
                   const sDate = new Date(s.startTime);
                   return sDate.getDate() === date.getDate() && sDate.getMonth() === date.getMonth();
               });
 
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+              const cellBg = isWeekend ? '#fff1f2' : rowBg;
+
               if (daysShifts.length > 0) {
                   let cellContent = '';
                   let dayHours = 0;
-                  
-                  // Use rate from last shift found (assuming consistent)
-                  rate = daysShifts[0].hourlyRate || 0;
+                  // Use rate from last shift found
+                  rate = daysShifts[0].hourlyRate || rate || 0;
 
                   daysShifts.forEach(s => {
                       if (s.endTime) {
@@ -116,32 +155,84 @@ export const downloadShiftsCSV = (
                           }
                       }
                   });
-
-                  if (showTimesInMatrix) {
-                      rowData.push(cellContent);
-                  } else {
-                      rowData.push(dayHours.toFixed(2));
-                  }
+                  const val = showTimesInMatrix ? cellContent : dayHours.toFixed(2);
+                  dayCells += `<td style="border:1px solid #ddd; text-align:center; white-space:pre-wrap; background-color:${cellBg};">${val}</td>`;
               } else {
-                  rowData.push('');
+                  dayCells += `<td style="border:1px solid #ddd; background-color:${cellBg};"></td>`;
               }
           });
 
-          // Summary Columns
-          rowData.push(totalHours.toFixed(2));
-          rowData.push(rate.toFixed(2));
-          
           if (holidayPayEnabled) {
               totalPay += (totalPay * (holidayPayRate / 100));
           }
-          rowData.push(totalPay.toFixed(2));
 
-          csvRows.push(rowData);
+          tableRows += `
+            <tr style="background-color:${rowBg};">
+                <td style="border:1px solid #ddd; font-weight:bold;">${staff.name}</td>
+                ${dayCells}
+                <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold;">${totalHours.toFixed(2)}</td>
+                <td style="border:1px solid #ddd; background-color:#f3f4f6;">${currency}${rate.toFixed(2)}</td>
+                <td style="border:1px solid #ddd; background-color:#f3f4f6;">${currency}${totalPay.toFixed(2)}</td>
+                ${includeDeductions ? `
+                    <td style="border:1px solid #ddd;"></td>
+                    <td style="border:1px solid #ddd;"></td>
+                    <td style="border:1px solid #ddd;"></td>
+                    <td style="border:1px solid #ddd; font-weight:bold; background-color:#ecfdf5;"></td>
+                ` : ''}
+            </tr>
+          `;
       });
 
-  } else if (groupByStaff) {
+      // Assemble full HTML
+      const htmlContent = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <!--[if gte mso 9]>
+            <xml>
+                <x:ExcelWorkbook>
+                    <x:ExcelWorksheets>
+                        <x:ExcelWorksheet>
+                            <x:Name>Payroll Matrix</x:Name>
+                            <x:WorksheetOptions>
+                                <x:DisplayGridlines/>
+                            </x:WorksheetOptions>
+                        </x:ExcelWorksheet>
+                    </x:ExcelWorksheets>
+                </x:ExcelWorkbook>
+            </xml>
+            <![endif]-->
+            <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
+        </head>
+        <body style="font-family: Arial, sans-serif;">
+            <table border="1" cellspacing="0" cellpadding="5">
+                ${tableRows}
+            </table>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${filename}_matrix.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      return;
+  } 
+  
+  // --- CSV FALLBACKS (Standard Views) ---
+  
+  let csvRows = [];
+
+  if (groupByStaff) {
     // --- GROUPED SUMMARY VIEW ---
-    
+    csvRows.push(['REPORT SUMMARY']);
+    csvRows.push(['Company', companyName]);
+    csvRows.push(['Range', dateRangeLabel]);
+    csvRows.push([]);
+
     const shiftsByUser: Record<string, Shift[]> = {};
     const statsByUser: Record<string, any> = {};
 
@@ -189,7 +280,6 @@ export const downloadShiftsCSV = (
       const stats = statsByUser[userId];
       const userShifts = shiftsByUser[userId];
 
-      // Rate History Logic
       let rateString = "0.00";
       if (userShifts.length > 0) {
           const sorted = [...userShifts].sort((a, b) => a.startTime - b.startTime);
@@ -236,6 +326,11 @@ export const downloadShiftsCSV = (
 
   } else {
     // --- DETAILED VIEW ---
+    csvRows.push(['REPORT SUMMARY']);
+    csvRows.push(['Company', companyName]);
+    csvRows.push(['Range', dateRangeLabel]);
+    csvRows.push([]);
+
     const headers = [
       'Staff Name',
       'Date',

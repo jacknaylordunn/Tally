@@ -240,6 +240,16 @@ export const deleteLocation = async (locationId: string): Promise<void> => {
     await deleteDoc(doc(db, LOCATIONS_REF, locationId));
 };
 
+export const updateAllLocationsRadius = async (companyId: string, radius: number): Promise<void> => {
+    const q = query(collection(db, LOCATIONS_REF), where("companyId", "==", companyId));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => {
+        batch.update(d.ref, { radius });
+    });
+    await batch.commit();
+};
+
 // --- ROTA / SCHEDULE SYSTEM ---
 
 export const createScheduleShift = async (shift: ScheduleShift): Promise<void> => {

@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile } from '../services/api';
+import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile, updateAllLocationsRadius, getLocations } from '../services/api';
 import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText, TableProperties } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useBlocker } from 'react-router-dom';
@@ -23,6 +23,9 @@ export const AdminSettings = () => {
   const [personalName, setPersonalName] = useState('');
   
   const [radius, setRadius] = useState(200);
+  const [updateExistingLocs, setUpdateExistingLocs] = useState(false);
+  const [locationCount, setLocationCount] = useState(0);
+
   const [requireApproval, setRequireApproval] = useState(false);
   const [defaultRate, setDefaultRate] = useState(15);
   const [currency, setCurrency] = useState('£');
@@ -33,6 +36,7 @@ export const AdminSettings = () => {
   // Export Settings
   const [exportShowTimesWeekly, setExportShowTimesWeekly] = useState(true);
   const [exportShowTimesMonthly, setExportShowTimesMonthly] = useState(false);
+  const [exportIncludeDeductions, setExportIncludeDeductions] = useState(false);
 
   // Holiday Pay
   const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
@@ -55,8 +59,12 @@ export const AdminSettings = () => {
   useEffect(() => {
     const loadData = async () => {
         if (!user || !user.currentCompanyId) return;
-        const data = await getCompany(user.currentCompanyId);
+        const [data, locs] = await Promise.all([
+            getCompany(user.currentCompanyId),
+            getLocations(user.currentCompanyId)
+        ]);
         setCompany(data);
+        setLocationCount(locs.length);
         
         // Identity
         setCompanyName(data.name);
@@ -75,6 +83,7 @@ export const AdminSettings = () => {
         // Export
         setExportShowTimesWeekly(data.settings.exportShowShiftTimesWeekly !== false); // default true
         setExportShowTimesMonthly(data.settings.exportShowShiftTimesMonthly || false);
+        setExportIncludeDeductions(data.settings.exportIncludeDeductions || false);
 
         // Rota
         setRotaEnabled(data.settings.rotaEnabled || false);
@@ -105,6 +114,7 @@ export const AdminSettings = () => {
           companyName !== company.name ||
           personalName !== user.name ||
           radius !== s.geofenceRadius ||
+          updateExistingLocs || // consider dirty if checkbox is ticked
           requireApproval !== (s.requireApproval || false) ||
           defaultRate !== (s.defaultHourlyRate || 15) ||
           currency !== (s.currency || '£') ||
@@ -115,6 +125,7 @@ export const AdminSettings = () => {
           holidayPayRate !== (s.holidayPayRate || 12.07) ||
           exportShowTimesWeekly !== clean(s.exportShowShiftTimesWeekly, true) ||
           exportShowTimesMonthly !== (s.exportShowShiftTimesMonthly || false) ||
+          exportIncludeDeductions !== (s.exportIncludeDeductions || false) ||
           rotaEnabled !== (s.rotaEnabled || false) ||
           rotaShowFinishTimes !== clean(s.rotaShowFinishTimes, true) ||
           allowShiftBidding !== clean(s.allowShiftBidding, true) ||
@@ -128,8 +139,8 @@ export const AdminSettings = () => {
       );
   }, [
       company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl, showStaffEarnings,
-      holidayPayEnabled, holidayPayRate, exportShowTimesWeekly, exportShowTimesMonthly, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
-      auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift
+      holidayPayEnabled, holidayPayRate, exportShowTimesWeekly, exportShowTimesMonthly, exportIncludeDeductions, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
+      auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift, updateExistingLocs
   ]);
 
   // Prevent Navigation if Dirty
@@ -212,6 +223,7 @@ export const AdminSettings = () => {
               holidayPayRate,
               exportShowShiftTimesWeekly: exportShowTimesWeekly,
               exportShowShiftTimesMonthly: exportShowTimesMonthly,
+              exportIncludeDeductions: exportIncludeDeductions,
               rotaEnabled,
               rotaShowFinishTimes,
               allowShiftBidding,
@@ -223,6 +235,11 @@ export const AdminSettings = () => {
               auditShortShiftThreshold: auditShortShift,
               auditLongShiftThreshold: auditLongShift
           });
+
+          // Handle Batch Location Update
+          if (updateExistingLocs) {
+              await updateAllLocationsRadius(user.currentCompanyId, radius);
+          }
 
           // Update User Details
           if (user.name !== personalName) {
@@ -322,8 +339,6 @@ export const AdminSettings = () => {
                     </div>
                 </div>
 
-                {/* Appearance Block (Unchanged) ... */}
-
                 {/* Payroll & Localization - UPDATED */}
                 <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
                     <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
@@ -397,12 +412,22 @@ export const AdminSettings = () => {
                                     <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
-                            <p className="text-xs text-slate-500">Weekly exports will show start/end times instead of total hours.</p>
                             
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-slate-700 dark:text-slate-300">Show Times in Monthly Matrix</span>
                                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                     <input type="checkbox" checked={exportShowTimesMonthly} onChange={(e) => setExportShowTimesMonthly(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div className="pr-4">
+                                    <span className="text-sm text-slate-700 dark:text-slate-300">Include Payroll Deduction Columns</span>
+                                    <p className="text-[10px] text-slate-500">Adds empty columns for Tax, NI, and Net Pay to the Matrix export for your accountant.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                    <input type="checkbox" checked={exportIncludeDeductions} onChange={(e) => setExportIncludeDeductions(e.target.checked)} className="sr-only peer" />
                                     <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
@@ -443,9 +468,6 @@ export const AdminSettings = () => {
                     </div>
                 </div>
 
-                {/* Other settings remain unchanged... */}
-                {/* General, Audit, Danger Zone */}
-                {/* Re-implementing the rest of the file exactly as it was to ensure completeness */}
                 <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
                     <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
                         <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><Building className="w-5 h-5" /></div>
@@ -455,6 +477,20 @@ export const AdminSettings = () => {
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">GPS Geofence Radius (meters)</label>
                             <input type="number" min="20" value={radius} onChange={(e) => setRadius(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" />
+                            {locationCount > 0 && (
+                                <div className="flex items-center mt-2 animate-fade-in">
+                                    <input 
+                                        type="checkbox" 
+                                        id="update-locs"
+                                        checked={updateExistingLocs}
+                                        onChange={(e) => setUpdateExistingLocs(e.target.checked)}
+                                        className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                    />
+                                    <label htmlFor="update-locs" className="ml-2 text-xs font-medium text-slate-600 dark:text-slate-400">
+                                        Update radius for all {locationCount} existing locations?
+                                    </label>
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center justify-between pt-2">
                             <div className="pr-4"><h4 className="font-medium text-sm">Require Admin Approval</h4><p className="text-xs text-slate-500">New staff must be approved.</p></div>

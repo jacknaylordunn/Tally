@@ -4,7 +4,7 @@ import { getShifts, updateShift, deleteShift, getCompany, getCompanyStaff, creat
 import { Shift, Company, User } from '../types';
 import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { downloadShiftsCSV } from '../utils/csv';
+import { downloadPayrollReport } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
 
 type DateRange = 'today' | '7' | '14' | '30' | 'custom';
@@ -184,15 +184,18 @@ export const AdminTimesheets = () => {
         ? (company?.settings.exportShowShiftTimesWeekly !== false) 
         : (company?.settings.exportShowShiftTimesMonthly || false);
 
-    downloadShiftsCSV(filteredShifts, {
+    downloadPayrollReport(filteredShifts, {
         filename: 'tally_timesheet', 
         currency,
         dateRangeLabel: rangeLabel,
         groupByStaff: type === 'grouped',
         matrixView: type === 'matrix',
         showTimesInMatrix: showTimes,
+        includeDeductions: company?.settings.exportIncludeDeductions,
         holidayPayEnabled: company?.settings.holidayPayEnabled,
-        holidayPayRate: company?.settings.holidayPayRate
+        holidayPayRate: company?.settings.holidayPayRate,
+        companyName: company?.name,
+        brandColor: company?.settings.primaryColor
     });
     setIsExportMenuOpen(false);
   };
