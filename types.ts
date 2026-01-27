@@ -75,6 +75,9 @@ export interface Shift {
   editedByName?: string;
   editedById?: string;
   editedAt?: number;
+  
+  // Review Status
+  warningsDismissed?: boolean; // If true, alerts for this shift are ignored in the dashboard
 }
 
 // --- ROTA SYSTEM TYPES ---

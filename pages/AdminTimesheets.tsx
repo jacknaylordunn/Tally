@@ -47,6 +47,15 @@ export const AdminTimesheets = () => {
     loadData();
   }, [user]);
 
+  // Sort Helper
+  const sortByLastName = (a: User, b: User) => {
+      const lastA = a.name.trim().split(' ').pop()?.toLowerCase() || '';
+      const lastB = b.name.trim().split(' ').pop()?.toLowerCase() || '';
+      if (lastA < lastB) return -1;
+      if (lastA > lastB) return 1;
+      return 0;
+  };
+
   const loadData = async () => {
     if (!user || !user.currentCompanyId) return;
     setLoading(true);
@@ -57,7 +66,9 @@ export const AdminTimesheets = () => {
     ]);
     setShifts(shiftsData);
     setCompany(companyData);
-    setStaffList(staffData);
+    
+    // Sort Staff List for Dropdown
+    setStaffList(staffData.sort(sortByLastName));
     
     // Initialize export defaults from settings
     if (companyData) {
@@ -113,16 +124,32 @@ export const AdminTimesheets = () => {
 
   const filteredShifts = useMemo(() => getFilteredShifts(), [shifts, dateRange, customStart, customEnd, searchTerm]);
 
+  // Formatter for DD.MM.YY
+  const formatDateLabel = (date: Date) => {
+      return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '.');
+  };
+
   // Derived Export Label
   const getExportRangeLabel = () => {
-      if (dateRange === 'today') return 'Today';
-      if (dateRange !== 'custom') return `Last ${dateRange} Days`;
-      if (customStart) {
-          const s = new Date(customStart).toLocaleDateString();
-          const e = customEnd ? new Date(customEnd).toLocaleDateString() : 'Now';
-          return `${s} - ${e}`;
-      }
-      return 'All Time';
+      const now = new Date();
+
+      if (dateRange === 'custom') {
+          if (!customStart) return 'All Time';
+          const s = new Date(customStart);
+          const e = customEnd ? new Date(customEnd) : now;
+          return `${formatDateLabel(s)} - ${formatDateLabel(e)}`;
+      } 
+      
+      if (dateRange === 'today') {
+          return formatDateLabel(now);
+      } 
+      
+      // Handle presets (7, 14, 30)
+      const days = parseInt(dateRange);
+      const start = new Date();
+      start.setDate(now.getDate() - days);
+      
+      return `${formatDateLabel(start)} - ${formatDateLabel(now)}`;
   };
 
   const calculateDuration = (start: number, end: number | null) => {
@@ -625,7 +652,7 @@ export const AdminTimesheets = () => {
             </div>
         )}
 
-        {/* Add Shift Modal (Unchanged) */}
+        {/* Add Shift Modal */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">

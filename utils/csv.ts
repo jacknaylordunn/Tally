@@ -23,6 +23,15 @@ const escapeCSV = (str: any) => {
     return cellStr;
 };
 
+// Sort helper: Last Name A-Z
+const sortByLastName = (aName: string, bName: string) => {
+    const lastA = aName.trim().split(' ').pop()?.toLowerCase() || '';
+    const lastB = bName.trim().split(' ').pop()?.toLowerCase() || '';
+    if (lastA < lastB) return -1;
+    if (lastA > lastB) return 1;
+    return 0;
+};
+
 // Helper to format date as DD.MM.YY for compact rate history
 const formatDateShort = (d: Date) => {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '.');
@@ -110,10 +119,6 @@ export const downloadPayrollReport = (
       }
 
       const daysCount = dates.length;
-      
-      // Determine columns per day
-      // If showing times: IN, OUT, HRS (3 cols)
-      // If not showing times: HRS (1 col)
       const colsPerDay = showTimesInMatrix ? 3 : 1;
       
       // 2. Data Grouping
@@ -123,16 +128,16 @@ export const downloadPayrollReport = (
           staffMap[s.userId].shifts.push(s);
       });
 
+      // SORT STAFF BY LAST NAME
+      const sortedStaff = Object.values(staffMap).sort((a, b) => sortByLastName(a.name, b.name));
+
       // 3. Construct HTML Table
       let tableRows = '';
 
       // Define Summary Column Count
-      // Default: Total Hrs, Rate, Gross (3 cols)
-      // Holiday Enabled: Total Hrs, Rate, Base, Holiday, Total (5 cols)
       const summaryColCount = holidayPayEnabled ? 5 : 3;
 
       // --- HEADER ROW 1: Title ---
-      // Colspan = Name (1) + Days (totalDayCols) + Summary (summaryColCount) + Deductions (4 optional)
       const totalDayCols = daysCount * colsPerDay;
       const totalWidth = 1 + totalDayCols + summaryColCount + (includeDeductions ? 4 : 0);
       
@@ -165,9 +170,8 @@ export const downloadPayrollReport = (
         </tr>
       `;
 
-      // --- HEADER ROW 3: Sub-columns (In/Out or Hours) ---
+      // --- HEADER ROW 3: Sub-columns ---
       tableRows += `<tr style="font-weight:bold; font-size:10px; text-align:center;">`;
-      
       dates.forEach(d => {
           const isWeekend = d.getDay() === 0 || d.getDay() === 6;
           const bg = isWeekend ? '#fff1f2' : '#ffffff';
@@ -200,8 +204,13 @@ export const downloadPayrollReport = (
       }
       tableRows += `</tr>`;
 
-      // 4. Data Rows
-      Object.values(staffMap).forEach((staff, index) => {
+      // 4. Data Rows & Totals Calculation
+      let grandTotalHours = 0;
+      let grandTotalBase = 0;
+      let grandTotalHoliday = 0;
+      let grandTotalPay = 0;
+
+      sortedStaff.forEach((staff, index) => {
           let totalHours = 0;
           let totalBasePay = 0;
           let dayCells = '';
@@ -218,7 +227,6 @@ export const downloadPayrollReport = (
 
               if (daysShifts.length > 0) {
                   let dayHours = 0;
-                  
                   let ins: string[] = [];
                   let outs: string[] = [];
 
@@ -258,10 +266,8 @@ export const downloadPayrollReport = (
               }
           });
 
-          // Calculate Rate String using new logic
           const rateDisplay = formatRateHistory(staff.shifts);
 
-          // Calculate Finals
           let finalHolidayPay = 0;
           let finalTotalPay = totalBasePay;
 
@@ -269,6 +275,12 @@ export const downloadPayrollReport = (
               finalHolidayPay = totalBasePay * (holidayPayRate / 100);
               finalTotalPay = totalBasePay + finalHolidayPay;
           }
+
+          // Accumulate Grand Totals
+          grandTotalHours += totalHours;
+          grandTotalBase += totalBasePay;
+          grandTotalHoliday += finalHolidayPay;
+          grandTotalPay += finalTotalPay;
 
           tableRows += `
             <tr style="background-color:${rowBg};">
@@ -294,6 +306,28 @@ export const downloadPayrollReport = (
             </tr>
           `;
       });
+
+      // --- FOOTER ROW: GRAND TOTALS ---
+      tableRows += `
+        <tr style="background-color:#1e293b; color:white; font-weight:bold;">
+            <td style="border:1px solid #000; padding:8px;">TOTALS / BUDGET</td>
+            ${/* Empty cells for days */ ''}
+            <td colspan="${totalDayCols}" style="border:1px solid #000; background-color:#334155;"></td>
+            
+            <td style="border:1px solid #000; text-align:center;">${grandTotalHours.toFixed(2)}</td>
+            <td style="border:1px solid #000; text-align:center;">-</td>
+            
+            ${holidayPayEnabled ? `
+                <td style="border:1px solid #000; text-align:right; padding-right:5px;">${grandTotalBase.toFixed(2)}</td>
+                <td style="border:1px solid #000; text-align:right; padding-right:5px;">${grandTotalHoliday.toFixed(2)}</td>
+                <td style="border:1px solid #000; text-align:right; padding-right:5px; background-color:#0f172a;">${currency}${grandTotalPay.toFixed(2)}</td>
+            ` : `
+                <td style="border:1px solid #000; text-align:right; padding-right:5px; background-color:#0f172a;">${currency}${grandTotalPay.toFixed(2)}</td>
+            `}
+
+            ${includeDeductions ? `<td colspan="4" style="border:1px solid #000; background-color:#334155;"></td>` : ''}
+        </tr>
+      `;
 
       // Assemble full HTML
       const htmlContent = `
@@ -389,23 +423,39 @@ export const downloadPayrollReport = (
 
     csvRows.push(headers);
 
-    Object.keys(statsByUser).forEach(userId => {
-      const stats = statsByUser[userId];
-      const userShifts = shiftsByUser[userId];
+    // Sort by Last Name
+    const sortedStats = Object.values(statsByUser).sort((a, b) => sortByLastName(a.name, b.name));
 
-      const rateString = formatRateHistory(userShifts);
+    sortedStats.forEach(stats => {
+      // We need to find the user ID to get rate string, but statsByUser is keyed by ID. 
+      // Reverse lookup or just store ID in stats would work. For simplicity, we just look at the shifts we processed for this name.
+      // But multiple people might have same name. 
+      // Better approach: Sort keys of `statsByUser` based on the name in the value.
+      // Refactoring slightly for robustness:
+      // We'll iterate keys, sort them, then produce rows.
+      return; // Handled below
+    });
 
-      const row = [
-        stats.name,
-        stats.shiftCount,
-        stats.totalHours.toFixed(2),
-        rateString,
-        stats.totalBasePay.toFixed(2),
-        holidayPayEnabled ? stats.totalHolidayPay.toFixed(2) : null,
-        stats.grandTotal.toFixed(2)
-      ].filter(item => item !== null);
-      
-      csvRows.push(row);
+    const sortedUserIds = Object.keys(statsByUser).sort((aId, bId) => {
+        return sortByLastName(statsByUser[aId].name, statsByUser[bId].name);
+    });
+
+    sortedUserIds.forEach(userId => {
+        const stats = statsByUser[userId];
+        const userShifts = shiftsByUser[userId];
+        const rateString = formatRateHistory(userShifts);
+
+        const row = [
+            stats.name,
+            stats.shiftCount,
+            stats.totalHours.toFixed(2),
+            rateString,
+            stats.totalBasePay.toFixed(2),
+            holidayPayEnabled ? stats.totalHolidayPay.toFixed(2) : null,
+            stats.grandTotal.toFixed(2)
+        ].filter(item => item !== null);
+        
+        csvRows.push(row);
     });
 
   } else {
@@ -431,7 +481,14 @@ export const downloadPayrollReport = (
 
     csvRows.push(headers);
 
-    shifts.forEach(shift => {
+    // Sort Shifts by Last Name then Start Time
+    const sortedShifts = [...shifts].sort((a, b) => {
+        const nameCompare = sortByLastName(a.userName, b.userName);
+        if (nameCompare !== 0) return nameCompare;
+        return b.startTime - a.startTime;
+    });
+
+    sortedShifts.forEach(shift => {
       if (!shift.endTime) return; 
 
       const startTime = new Date(shift.startTime);

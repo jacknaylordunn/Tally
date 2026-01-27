@@ -30,6 +30,15 @@ export const AdminStaff = () => {
     loadData();
   }, [user]);
 
+  // Helper for sorting by last name
+  const sortByLastName = (a: User, b: User) => {
+      const lastA = a.name.trim().split(' ').pop()?.toLowerCase() || '';
+      const lastB = b.name.trim().split(' ').pop()?.toLowerCase() || '';
+      if (lastA < lastB) return -1;
+      if (lastA > lastB) return 1;
+      return 0;
+  };
+
   const loadData = async () => {
     if (!user || !user.currentCompanyId) return;
     setLoading(true);
@@ -37,7 +46,11 @@ export const AdminStaff = () => {
         getCompanyStaff(user.currentCompanyId),
         getCompany(user.currentCompanyId)
     ]);
-    setStaff(staffData);
+    
+    // Sort Staff Alphabetically by Last Name
+    const sortedStaff = staffData.sort(sortByLastName);
+    
+    setStaff(sortedStaff);
     setCompany(companyData);
     setLoading(false);
   };

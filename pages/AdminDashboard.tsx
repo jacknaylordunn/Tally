@@ -1,21 +1,24 @@
 
 import React, { useEffect, useState } from 'react';
-import { getShifts, getLocations, getCompany, getSchedule, updateShift, deleteShift } from '../services/api';
-import { Shift, Location, Company } from '../types';
-import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown } from 'lucide-react';
+import { getShifts, getLocations, getCompany, getSchedule, updateShift, deleteShift, getCompanyStaff, updateUserProfile } from '../services/api';
+import { Shift, Location, Company, User, ScheduleShift } from '../types';
+import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown, ClipboardList, Check, UserPlus, AlertTriangle, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import { APP_NAME } from '../constants';
 
 export const AdminDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { startTutorial } = useTutorial();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
-  const [todaysScheduleCount, setTodaysScheduleCount] = useState(0);
+  const [staff, setStaff] = useState<User[]>([]);
+  const [todaysSchedule, setTodaysSchedule] = useState<ScheduleShift[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'active'>('all');
@@ -26,6 +29,10 @@ export const AdminDashboard = () => {
 
   const [isLocationSelectorOpen, setIsLocationSelectorOpen] = useState(false);
   const [selectedLocationForPoster, setSelectedLocationForPoster] = useState<Location | null>(null);
+
+  // Review Modal State
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewTab, setReviewTab] = useState<'alerts' | 'pending' | 'rota'>('alerts');
 
   // Action Menu State
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -39,14 +46,16 @@ export const AdminDashboard = () => {
   useEffect(() => {
     const loadData = async () => {
         if (!user || !user.currentCompanyId) return;
-        const [shiftsData, locationsData, companyData] = await Promise.all([
+        const [shiftsData, locationsData, companyData, staffData] = await Promise.all([
             getShifts(user.currentCompanyId),
             getLocations(user.currentCompanyId),
-            getCompany(user.currentCompanyId)
+            getCompany(user.currentCompanyId),
+            getCompanyStaff(user.currentCompanyId)
         ]);
         setShifts(shiftsData);
         setLocations(locationsData);
         setCompany(companyData);
+        setStaff(staffData);
 
         if (companyData.settings.rotaEnabled) {
             try {
@@ -54,12 +63,11 @@ export const AdminDashboard = () => {
                 const startOfDay = new Date(now.setHours(0,0,0,0)).getTime();
                 const endOfDay = new Date(now.setHours(23,59,59,999)).getTime();
                 const todayRota = await getSchedule(user.currentCompanyId, startOfDay, endOfDay);
-                setTodaysScheduleCount(todayRota.filter(s => s.userId).length);
+                setTodaysSchedule(todayRota);
             } catch (e) { console.error(e); }
         }
         setLoading(false);
         
-        // Try starting tutorial (Context checks if it's already active/done)
         setTimeout(() => startTutorial(), 1000);
     };
     loadData();
@@ -72,11 +80,12 @@ export const AdminDashboard = () => {
   });
 
   const activeShiftsCount = shifts.filter(s => !s.endTime).length;
+  const todaysScheduleCount = todaysSchedule.filter(s => s.userId).length;
   const currency = company?.settings.currency || '£';
 
-  // --- COMPREHENSIVE AUDIT LOGIC ---
-  const getAlertCount = () => {
-      if (!company) return 0;
+  // --- REVIEW ALERTS CALCULATION ---
+  const getAlerts = () => {
+      if (!company) return [];
       const { 
           auditLateInThreshold = 15,
           auditEarlyOutThreshold = 15,
@@ -85,34 +94,42 @@ export const AdminDashboard = () => {
           auditLongShiftThreshold = 14 
       } = company.settings;
 
-      return shifts.filter(s => {
+      const alerts: { type: string, message: string, shift: Shift }[] = [];
+
+      shifts.forEach(s => {
+          // If manually dismissed, skip
+          if (s.warningsDismissed) return;
+
           const now = Date.now();
-          // Check Long Shift / Forgotten Clock Out
           const durationMins = ((s.endTime || now) - s.startTime) / 60000;
-          if (durationMins > (auditLongShiftThreshold * 60)) return true;
-
-          // Check Short Shift (only if finished)
-          if (s.endTime && durationMins < auditShortShiftThreshold) return true;
-
-          // Check Late In
+          
+          if (durationMins > (auditLongShiftThreshold * 60)) {
+              alerts.push({ type: 'long', message: `Long shift (> ${auditLongShiftThreshold}h)`, shift: s });
+          }
+          if (s.endTime && durationMins < auditShortShiftThreshold) {
+              alerts.push({ type: 'short', message: `Short shift (< ${auditShortShiftThreshold}m)`, shift: s });
+          }
           if (s.scheduledStartTime) {
               const lateMins = (s.startTime - s.scheduledStartTime) / 60000;
-              if (lateMins > auditLateInThreshold) return true;
+              if (lateMins > auditLateInThreshold) {
+                  alerts.push({ type: 'late_in', message: `Late In (+${Math.round(lateMins)}m)`, shift: s });
+              }
           }
-
-          // Check Early/Late Out (only if finished)
           if (s.endTime && s.scheduledEndTime) {
               const earlyMins = (s.scheduledEndTime - s.endTime) / 60000;
-              const lateOutMins = (s.endTime - s.scheduledEndTime) / 60000;
-              if (earlyMins > auditEarlyOutThreshold) return true;
-              if (lateOutMins > auditLateOutThreshold) return true;
+              if (earlyMins > auditEarlyOutThreshold) {
+                  alerts.push({ type: 'early_out', message: `Early Out (${Math.round(earlyMins)}m)`, shift: s });
+              }
           }
-
-          return false;
-      }).length;
+      });
+      return alerts;
   };
 
-  const alertCount = getAlertCount();
+  const pendingStaff = staff.filter(u => u.isApproved === false);
+  const uncoveredRota = todaysSchedule.filter(s => !s.userId);
+  const alerts = getAlerts();
+  
+  const totalReviewItems = alerts.length + pendingStaff.length + uncoveredRota.length;
 
   // --- ROLLING COST CALCULATION ---
   const calculateRollingCost = () => {
@@ -120,19 +137,12 @@ export const AdminDashboard = () => {
       const cutoff = now - (costWindow * 60 * 60 * 1000);
       
       return shifts.reduce((total, s) => {
-          // Shift end time (or now if active)
           const sEnd = s.endTime || now;
-          
-          // If shift ended before window started, skip
           if (sEnd < cutoff) return total;
-          
-          // If shift started in future (sanity check), skip
           if (s.startTime > now) return total;
 
-          // Calculate overlap with window
           const effectiveStart = Math.max(s.startTime, cutoff);
           const effectiveEnd = Math.min(sEnd, now);
-          
           const durationHours = (effectiveEnd - effectiveStart) / 3600000;
           if (durationHours <= 0) return total;
 
@@ -158,6 +168,27 @@ export const AdminDashboard = () => {
       setEditStartTime(toLocalISO(shift.startTime));
       setEditEndTime(shift.endTime ? toLocalISO(shift.endTime) : '');
       setOpenActionMenuId(null);
+      setIsReviewModalOpen(false); // Close review modal if opened from there
+  };
+
+  const handleDismissAlert = async (shift: Shift) => {
+      try {
+          await updateShift(shift.id, { warningsDismissed: true });
+          setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, warningsDismissed: true } : s));
+      } catch (e) {
+          console.error("Dismiss failed", e);
+      }
+  };
+
+  const handleApproveStaff = async (userId: string) => {
+      if(!confirm("Approve this staff member?")) return;
+      try {
+          await updateUserProfile(userId, { isApproved: true });
+          setStaff(prev => prev.map(u => u.id === userId ? { ...u, isApproved: true } : u));
+      } catch (e) {
+          console.error(e);
+          alert("Failed to approve.");
+      }
   };
 
   const handleSaveEdit = async () => {
@@ -204,8 +235,11 @@ export const AdminDashboard = () => {
       setOpenActionMenuId(null);
   };
 
-  const StatWidget = ({ label, value, subtext, icon: Icon, color, isDropdown = false }: any) => (
-      <div className="glass-panel p-6 rounded-3xl relative overflow-visible group hover:bg-white/50 dark:hover:bg-white/5 transition duration-300 border border-slate-200 dark:border-white/5">
+  const StatWidget = ({ label, value, subtext, icon: Icon, color, isDropdown = false, onClick }: any) => (
+      <div 
+        onClick={onClick}
+        className={`glass-panel p-6 rounded-3xl relative overflow-visible group transition duration-300 border border-slate-200 dark:border-white/5 ${onClick ? 'cursor-pointer hover:bg-white/80 dark:hover:bg-white/10 hover:shadow-lg' : 'hover:bg-white/50 dark:hover:bg-white/5'}`}
+      >
           <div className={`absolute -right-4 -top-4 w-24 h-24 bg-${color}-500/10 rounded-full blur-2xl group-hover:bg-${color}-500/20 transition`}></div>
           <div className="relative z-10">
               <div className="flex justify-between items-start mb-4">
@@ -213,7 +247,7 @@ export const AdminDashboard = () => {
                       <Icon className="w-6 h-6" />
                   </div>
                   {isDropdown ? (
-                      <div className="relative">
+                      <div className="relative" onClick={e => e.stopPropagation()}>
                           <button 
                             onClick={() => setIsCostMenuOpen(!isCostMenuOpen)}
                             className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition"
@@ -297,10 +331,13 @@ export const AdminDashboard = () => {
 
             <StatWidget 
                 label="Requires Review" 
-                value={alertCount} 
+                value={totalReviewItems} 
                 subtext="Alerts"
-                icon={AlertCircle}
-                color="rose"
+                icon={ClipboardList}
+                color={totalReviewItems > 0 ? "rose" : "slate"}
+                onClick={() => {
+                    if (totalReviewItems > 0) setIsReviewModalOpen(true);
+                }}
             />
         </div>
 
@@ -438,6 +475,144 @@ export const AdminDashboard = () => {
         </div>
 
         {/* --- MODALS --- */}
+        
+        {/* Review Modal */}
+        {isReviewModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setIsReviewModalOpen(false)}>
+                <div className="glass-panel w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 overflow-hidden flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <ClipboardList className="w-6 h-6 text-brand-500" />
+                            Requires Review
+                        </h2>
+                        <button onClick={() => setIsReviewModalOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+                    
+                    {/* Tabs */}
+                    <div className="flex bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/5 px-6">
+                        <button 
+                            onClick={() => setReviewTab('alerts')}
+                            className={`py-4 px-4 text-sm font-bold border-b-2 transition ${reviewTab === 'alerts' ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            Attendance Alerts ({alerts.length})
+                        </button>
+                        <button 
+                            onClick={() => setReviewTab('pending')}
+                            className={`py-4 px-4 text-sm font-bold border-b-2 transition ${reviewTab === 'pending' ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            Pending Staff ({pendingStaff.length})
+                        </button>
+                        <button 
+                            onClick={() => setReviewTab('rota')}
+                            className={`py-4 px-4 text-sm font-bold border-b-2 transition ${reviewTab === 'rota' ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            Uncovered Rota ({uncoveredRota.length})
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-black/10">
+                        {reviewTab === 'alerts' && (
+                            <div className="space-y-3">
+                                {alerts.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-500">No attendance alerts.</div>
+                                ) : (
+                                    alerts.map((item, i) => (
+                                        <div key={i} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-white/5 flex justify-between items-center group">
+                                            <div>
+                                                <div className="font-bold text-slate-900 dark:text-white">{item.shift.userName}</div>
+                                                <div className="text-xs text-slate-500 mb-1">{new Date(item.shift.startTime).toLocaleDateString()}</div>
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/30">
+                                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                                    {item.message}
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => handleDismissAlert(item.shift)}
+                                                    className="px-3 py-2 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                                                >
+                                                    <EyeOff className="w-3 h-3" /> Dismiss
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleEditClick(item.shift)}
+                                                    className="px-3 py-2 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 rounded-lg text-xs font-bold transition text-slate-700 dark:text-white"
+                                                >
+                                                    View / Edit
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {reviewTab === 'pending' && (
+                            <div className="space-y-3">
+                                {pendingStaff.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-500">No pending staff approvals.</div>
+                                ) : (
+                                    pendingStaff.map(u => (
+                                        <div key={u.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-white/5 flex justify-between items-center">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center font-bold text-slate-500">
+                                                    {u.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <div className="font-bold text-slate-900 dark:text-white">{u.name}</div>
+                                                    <div className="text-xs text-slate-500">{u.email}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => navigate('/admin/staff')}
+                                                    className="px-3 py-2 text-slate-500 hover:text-slate-900 dark:hover:text-white text-xs font-bold"
+                                                >
+                                                    View Profile
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleApproveStaff(u.id)}
+                                                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition flex items-center gap-1"
+                                                >
+                                                    <UserPlus className="w-3 h-3" /> Approve
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {reviewTab === 'rota' && (
+                            <div className="space-y-3">
+                                {uncoveredRota.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-500">All shifts today are covered.</div>
+                                ) : (
+                                    uncoveredRota.map(s => (
+                                        <div key={s.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-white/5 flex justify-between items-center">
+                                            <div>
+                                                <div className="font-bold text-slate-900 dark:text-white">{s.role} Shift</div>
+                                                <div className="text-xs text-slate-500 font-mono">
+                                                    {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => navigate('/admin/rota')}
+                                                className="px-4 py-2 bg-brand-600 text-white rounded-lg text-xs font-bold hover:bg-brand-700 transition"
+                                            >
+                                                Go to Rota
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
         
         {/* Poster Modal */}
         {selectedLocationForPoster && (

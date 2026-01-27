@@ -70,14 +70,22 @@ service cloud.firestore {
         isCompanyAdmin(resource.data.companyId)
       );
       
+      // Staff can create (Clock In) or Admin can create
       allow create: if isAuthenticated() && (
         request.resource.data.userId == request.auth.uid ||
         isCompanyAdmin(request.resource.data.companyId)
       );
       
+      // Security Update:
+      // Admins can update any field.
+      // Staff (Owner of shift) can ONLY update the 'endTime' field (Clock Out).
+      // They cannot modify startTime, hourlyRate, or dismiss warnings.
       allow update: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        isCompanyAdmin(resource.data.companyId)
+        isCompanyAdmin(resource.data.companyId) || 
+        (
+          resource.data.userId == request.auth.uid && 
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime'])
+        )
       );
       
       allow delete: if isAuthenticated() && isCompanyAdmin(resource.data.companyId);
