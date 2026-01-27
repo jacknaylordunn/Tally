@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getShifts, getLocations, getCompany, getSchedule, updateShift, deleteShift, getCompanyStaff, updateUserProfile } from '../services/api';
 import { Shift, Location, Company, User, ScheduleShift } from '../types';
-import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown, ClipboardList, Check, UserPlus, AlertTriangle, EyeOff } from 'lucide-react';
+import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown, ClipboardList, Check, UserPlus, AlertTriangle, EyeOff, Wand2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -683,6 +683,16 @@ export const AdminDashboard = () => {
                                     onChange={(e) => setEditStartTime(e.target.value)}
                                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                                 />
+                                {editingShift.scheduledStartTime && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditStartTime(toLocalISO(editingShift.scheduledStartTime!))}
+                                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline mt-1 flex items-center gap-1"
+                                    >
+                                        <Wand2 className="w-3 h-3" />
+                                        Reset to Plan: {new Date(editingShift.scheduledStartTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                    </button>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs font-bold uppercase text-slate-500 mb-1">End Time</label>
@@ -692,6 +702,16 @@ export const AdminDashboard = () => {
                                     onChange={(e) => setEditEndTime(e.target.value)}
                                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                                 />
+                                {editingShift.scheduledEndTime && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditEndTime(toLocalISO(editingShift.scheduledEndTime!))}
+                                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline mt-1 flex items-center gap-1"
+                                    >
+                                        <Wand2 className="w-3 h-3" />
+                                        Reset to Plan: {new Date(editingShift.scheduledEndTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                    </button>
+                                )}
                             </div>
                         </div>
                         <div className="flex items-center space-x-2 text-xs text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20 p-3 rounded-lg border border-brand-200 dark:border-brand-900/30">

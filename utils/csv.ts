@@ -13,6 +13,7 @@ interface ExportOptions {
   holidayPayRate?: number;
   companyName?: string;
   brandColor?: string;
+  timeFormat?: '12h' | '24h_dot';
 }
 
 const escapeCSV = (str: any) => {
@@ -35,6 +36,15 @@ const sortByLastName = (aName: string, bName: string) => {
 // Helper to format date as DD.MM.YY for compact rate history
 const formatDateShort = (d: Date) => {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '.');
+};
+
+const formatTime = (date: Date, format: '12h' | '24h_dot' = '12h') => {
+    if (format === '24h_dot') {
+        const h = date.getHours().toString().padStart(2, '0');
+        const m = date.getMinutes().toString().padStart(2, '0');
+        return `${h}.${m}`;
+    }
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
 };
 
 // Logic to generate strings like "12.00 (until 12.01.26) -> 12.65 (from 12.01.26)"
@@ -98,7 +108,8 @@ export const downloadPayrollReport = (
     holidayPayEnabled = false,
     holidayPayRate = 0,
     companyName = 'Tallyd Report',
-    brandColor = '#0ea5e9'
+    brandColor = '#0ea5e9',
+    timeFormat = '12h'
   } = options;
 
   // --- HTML/EXCEL MATRIX VIEW (Rich Formatting) ---
@@ -238,8 +249,8 @@ export const downloadPayrollReport = (
                           totalBasePay += (h * (s.hourlyRate || 0));
                           
                           if (showTimesInMatrix) {
-                              ins.push(new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-                              outs.push(new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+                              ins.push(formatTime(new Date(s.startTime), timeFormat));
+                              outs.push(formatTime(new Date(s.endTime), timeFormat));
                           }
                       }
                   });
@@ -503,8 +514,8 @@ export const downloadPayrollReport = (
       const row = [
         shift.userName,
         startTime.toLocaleDateString(),
-        startTime.toLocaleTimeString(),
-        endTime.toLocaleTimeString(),
+        formatTime(startTime, timeFormat),
+        formatTime(endTime, timeFormat),
         hours.toFixed(2),
         rate.toFixed(2),
         basePay.toFixed(2),

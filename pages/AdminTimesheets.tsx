@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getShifts, updateShift, deleteShift, getCompany, getCompanyStaff, createManualShift } from '../services/api';
 import { Shift, Company, User } from '../types';
-import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet, FileText, Table, Info } from 'lucide-react';
+import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet, FileText, Table, Info, Wand2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadPayrollReport } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -28,7 +28,8 @@ export const AdminTimesheets = () => {
   const [exportOptions, setExportOptions] = useState({
       showTimes: true,
       includeDeductions: false,
-      separateHoliday: false
+      separateHoliday: false,
+      timeFormat: '12h' as '12h' | '24h_dot'
   });
 
   // Edit Modal State
@@ -229,7 +230,8 @@ export const AdminTimesheets = () => {
         holidayPayEnabled: exportOptions.separateHoliday,
         holidayPayRate: company?.settings.holidayPayRate,
         companyName: company?.name,
-        brandColor: company?.settings.primaryColor
+        brandColor: company?.settings.primaryColor,
+        timeFormat: exportOptions.timeFormat
     });
     setIsExportModalOpen(false);
   };
@@ -579,6 +581,27 @@ export const AdminTimesheets = () => {
                         </div>
                     )}
 
+                    {/* Time Format Option */}
+                    {(exportFormat === 'matrix' && exportOptions.showTimes) || exportFormat === 'detailed' ? (
+                        <div className="mt-4">
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Time Format</label>
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-white/5">
+                                <button 
+                                    onClick={() => setExportOptions(prev => ({ ...prev, timeFormat: '12h' }))}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${exportOptions.timeFormat === '12h' ? 'bg-white dark:bg-slate-600 shadow-sm text-brand-600 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
+                                >
+                                    10:56 pm
+                                </button>
+                                <button 
+                                    onClick={() => setExportOptions(prev => ({ ...prev, timeFormat: '24h_dot' }))}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${exportOptions.timeFormat === '24h_dot' ? 'bg-white dark:bg-slate-600 shadow-sm text-brand-600 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
+                                >
+                                    22.56
+                                </button>
+                            </div>
+                        </div>
+                    ) : null}
+
                     <div className="mt-8 flex gap-3">
                         <button 
                             onClick={() => setIsExportModalOpen(false)}
@@ -624,6 +647,16 @@ export const AdminTimesheets = () => {
                                     onChange={(e) => setEditStartTime(e.target.value)}
                                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                                 />
+                                {editingShift.scheduledStartTime && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditStartTime(toLocalISO(editingShift.scheduledStartTime!))}
+                                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline mt-1 flex items-center gap-1"
+                                    >
+                                        <Wand2 className="w-3 h-3" />
+                                        Reset to Plan: {new Date(editingShift.scheduledStartTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                    </button>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs font-bold uppercase text-slate-500 mb-1">End Time</label>
@@ -633,6 +666,16 @@ export const AdminTimesheets = () => {
                                     onChange={(e) => setEditEndTime(e.target.value)}
                                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                                 />
+                                {editingShift.scheduledEndTime && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditEndTime(toLocalISO(editingShift.scheduledEndTime!))}
+                                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline mt-1 flex items-center gap-1"
+                                    >
+                                        <Wand2 className="w-3 h-3" />
+                                        Reset to Plan: {new Date(editingShift.scheduledEndTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                    </button>
+                                )}
                             </div>
                         </div>
                         <div className="flex items-center space-x-2 text-xs text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20 p-3 rounded-lg border border-brand-200 dark:border-brand-900/30">
@@ -642,8 +685,17 @@ export const AdminTimesheets = () => {
                     </div>
 
                     <div className="flex gap-3">
-                         <button onClick={() => setEditingShift(null)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition">Cancel</button>
-                        <button onClick={handleSaveEdit} disabled={saving} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2">
+                         <button 
+                            onClick={() => setEditingShift(null)}
+                            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleSaveEdit}
+                            disabled={saving}
+                            className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2"
+                        >
                             <Save className="w-4 h-4" />
                             <span>{saving ? 'Saving...' : 'Save Changes'}</span>
                         </button>

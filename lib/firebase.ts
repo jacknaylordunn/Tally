@@ -1,6 +1,7 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDQk5fIToyGp8qxyD2llk_v8N3E0aNO3G4",
@@ -14,15 +15,24 @@ const firebaseConfig = {
 
 // Initialize Firebase
 // Check if apps already initialized to prevent hot-reload errors in development
-const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// We avoid explicit type annotation for 'app' to prevent module resolution errors
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with offline persistence enabled
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  })
-});
+// Initialize Firestore
+// Handle potential duplicate initialization during hot reloads
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+} catch (e) {
+  // If Firestore is already initialized, use the existing instance
+  db = getFirestore(app);
+}
 
+export { db };
 export const auth = getAuth(app);
 
 export default app;
