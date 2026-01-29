@@ -12,7 +12,8 @@ export interface User {
   activeShiftId?: string | null;
   role: UserRole;
   customHourlyRate?: number; // Override company default
-  position?: string; // e.g. "Senior Medic"
+  position?: string; // Primary/Legacy position
+  roles?: string[]; // New: Multiple roles for Rota filtering
   isApproved?: boolean; // If true, can clock in. If undefined, assume true (migration).
   tutorialSeen?: boolean; // Tracks if the user has completed the welcome tour
 }

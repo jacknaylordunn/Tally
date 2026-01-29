@@ -17,7 +17,7 @@ export const AdminDashboard = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
   const [staff, setStaff] = useState<User[]>([]);
-  const [todaysSchedule, setTodaysSchedule] = useState<ScheduleShift[]>([]);
+  const [activeSchedule, setActiveSchedule] = useState<ScheduleShift[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,11 +59,17 @@ export const AdminDashboard = () => {
 
         if (companyData.settings.rotaEnabled) {
             try {
+                // Fetch schedule for Yesterday AND Today to catch overnight shifts
                 const now = new Date();
-                const startOfDay = new Date(now.setHours(0,0,0,0)).getTime();
-                const endOfDay = new Date(now.setHours(23,59,59,999)).getTime();
-                const todayRota = await getSchedule(user.currentCompanyId, startOfDay, endOfDay);
-                setTodaysSchedule(todayRota);
+                const startOfYesterday = new Date(now);
+                startOfYesterday.setDate(now.getDate() - 1);
+                startOfYesterday.setHours(0,0,0,0);
+                
+                const endOfToday = new Date(now);
+                endOfToday.setHours(23,59,59,999);
+
+                const recentSchedule = await getSchedule(user.currentCompanyId, startOfYesterday.getTime(), endOfToday.getTime());
+                setActiveSchedule(recentSchedule);
             } catch (e) { console.error(e); }
         }
         setLoading(false);
@@ -80,7 +86,11 @@ export const AdminDashboard = () => {
   });
 
   const activeShiftsCount = shifts.filter(s => !s.endTime).length;
-  const todaysScheduleCount = todaysSchedule.filter(s => s.userId).length;
+  
+  // Calculate expected shifts RIGHT NOW (handles overnight shifts correctly)
+  const nowTs = Date.now();
+  const scheduledNowCount = activeSchedule.filter(s => s.userId && s.startTime <= nowTs && s.endTime > nowTs).length;
+  
   const currency = company?.settings.currency || '£';
 
   // --- REVIEW ALERTS CALCULATION ---
@@ -88,6 +98,7 @@ export const AdminDashboard = () => {
       if (!company) return [];
       const { 
           auditLateInThreshold = 15,
+          auditEarlyInThreshold = 30,
           auditEarlyOutThreshold = 15,
           auditLateOutThreshold = 15,
           auditShortShiftThreshold = 5,
@@ -101,6 +112,7 @@ export const AdminDashboard = () => {
           if (s.warningsDismissed) return;
 
           const now = Date.now();
+          // 1. Duration Checks
           const durationMins = ((s.endTime || now) - s.startTime) / 60000;
           
           if (durationMins > (auditLongShiftThreshold * 60)) {
@@ -109,16 +121,25 @@ export const AdminDashboard = () => {
           if (s.endTime && durationMins < auditShortShiftThreshold) {
               alerts.push({ type: 'short', message: `Short shift (< ${auditShortShiftThreshold}m)`, shift: s });
           }
+
+          // 2. Schedule Adherence Checks
           if (s.scheduledStartTime) {
-              const lateMins = (s.startTime - s.scheduledStartTime) / 60000;
-              if (lateMins > auditLateInThreshold) {
-                  alerts.push({ type: 'late_in', message: `Late In (+${Math.round(lateMins)}m)`, shift: s });
+              const diffStart = (s.startTime - s.scheduledStartTime) / 60000;
+              
+              if (diffStart > auditLateInThreshold) {
+                  alerts.push({ type: 'late_in', message: `Late In (+${Math.round(diffStart)}m)`, shift: s });
+              } else if (diffStart < -auditEarlyInThreshold) {
+                  alerts.push({ type: 'early_in', message: `Early In (${Math.abs(Math.round(diffStart))}m)`, shift: s });
               }
           }
-          if (s.endTime && s.scheduledEndTime) {
-              const earlyMins = (s.scheduledEndTime - s.endTime) / 60000;
-              if (earlyMins > auditEarlyOutThreshold) {
-                  alerts.push({ type: 'early_out', message: `Early Out (${Math.round(earlyMins)}m)`, shift: s });
+
+          if (s.scheduledEndTime && s.endTime) {
+              const diffEnd = (s.endTime - s.scheduledEndTime) / 60000;
+              
+              if (diffEnd < -auditEarlyOutThreshold) {
+                  alerts.push({ type: 'early_out', message: `Early Out (${Math.abs(Math.round(diffEnd))}m)`, shift: s });
+              } else if (diffEnd > auditLateOutThreshold) {
+                  alerts.push({ type: 'late_out', message: `Late Out (+${Math.round(diffEnd)}m)`, shift: s });
               }
           }
       });
@@ -126,7 +147,7 @@ export const AdminDashboard = () => {
   };
 
   const pendingStaff = staff.filter(u => u.isApproved === false);
-  const uncoveredRota = todaysSchedule.filter(s => !s.userId);
+  const uncoveredRota = activeSchedule.filter(s => !s.userId && s.startTime > Date.now() && s.startTime < Date.now() + 86400000); // Uncovered in next 24h
   const alerts = getAlerts();
   
   const totalReviewItems = alerts.length + pendingStaff.length + uncoveredRota.length;
@@ -303,9 +324,9 @@ export const AdminDashboard = () => {
         <div className={`grid grid-cols-1 ${company?.settings.rotaEnabled ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-6`}>
             {company?.settings.rotaEnabled && (
                 <StatWidget 
-                    label="Today's Schedule" 
-                    value={`${activeShiftsCount}/${todaysScheduleCount}`} 
-                    subtext="Attendance"
+                    label="Active Schedule" 
+                    value={`${activeShiftsCount}/${scheduledNowCount}`} 
+                    subtext="On-Shift"
                     icon={Calendar}
                     color="purple"
                 />
@@ -614,21 +635,53 @@ export const AdminDashboard = () => {
             </div>
         )}
         
-        {/* Poster Modal */}
+        {/* Poster Modal - UPDATED TO MATCH LOCATIONS PRINT STYLE */}
         {selectedLocationForPoster && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-3xl p-8 max-w-lg w-full text-center relative">
-                    <button onClick={() => setSelectedLocationForPoster(null)} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition text-slate-900">
-                        <X className="w-5 h-5" />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-none md:rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl print:shadow-none print:w-screen print:h-screen print:max-w-none print:rounded-none print:flex print:flex-col print:items-center print:justify-center">
+                    <button 
+                        onClick={() => setSelectedLocationForPoster(null)} 
+                        className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition print:hidden"
+                    >
+                        <X className="w-5 h-5 text-slate-500" />
                     </button>
-                    <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{selectedLocationForPoster.name}</h2>
-                    <p className="text-slate-500 mb-8">Scan to Clock In/Out</p>
-                    <div className="bg-white border-4 border-slate-900 p-6 rounded-3xl inline-block mb-8">
-                         <QRCode value={getStaticQrUrl(selectedLocationForPoster.id)} size={250} />
+
+                    <div className="mb-8 space-y-2">
+                        <div className="flex items-center justify-center space-x-2 mb-4 text-slate-400">
+                             <Building className="w-5 h-5" />
+                             <span className="font-semibold uppercase tracking-widest text-sm">{company?.name || APP_NAME}</span>
+                        </div>
+                        <h2 className="text-4xl font-extrabold text-slate-900">{selectedLocationForPoster.name}</h2>
+                        <p className="text-slate-500 text-lg">Scan to Clock In or Out</p>
                     </div>
-                    <button className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition" onClick={() => window.print()}>
-                        Print Poster
-                    </button>
+
+                    <div className="bg-white border-4 border-slate-900 p-8 rounded-3xl inline-block mb-8 shadow-xl print:shadow-none">
+                         <QRCode value={getStaticQrUrl(selectedLocationForPoster.id)} size={300} />
+                    </div>
+                    
+                    <div className="text-slate-400 text-sm font-medium mb-8">
+                        <p>1. Open your camera</p>
+                        <p>2. Scan the code</p>
+                        <p>3. Confirm your location</p>
+                    </div>
+
+                    <div className="flex gap-4 print:hidden">
+                        <button 
+                            className="flex-1 bg-brand-500 text-white py-3 rounded-xl font-bold hover:bg-brand-600 transition shadow-lg shadow-brand-500/30"
+                            onClick={() => window.print()}
+                        >
+                            Print Poster
+                        </button>
+                         <button 
+                            className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-200 transition"
+                            onClick={() => {
+                                navigator.clipboard.writeText(getStaticQrUrl(selectedLocationForPoster.id));
+                                alert("Link copied to clipboard");
+                            }}
+                        >
+                            Copy Link
+                        </button>
+                    </div>
                 </div>
             </div>
         )}

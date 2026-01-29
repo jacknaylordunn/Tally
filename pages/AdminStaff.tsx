@@ -17,8 +17,8 @@ export const AdminStaff = () => {
   // Edit Modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editRate, setEditRate] = useState('');
-  const [editPosition, setEditPosition] = useState('');
-  const [isNewPositionMode, setIsNewPositionMode] = useState(false);
+  const [editRoles, setEditRoles] = useState<string[]>([]);
+  const [roleInput, setRoleInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Bulk Update Modal
@@ -60,22 +60,40 @@ export const AdminStaff = () => {
     s.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Derive unique existing positions for the dropdown
-  const existingPositions = Array.from(new Set(staff.map(u => u.position).filter(Boolean))).sort() as string[];
+  // Derive unique existing positions for the dropdown suggestions
+  const allRoles = Array.from(new Set(
+      staff.flatMap(u => u.roles || (u.position ? [u.position] : []))
+  )).sort().filter(Boolean);
 
   const handleEdit = (u: User) => {
       setEditingUser(u);
       setEditRate(u.customHourlyRate?.toString() || '');
-      setEditPosition(u.position || '');
-      setIsNewPositionMode(false);
+      // Initialize roles from roles array OR legacy position field
+      setEditRoles(u.roles && u.roles.length > 0 ? u.roles : (u.position ? [u.position] : []));
+      setRoleInput('');
+  };
+
+  const addRole = (role: string) => {
+      if (role && !editRoles.includes(role)) {
+          setEditRoles([...editRoles, role]);
+      }
+      setRoleInput('');
+  };
+
+  const removeRole = (role: string) => {
+      setEditRoles(editRoles.filter(r => r !== role));
   };
 
   const handleSave = async () => {
       if (!editingUser || !user?.currentCompanyId) return;
       setSaving(true);
       try {
+          // Flatten first role to legacy 'position' field for backward compat
+          const primaryPosition = editRoles.length > 0 ? editRoles[0] : null;
+
           const updates: any = {
-              position: editPosition
+              position: primaryPosition || deleteField(),
+              roles: editRoles
           };
 
           let newRate: number | null = null;
@@ -257,7 +275,7 @@ export const AdminStaff = () => {
                     <thead className="bg-slate-50 dark:bg-white/5 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
                         <tr>
                             <th className="px-6 py-4">Employee</th>
-                            <th className="px-6 py-4">Position</th>
+                            <th className="px-6 py-4">Roles / Position</th>
                             <th className="px-6 py-4">Hourly Rate</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4"></th>
@@ -275,6 +293,7 @@ export const AdminStaff = () => {
                             const effectiveRate = u.customHourlyRate ?? company?.settings.defaultHourlyRate ?? 0;
                             const isCustom = u.customHourlyRate !== undefined;
                             const isPending = u.isApproved === false;
+                            const roles = u.roles && u.roles.length > 0 ? u.roles : (u.position ? [u.position] : []);
                             
                             return (
                                 <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition group">
@@ -293,11 +312,13 @@ export const AdminStaff = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {u.position ? (
-                                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                                                {u.position}
-                                            </span>
-                                        ) : <span className="text-slate-400 italic">None</span>}
+                                        <div className="flex flex-wrap gap-1">
+                                            {roles.length > 0 ? roles.map((r, i) => (
+                                                <span key={i} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                                    {r}
+                                                </span>
+                                            )) : <span className="text-slate-400 italic">None</span>}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 font-mono text-slate-700 dark:text-slate-300">
                                         {currency}{effectiveRate.toFixed(2)}
@@ -383,52 +404,46 @@ export const AdminStaff = () => {
                         )}
                         
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Position / Title</label>
-                            {isNewPositionMode ? (
-                                <div className="flex gap-2">
-                                    <div className="relative flex-1">
-                                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                                        <input 
-                                            type="text"
-                                            value={editPosition}
-                                            onChange={(e) => setEditPosition(e.target.value)}
-                                            placeholder="e.g. Senior Medic"
-                                            autoFocus
-                                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
-                                        />
-                                    </div>
-                                    <button 
-                                        type="button"
-                                        onClick={() => setIsNewPositionMode(false)}
-                                        className="px-3 py-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="relative">
-                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-                                    <select 
-                                        value={editPosition}
-                                        onChange={(e) => {
-                                            if (e.target.value === '__NEW__') {
-                                                setEditPosition('');
-                                                setIsNewPositionMode(true);
-                                            } else {
-                                                setEditPosition(e.target.value);
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Roles / Positions</label>
+                            
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {editRoles.map((role, i) => (
+                                    <span key={i} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 border border-brand-100 dark:border-brand-500/20">
+                                        {role}
+                                        <button onClick={() => removeRole(role)} className="ml-1 hover:text-red-500"><X className="w-3 h-3" /></button>
+                                    </span>
+                                ))}
+                            </div>
+
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                    <input 
+                                        type="text"
+                                        value={roleInput}
+                                        onChange={(e) => setRoleInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                addRole(roleInput);
                                             }
                                         }}
-                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Select Role...</option>
-                                        {existingPositions.map((pos) => (
-                                            <option key={pos} value={pos}>{pos}</option>
-                                        ))}
-                                        <option value="__NEW__" className="font-bold text-brand-600">+ Create New Role...</option>
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                        list="roles-list"
+                                        placeholder="Add role..."
+                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                    />
+                                    <datalist id="roles-list">
+                                        {allRoles.map(r => <option key={r} value={r} />)}
+                                    </datalist>
                                 </div>
-                            )}
+                                <button 
+                                    type="button"
+                                    onClick={() => addRole(roleInput)}
+                                    className="px-3 py-2 text-white bg-brand-600 hover:bg-brand-700 rounded-lg font-bold"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
 
                          <div>

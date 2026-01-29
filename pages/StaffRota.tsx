@@ -112,12 +112,12 @@ export const StaffRota = () => {
       const isOpen = s.userId === null || (s.userId !== user?.id && s.isOffered);
       if (!isOpen) return false;
 
-      // Visibility Rule: If shift has a role, user must match it.
-      // If user has no position set, they only see shifts with no role or 'Staff' role (assuming 'Staff' is default/generic)
-      if (s.role && s.role !== 'Staff' && s.role !== 'Open' && s.role !== user?.position) {
-          return false;
-      }
-      return true;
+      // Visibility Rule: If shift has a role, user must have that role in their profile.
+      // Falls back to legacy `position` field if `roles` array is missing.
+      const userRoles = user?.roles || (user?.position ? [user.position] : []);
+      const canSee = !s.role || s.role === 'Staff' || s.role === 'Open' || userRoles.includes(s.role);
+
+      return canSee;
   }).sort((a,b) => a.startTime - b.startTime);
 
   // Group by Date -> Group Key
