@@ -46,7 +46,6 @@ export const AdminRota = () => {
   const [repeatSourceShift, setRepeatSourceShift] = useState<ScheduleShift | null>(null);
   
   // Context Menu State
-  // Type expanded to include 'group' data which is ScheduleShift[]
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'shift' | 'day' | 'group', data: any } | null>(null);
   const [clipboard, setClipboard] = useState<ScheduleShift | null>(null);
   const [dayClipboard, setDayClipboard] = useState<ScheduleShift[] | null>(null);
@@ -125,7 +124,19 @@ export const AdminRota = () => {
     setLoading(false);
   };
 
-  // ... (Cost helper and groupings unchanged)
+  if (company && company.settings.rotaEnabled === false) {
+      return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center border border-slate-200 dark:border-white/10">
+                  <Lock className="w-8 h-8 text-slate-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Rota System Disabled</h2>
+              <p className="text-slate-500 max-w-md">The scheduling features are currently turned off for your company. Please enable them in Settings if you wish to use them.</p>
+          </div>
+      );
+  }
+
+  // Cost Helper
   const getShiftCost = (shift: ScheduleShift) => {
       const durationHours = (shift.endTime - shift.startTime) / 3600000;
       let rate = company?.settings.defaultHourlyRate || 0;
@@ -146,6 +157,7 @@ export const AdminRota = () => {
   const totalWeeklyCost = schedule.reduce((acc, s) => acc + getShiftCost(s), 0);
   const currency = company?.settings.currency || '£';
 
+  // --- GROUPING LOGIC ---
   const getGroupKey = (s: ScheduleShift) => {
       return `${s.role}_${s.startTime}_${s.endTime}_${s.locationId || 'nal'}`;
   };
@@ -169,49 +181,7 @@ export const AdminRota = () => {
     }).sort((a, b) => a.startTime - b.startTime);
   };
 
-  // ... (Actions unchanged: Prev, Next, Today, CopyWeek, ClearDrafts, Modal handlers)
-  
-  // --- EXTENDED ACTIONS ---
-
-  const handleDeleteGroup = async (groupShifts: ScheduleShift[]) => {
-      if (!confirm(`Delete all ${groupShifts.length} shifts in this collection?`)) return;
-      setLoading(true);
-      await Promise.all(groupShifts.map(s => deleteScheduleShift(s.id)));
-      loadData();
-      setContextMenu(null);
-  };
-
-  const handleCopyGroup = (groupShifts: ScheduleShift[]) => {
-      setGroupClipboard(groupShifts);
-      // Also set single clipboard to first item for single-paste scenarios if needed
-      if(groupShifts.length > 0) setClipboard(groupShifts[0]);
-      setContextMenu(null);
-  };
-
-  const handleDuplicateShiftInGroup = async (groupShifts: ScheduleShift[]) => {
-      if (groupShifts.length === 0) return;
-      const source = groupShifts[0];
-      const newShift: any = { ...source };
-      newShift.id = `sch_${Date.now()}_grpdup_${Math.random().toString(36).substr(2,5)}`;
-      newShift.status = 'draft';
-      newShift.userId = null;
-      delete newShift.userName;
-      newShift.bids = [];
-      newShift.isOffered = false;
-      await createScheduleShift(newShift);
-      loadData();
-      setContextMenu(null);
-  };
-
-  const handleDeleteDay = async (date: Date) => {
-      const shifts = getShiftsForDay(date);
-      if (shifts.length === 0) return;
-      if (!confirm(`Are you sure you want to delete ALL ${shifts.length} shifts on ${date.toLocaleDateString()}? This cannot be undone.`)) return;
-      setLoading(true);
-      await Promise.all(shifts.map(s => deleteScheduleShift(s.id)));
-      loadData();
-      setContextMenu(null);
-  };
+  // --- ACTIONS ---
 
   const handleTimeOffAction = async (requestId: string, status: 'approved' | 'rejected') => {
       if (!user?.currentCompanyId) return;
@@ -551,6 +521,47 @@ export const AdminRota = () => {
         setEditingShift(null);
         loadData();
     }
+  };
+
+  // --- EXTENDED ACTIONS ---
+
+  const handleDeleteGroup = async (groupShifts: ScheduleShift[]) => {
+      if (!confirm(`Delete all ${groupShifts.length} shifts in this collection?`)) return;
+      setLoading(true);
+      await Promise.all(groupShifts.map(s => deleteScheduleShift(s.id)));
+      loadData();
+      setContextMenu(null);
+  };
+
+  const handleCopyGroup = (groupShifts: ScheduleShift[]) => {
+      setGroupClipboard(groupShifts);
+      if(groupShifts.length > 0) setClipboard(groupShifts[0]);
+      setContextMenu(null);
+  };
+
+  const handleDuplicateShiftInGroup = async (groupShifts: ScheduleShift[]) => {
+      if (groupShifts.length === 0) return;
+      const source = groupShifts[0];
+      const newShift: any = { ...source };
+      newShift.id = `sch_${Date.now()}_grpdup_${Math.random().toString(36).substr(2,5)}`;
+      newShift.status = 'draft';
+      newShift.userId = null;
+      delete newShift.userName;
+      newShift.bids = [];
+      newShift.isOffered = false;
+      await createScheduleShift(newShift);
+      loadData();
+      setContextMenu(null);
+  };
+
+  const handleDeleteDay = async (date: Date) => {
+      const shifts = getShiftsForDay(date);
+      if (shifts.length === 0) return;
+      if (!confirm(`Are you sure you want to delete ALL ${shifts.length} shifts on ${date.toLocaleDateString()}? This cannot be undone.`)) return;
+      setLoading(true);
+      await Promise.all(shifts.map(s => deleteScheduleShift(s.id)));
+      loadData();
+      setContextMenu(null);
   };
 
   const handlePublish = async (scope: 'week' | 'all') => {
@@ -1059,6 +1070,254 @@ export const AdminRota = () => {
         </div>
 
         {/* ... (Modals Unchanged) ... */}
+        {isPrintSettingsOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
+                <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-white/10 bg-slate-900">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                            <Settings className="w-5 h-5" /> Print Settings
+                        </h3>
+                        <button onClick={() => setIsPrintSettingsOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-white" /></button>
+                    </div>
+                    
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-3 gap-3">
+                            <button 
+                                onClick={() => setPrintConfig({...printConfig, layout: 'list'})}
+                                className={`flex flex-col items-center p-4 rounded-xl border transition-all ${printConfig.layout === 'list' ? 'bg-brand-600 border-brand-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                <AlignJustify className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold">List View</span>
+                            </button>
+                            <button 
+                                onClick={() => setPrintConfig({...printConfig, layout: 'staff_grid'})}
+                                className={`flex flex-col items-center p-4 rounded-xl border transition-all ${printConfig.layout === 'staff_grid' ? 'bg-brand-600 border-brand-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                <Table className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold">Staff Grid</span>
+                            </button>
+                            <button 
+                                onClick={() => setPrintConfig({...printConfig, layout: 'date_grid'})}
+                                className={`flex flex-col items-center p-4 rounded-xl border transition-all ${printConfig.layout === 'date_grid' ? 'bg-brand-600 border-brand-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                <LayoutTemplate className="w-6 h-6 mb-2" />
+                                <span className="text-xs font-bold">Date Grid</span>
+                            </button>
+                        </div>
+
+                        <div className="bg-slate-800/50 rounded-xl p-4 space-y-3 border border-white/5">
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-sm text-slate-300">Show Locations</span>
+                                <div 
+                                    onClick={() => setPrintConfig({...printConfig, showLocation: !printConfig.showLocation})}
+                                    className={`w-10 h-6 rounded-full p-1 transition-colors ${printConfig.showLocation ? 'bg-brand-500' : 'bg-slate-700'}`}
+                                >
+                                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${printConfig.showLocation ? 'translate-x-4' : ''}`}></div>
+                                </div>
+                            </label>
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-sm text-slate-300">Show Role Names</span>
+                                <div 
+                                    onClick={() => setPrintConfig({...printConfig, showRole: !printConfig.showRole})}
+                                    className={`w-10 h-6 rounded-full p-1 transition-colors ${printConfig.showRole ? 'bg-brand-500' : 'bg-slate-700'}`}
+                                >
+                                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${printConfig.showRole ? 'translate-x-4' : ''}`}></div>
+                                </div>
+                            </label>
+                            {printConfig.layout !== 'list' && (
+                                <label className="flex items-center justify-between cursor-pointer">
+                                    <span className="text-sm text-slate-300">Show Unassigned Row</span>
+                                    <div 
+                                        onClick={() => setPrintConfig({...printConfig, showUnassigned: !printConfig.showUnassigned})}
+                                        className={`w-10 h-6 rounded-full p-1 transition-colors ${printConfig.showUnassigned ? 'bg-brand-500' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${printConfig.showUnassigned ? 'translate-x-4' : ''}`}></div>
+                                    </div>
+                                </label>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                onClick={() => setIsPrintSettingsOpen(false)} 
+                                className="flex-1 px-4 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleConfirmPrint}
+                                className="flex-1 px-4 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center gap-2"
+                            >
+                                <Printer className="w-5 h-5" />
+                                <span>Print Now</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {isShiftModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
+                <div id="shift-modal-container" className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">
+                            {editingShift ? 'Edit Shift' : `Add Shift`}
+                        </h3>
+                        <button onClick={() => setIsShiftModalOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-slate-900 dark:hover:text-white" /></button>
+                    </div>
+
+                    <form onSubmit={handleSaveShift} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Role / Position</label>
+                            {isNewRoleMode ? (
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" required
+                                        value={shiftRole} onChange={e => setShiftRole(e.target.value)}
+                                        className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        placeholder="e.g. Bar Staff"
+                                        autoFocus
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsNewRoleMode(false)}
+                                        className="px-3 py-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <select 
+                                        value={shiftRole} 
+                                        onChange={(e) => {
+                                            if (e.target.value === '__NEW__') {
+                                                setShiftRole('');
+                                                setIsNewRoleMode(true);
+                                            } else {
+                                                setShiftRole(e.target.value);
+                                            }
+                                        }}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="Staff">Staff (Default)</option>
+                                        {Array.from(new Set(staff.flatMap(u => u.roles || [u.position]).filter(Boolean))).sort().map(pos => (
+                                            <option key={pos} value={pos}>{pos}</option>
+                                        ))}
+                                        <option value="__NEW__" className="font-bold text-brand-600">+ Create New Role...</option>
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                </div>
+                            )}
+                        </div>
+
+                        {!editingShift && (
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Number of Staff Needed</label>
+                                <input 
+                                    type="number" min="1" max="20" required
+                                    value={shiftQuantity} onChange={e => setShiftQuantity(parseInt(e.target.value))}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">Creates multiple open slots for this role.</p>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-4">
+                             <div>
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Start Time</label>
+                                <input 
+                                    type="time" required
+                                    value={shiftStart} onChange={e => setShiftStart(e.target.value)}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                            </div>
+                             <div>
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">End Time</label>
+                                {company?.settings.rotaShowFinishTimes !== false ? (
+                                    <input 
+                                        type="time" required
+                                        value={shiftEnd} onChange={e => setShiftEnd(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                    />
+                                ) : (
+                                    <div className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 text-sm flex items-center">
+                                        <ArrowRight className="w-4 h-4 mr-2" /> Till Finish
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Assign Staff</label>
+                            <select 
+                                value={shiftUser} onChange={e => setShiftUser(e.target.value)}
+                                disabled={!editingShift && shiftQuantity > 1}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none disabled:opacity-50"
+                            >
+                                <option value="open">-- Open / Unassigned --</option>
+                                {staff.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name} ({s.position || 'Staff'})</option>
+                                ))}
+                            </select>
+                            {!editingShift && shiftQuantity > 1 && <p className="text-xs text-amber-500 mt-1">Cannot assign staff during bulk creation.</p>}
+                        </div>
+
+                         <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Location</label>
+                            <select 
+                                value={shiftLocation} onChange={e => setShiftLocation(e.target.value)}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                            >
+                                <option value="">-- No Specific Location --</option>
+                                {locations.map(l => (
+                                    <option key={l.id} value={l.id}>{l.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        {/* Bids Section */}
+                        {editingShift && editingShift.bids && editingShift.bids.length > 0 && (
+                            <div className="bg-amber-100 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-900/30 animate-fade-in">
+                                <h4 className="text-sm font-bold text-amber-600 dark:text-amber-400 mb-2">
+                                    {editingShift.userId ? 'Swap Requests' : 'Staff Bids'} ({editingShift.bids.length})
+                                </h4>
+                                <div className="space-y-2">
+                                    {editingShift.bids.map(bidderId => {
+                                        const b = staff.find(s => s.id === bidderId);
+                                        if (!b) return null;
+                                        return (
+                                            <div key={bidderId} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700">
+                                                <span className="text-sm text-slate-700 dark:text-slate-200">{b.name}</span>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleAssignBidder(editingShift, bidderId)}
+                                                    className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded font-bold hover:bg-amber-500 transition"
+                                                >
+                                                    {editingShift.userId ? 'Approve Swap' : 'Assign'}
+                                                </button>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-4 items-center">
+                            {editingShift && (
+                                <button type="button" onClick={() => handleDeleteShift()} className="px-3 py-2 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg font-bold transition">Delete</button>
+                            )}
+                            <div className="flex-1"></div>
+                            
+                            <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-2 text-slate-500 dark:text-slate-400 font-bold hover:text-slate-900 dark:hover:text-white transition">Cancel</button>
+                            <button id="shift-save-btn" type="submit" className="px-6 py-2 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
+
         {/* Repeat Shift Modal */}
         {isRepeatModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
@@ -1085,4 +1344,120 @@ export const AdminRota = () => {
                             <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Repeat Pattern</label>
                             <div className="grid grid-cols-2 gap-3">
                                 <button 
-                                    onClick
+                                    onClick={() => setRepeatMode('daily_week')}
+                                    className={`p-3 rounded-lg border-2 text-left transition-all ${repeatMode === 'daily_week' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                                >
+                                    <span className="block font-bold text-sm">Every Day</span>
+                                    <span className="text-[10px]">Rest of this week</span>
+                                </button>
+                                <button 
+                                    onClick={() => setRepeatMode('custom')}
+                                    className={`p-3 rounded-lg border-2 text-left transition-all ${repeatMode === 'custom' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                                >
+                                    <span className="block font-bold text-sm">Custom</span>
+                                    <span className="text-[10px]">Specific days & dates</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {repeatMode === 'custom' && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Repeats On</label>
+                                    <div className="flex justify-between gap-1">
+                                        {['S','M','T','W','T','F','S'].map((d, i) => (
+                                            <button 
+                                                key={i}
+                                                onClick={() => toggleRepeatDay(i)}
+                                                className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${
+                                                    repeatDays.includes(i) 
+                                                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' 
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                                }`}
+                                            >
+                                                {d}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {repeatDays.length === 0 && <p className="text-[10px] text-amber-500 mt-1">* Select at least one day. Leaving blank repeats daily.</p>}
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Repeat Until</label>
+                                    <input 
+                                        type="date"
+                                        min={new Date().toISOString().split('T')[0]}
+                                        value={repeatEndDate}
+                                        onChange={(e) => setRepeatEndDate(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => setIsRepeatModalOpen(false)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:text-slate-900 dark:hover:text-white transition">Cancel</button>
+                            <button 
+                                onClick={handleConfirmRepeat}
+                                className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition shadow-lg shadow-brand-500/20"
+                            >
+                                Create Shifts
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {isTimeOffModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in print:hidden">
+                <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 h-[80vh] flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Time Off Requests</h3>
+                        <button onClick={() => setIsTimeOffModalOpen(false)}><X className="w-5 h-5 text-slate-400 hover:text-slate-900 dark:hover:text-white" /></button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                        {timeOffRequests.length === 0 ? (
+                            <div className="text-center py-12 text-slate-500">No pending requests.</div>
+                        ) : (
+                            timeOffRequests.map(req => (
+                                <div key={req.id} className="border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 rounded-xl p-4">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h4 className="font-bold text-slate-900 dark:text-white">{req.userName}</h4>
+                                            <span className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-white/5">{req.type}</span>
+                                        </div>
+                                        <div className="text-right text-xs text-slate-500">
+                                            Requested {new Date(req.createdAt).toLocaleDateString()}
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                                        {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                                        {req.reason && <p className="mt-1 italic text-slate-500 dark:text-slate-400">"{req.reason}"</p>}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => handleTimeOffAction(req.id, 'rejected')}
+                                            className="flex-1 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                        >
+                                            Deny
+                                        </button>
+                                        <button 
+                                            onClick={() => handleTimeOffAction(req.id, 'approved')}
+                                            className="flex-1 py-2 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition"
+                                        >
+                                            Approve
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+    </div>
+    </>
+  );
+};
