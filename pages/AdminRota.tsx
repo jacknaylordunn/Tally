@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts, updateBatchScheduleShifts, getGlobalDraftCount } from '../services/api';
 import { ScheduleShift, User, Location, TimeOffRequest, Company, Shift } from '../types';
-import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer, Settings, Check, LayoutTemplate, AlignJustify, Table, ChevronDown, MousePointer2, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, MapPin, User as UserIcon, Calendar, X, Clock, AlertCircle, Send, Copy, Repeat, LayoutList, Grid, Lock, AlertTriangle, CalendarCheck, ArrowRight, ClipboardCopy, ClipboardPaste, Trash2, Move, ArrowRightLeft, Layers, Users, Printer, Settings, Check, LayoutTemplate, AlignJustify, Table, ChevronDown, MousePointer2, RefreshCw, Coins } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -32,6 +32,10 @@ export const AdminRota = () => {
       showUnassigned: true
   });
 
+  // Cost Estimation State
+  const [showCosts, setShowCosts] = useState(false);
+  const [includeOpenCosts, setIncludeOpenCosts] = useState(true);
+
   // Publish State
   const [isPublishMenuOpen, setIsPublishMenuOpen] = useState(false);
 
@@ -42,7 +46,6 @@ export const AdminRota = () => {
   const [repeatSourceShift, setRepeatSourceShift] = useState<ScheduleShift | null>(null);
   
   // Context Menu State
-  // Type discriminates between clicking a specific shift or a general day area
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'shift' | 'day', data: any } | null>(null);
   const [clipboard, setClipboard] = useState<ScheduleShift | null>(null);
   const [dayClipboard, setDayClipboard] = useState<ScheduleShift[] | null>(null);
@@ -132,8 +135,26 @@ export const AdminRota = () => {
       );
   }
 
-  // Derive unique existing roles from staff list
-  const existingRoles = Array.from(new Set(staff.map(u => u.position).filter(Boolean))).sort() as string[];
+  // Cost Helper
+  const getShiftCost = (shift: ScheduleShift) => {
+      const durationHours = (shift.endTime - shift.startTime) / 3600000;
+      let rate = company?.settings.defaultHourlyRate || 0;
+
+      if (shift.userId) {
+          const assignedStaff = staff.find(u => u.id === shift.userId);
+          if (assignedStaff && assignedStaff.customHourlyRate !== undefined) {
+              rate = assignedStaff.customHourlyRate;
+          }
+      } else {
+          // Open shift
+          if (!includeOpenCosts) return 0;
+      }
+
+      return durationHours * rate;
+  };
+
+  const totalWeeklyCost = schedule.reduce((acc, s) => acc + getShiftCost(s), 0);
+  const currency = company?.settings.currency || '£';
 
   // --- GROUPING LOGIC ---
   const getGroupKey = (s: ScheduleShift) => {
@@ -157,17 +178,6 @@ export const AdminRota = () => {
              sDate.getMonth() === date.getMonth() &&
              sDate.getFullYear() === date.getFullYear();
     }).sort((a, b) => a.startTime - b.startTime);
-  };
-
-  const getShiftsForCell = (date: Date, userId: string | null) => {
-      return schedule.filter(s => {
-          const sDate = new Date(s.startTime);
-          const isSameDate = sDate.getDate() === date.getDate() && 
-                             sDate.getMonth() === date.getMonth() && 
-                             sDate.getFullYear() === date.getFullYear();
-          const isSameUser = s.userId === userId;
-          return isSameDate && isSameUser;
-      }).sort((a,b) => a.startTime - b.startTime);
   };
 
   // --- ACTIONS ---
@@ -516,7 +526,6 @@ export const AdminRota = () => {
     if (!user?.currentCompanyId) return;
     setIsPublishMenuOpen(false);
     
-    // Calculate accurate counts for the confirmation dialog
     const weekDrafts = schedule.filter(s => s.status === 'draft').length;
     const confirmMsg = scope === 'week' 
         ? `Publish ${weekDrafts} draft shifts for the currently visible week?` 
@@ -529,10 +538,8 @@ export const AdminRota = () => {
                 const { start, end } = getWeekRange(currentDate);
                 await publishDrafts(user.currentCompanyId, start.getTime(), end.getTime());
             } else {
-                // No date range = publish all
                 await publishDrafts(user.currentCompanyId);
             }
-            // Add a small delay to allow Firestore to propagate, then reload
             setTimeout(() => loadData(), 500);
         } catch (e) {
             console.error("Publish failed", e);
@@ -770,6 +777,20 @@ export const AdminRota = () => {
                 <p className="text-slate-500 dark:text-slate-400">Plan shifts and manage staffing levels.</p>
             </div>
             <div className="flex flex-wrap gap-2">
+                 {showCosts && (
+                     <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-xl border border-emerald-100 dark:border-emerald-500/20 mr-2">
+                         <div className="flex flex-col">
+                             <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Est. Cost</span>
+                             <span className="text-lg font-bold text-slate-900 dark:text-white leading-none">{currency}{Math.round(totalWeeklyCost)}</span>
+                         </div>
+                         <div className="w-px h-full bg-emerald-200 dark:bg-emerald-800 mx-2"></div>
+                         <label className="flex items-center gap-2 cursor-pointer">
+                             <input type="checkbox" checked={includeOpenCosts} onChange={e => setIncludeOpenCosts(e.target.checked)} className="rounded text-emerald-600 focus:ring-emerald-500" />
+                             <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Include Open Shifts</span>
+                         </label>
+                     </div>
+                 )}
+
                  <button 
                     onClick={() => setIsTimeOffModalOpen(true)}
                     className="relative glass-panel hover:bg-white/50 dark:hover:bg-white/10 text-slate-700 dark:text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center space-x-2 border border-slate-200 dark:border-white/10"
@@ -847,9 +868,19 @@ export const AdminRota = () => {
                 </div>
             </div>
             
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                <button onClick={() => setViewMode('week')} className={`p-2 rounded-md transition ${viewMode === 'week' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}><Grid className="w-4 h-4" /></button>
-                <button onClick={() => setViewMode('day')} className={`p-2 rounded-md transition ${viewMode === 'day' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}><LayoutList className="w-4 h-4" /></button>
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => setShowCosts(!showCosts)} 
+                    className={`p-2 rounded-lg transition border ${showCosts ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-transparent'}`}
+                    title="Toggle Cost Estimates"
+                >
+                    <Coins className="w-4 h-4" />
+                </button>
+                <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-1"></div>
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                    <button onClick={() => setViewMode('week')} className={`p-2 rounded-md transition ${viewMode === 'week' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}><Grid className="w-4 h-4" /></button>
+                    <button onClick={() => setViewMode('day')} className={`p-2 rounded-md transition ${viewMode === 'day' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}><LayoutList className="w-4 h-4" /></button>
+                </div>
             </div>
         </div>
 
@@ -862,6 +893,7 @@ export const AdminRota = () => {
                         const dayShifts = getShiftsForDay(date);
                         const groups = groupShifts(dayShifts);
                         const isToday = new Date().toDateString() === date.toDateString();
+                        const dayCost = dayShifts.reduce((acc, s) => acc + getShiftCost(s), 0);
                         
                         return (
                             <div 
@@ -881,6 +913,11 @@ export const AdminRota = () => {
                                     <div className={`text-lg font-bold ${isToday ? 'text-brand-600 dark:text-brand-400' : 'text-slate-900 dark:text-white'}`}>
                                         {date.getDate()}
                                     </div>
+                                    {showCosts && dayCost > 0 && (
+                                        <div className="mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full inline-block">
+                                            {currency}{Math.round(dayCost)}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 p-2 space-y-2 min-h-[10rem]">
@@ -906,13 +943,21 @@ export const AdminRota = () => {
                         const dayShifts = getShiftsForDay(currentDate);
                         const groups = groupShifts(dayShifts);
                         const roleKeys = Object.keys(groups).sort();
+                        const dayCost = dayShifts.reduce((acc, s) => acc + getShiftCost(s), 0);
 
                         return (
                             <div className="space-y-8">
                                 <div className="flex justify-between items-center">
-                                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                                        {currentDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-                                    </h2>
+                                    <div className="flex items-baseline gap-4">
+                                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                                            {currentDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+                                        </h2>
+                                        {showCosts && dayCost > 0 && (
+                                            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-lg border border-emerald-100 dark:border-emerald-500/20">
+                                                Est. Cost: {currency}{dayCost.toFixed(2)}
+                                            </span>
+                                        )}
+                                    </div>
                                     <button onClick={() => handleAddShift(currentDate)} className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition flex items-center space-x-2">
                                         <Plus className="w-4 h-4" /> <span>Add Shift</span>
                                     </button>
