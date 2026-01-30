@@ -1,5 +1,5 @@
 
-import { Shift } from '../types';
+import { Shift, User } from '../types';
 
 interface ExportOptions {
   filename: string;
@@ -14,6 +14,8 @@ interface ExportOptions {
   companyName?: string;
   brandColor?: string;
   timeFormat?: '12h' | '24h_dot';
+  includeInactiveStaff?: boolean; // New
+  includeEmployeeId?: boolean; // New
 }
 
 const escapeCSV = (str: any) => {
@@ -93,9 +95,11 @@ const formatRateHistory = (shifts: Shift[]): string => {
 
 export const downloadPayrollReport = (
   shifts: Shift[], 
+  allStaff: User[], // Passed in to handle 'include inactive'
   options: ExportOptions
 ) => {
-  if (!shifts.length) return;
+  // We allow 0 shifts IF includeInactiveStaff is true, otherwise guard
+  if (!shifts.length && !options.includeInactiveStaff) return;
 
   const { 
     filename, 
@@ -109,18 +113,58 @@ export const downloadPayrollReport = (
     holidayPayRate = 0,
     companyName = 'Tallyd Report',
     brandColor = '#0ea5e9',
-    timeFormat = '12h'
+    timeFormat = '12h',
+    includeInactiveStaff = false,
+    includeEmployeeId = false
   } = options;
+
+  // --- DATA PREPARATION: MERGE SHIFTS WITH STAFF ---
+  const staffMap: Record<string, { name: string, employeeId?: string, shifts: Shift[] }> = {};
+  
+  // 1. Initialize with all staff if option enabled
+  if (includeInactiveStaff) {
+      allStaff.forEach(u => {
+          staffMap[u.id] = { 
+              name: u.name, 
+              employeeId: u.employeeNumber, 
+              shifts: [] 
+          };
+      });
+  }
+
+  // 2. Populate shifts (add staff if missing/deleted but has shift history)
+  shifts.forEach(s => {
+      if(!staffMap[s.userId]) {
+          // Try find user in allStaff to get Employee ID, even if not pre-initialized
+          const u = allStaff.find(u => u.id === s.userId);
+          staffMap[s.userId] = { 
+              name: s.userName, 
+              employeeId: u?.employeeNumber, 
+              shifts: [] 
+          };
+      }
+      staffMap[s.userId].shifts.push(s);
+  });
+
+  // 3. Sort
+  const sortedStaff = Object.values(staffMap).sort((a, b) => sortByLastName(a.name, b.name));
 
   // --- HTML/EXCEL MATRIX VIEW (Rich Formatting) ---
   if (matrixView) {
       
-      // 1. Determine Date Range
+      // Determine Date Range from actual shifts OR current date context (approximation)
       const timestamps = shifts.map(s => s.startTime);
-      const minDate = new Date(Math.min(...timestamps));
-      const maxDate = new Date(Math.max(...timestamps));
-      minDate.setHours(0,0,0,0);
-      maxDate.setHours(0,0,0,0);
+      const minDate = timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date();
+      const maxDate = timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date();
+      
+      // Safety: If range is huge or empty, clamp/default
+      if (timestamps.length === 0) {
+          minDate.setHours(0,0,0,0);
+          maxDate.setHours(0,0,0,0); // Just today column
+      } else {
+          minDate.setHours(0,0,0,0);
+          maxDate.setHours(0,0,0,0);
+      }
       
       const dates: Date[] = [];
       const cursor = new Date(minDate);
@@ -132,16 +176,6 @@ export const downloadPayrollReport = (
       const daysCount = dates.length;
       const colsPerDay = showTimesInMatrix ? 3 : 1;
       
-      // 2. Data Grouping
-      const staffMap: Record<string, { name: string, shifts: Shift[] }> = {};
-      shifts.forEach(s => {
-          if(!staffMap[s.userId]) staffMap[s.userId] = { name: s.userName, shifts: [] };
-          staffMap[s.userId].shifts.push(s);
-      });
-
-      // SORT STAFF BY LAST NAME
-      const sortedStaff = Object.values(staffMap).sort((a, b) => sortByLastName(a.name, b.name));
-
       // 3. Construct HTML Table
       let tableRows = '';
 
@@ -149,8 +183,9 @@ export const downloadPayrollReport = (
       const summaryColCount = holidayPayEnabled ? 5 : 3;
 
       // --- HEADER ROW 1: Title ---
+      const empIdColWidth = includeEmployeeId ? 1 : 0;
       const totalDayCols = daysCount * colsPerDay;
-      const totalWidth = 1 + totalDayCols + summaryColCount + (includeDeductions ? 4 : 0);
+      const totalWidth = 1 + empIdColWidth + totalDayCols + summaryColCount + (includeDeductions ? 4 : 0);
       
       tableRows += `
         <tr>
@@ -170,6 +205,7 @@ export const downloadPayrollReport = (
       tableRows += `
         <tr style="font-weight:bold; background-color:#e5e7eb;">
             <td rowspan="2" style="border:1px solid #000; width:150px; background-color:#d1d5db; vertical-align:middle; text-align:center;">STAFF NAME</td>
+            ${includeEmployeeId ? `<td rowspan="2" style="border:1px solid #000; width:80px; background-color:#d1d5db; vertical-align:middle; text-align:center;">ID</td>` : ''}
             ${dates.map(d => {
                 const dayName = d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'}).toUpperCase();
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -296,6 +332,7 @@ export const downloadPayrollReport = (
           tableRows += `
             <tr style="background-color:${rowBg};">
                 <td style="border:1px solid #ddd; font-weight:bold; padding:5px; vertical-align:middle;">${staff.name}</td>
+                ${includeEmployeeId ? `<td style="border:1px solid #ddd; text-align:center; font-family:monospace; font-size:11px; vertical-align:middle;">${staff.employeeId || ''}</td>` : ''}
                 ${dayCells}
                 <td style="border:1px solid #ddd; background-color:#f3f4f6; font-weight:bold; text-align:center; vertical-align:middle;">${totalHours.toFixed(2)}</td>
                 <td style="border:1px solid #ddd; background-color:#f3f4f6; text-align:center; vertical-align:middle; white-space:pre-wrap; font-size:11px;">${rateDisplay}</td>
@@ -319,9 +356,10 @@ export const downloadPayrollReport = (
       });
 
       // --- FOOTER ROW: GRAND TOTALS ---
+      const idOffset = includeEmployeeId ? 1 : 0;
       tableRows += `
         <tr style="background-color:#1e293b; color:white; font-weight:bold;">
-            <td style="border:1px solid #000; padding:8px;">TOTALS / BUDGET</td>
+            <td style="border:1px solid #000; padding:8px;" colspan="${1 + idOffset}">TOTALS / BUDGET</td>
             ${/* Empty cells for days */ ''}
             <td colspan="${totalDayCols}" style="border:1px solid #000; background-color:#334155;"></td>
             
@@ -391,38 +429,8 @@ export const downloadPayrollReport = (
     csvRows.push(['Generated', new Date().toLocaleString()]);
     csvRows.push([]);
 
-    const shiftsByUser: Record<string, Shift[]> = {};
-    const statsByUser: Record<string, any> = {};
-
-    shifts.forEach(shift => {
-        if (!shiftsByUser[shift.userId]) {
-            shiftsByUser[shift.userId] = [];
-            statsByUser[shift.userId] = {
-                name: shift.userName,
-                totalHours: 0,
-                totalBasePay: 0,
-                totalHolidayPay: 0,
-                grandTotal: 0,
-                shiftCount: 0
-            };
-        }
-        shiftsByUser[shift.userId].push(shift);
-
-        if (shift.endTime) {
-            const hours = (shift.endTime - shift.startTime) / 3600000;
-            const rate = shift.hourlyRate || 0;
-            const pay = hours * rate;
-            const holiday = holidayPayEnabled ? (pay * (holidayPayRate / 100)) : 0;
-
-            statsByUser[shift.userId].totalHours += hours;
-            statsByUser[shift.userId].totalBasePay += pay;
-            statsByUser[shift.userId].totalHolidayPay += holiday;
-            statsByUser[shift.userId].grandTotal += (pay + holiday);
-            statsByUser[shift.userId].shiftCount += 1;
-        }
-    });
-
     const headers = [
+      includeEmployeeId ? 'Employee ID' : null,
       'Staff Member',
       'Total Shifts',
       'Total Hours',
@@ -434,36 +442,43 @@ export const downloadPayrollReport = (
 
     csvRows.push(headers);
 
-    // Sort by Last Name
-    const sortedStats = Object.values(statsByUser).sort((a, b) => sortByLastName(a.name, b.name));
+    sortedStaff.forEach(staff => {
+        let totalHours = 0;
+        let totalBasePay = 0;
+        let totalHolidayPay = 0;
+        let shiftCount = 0;
 
-    sortedStats.forEach(stats => {
-      // We need to find the user ID to get rate string, but statsByUser is keyed by ID. 
-      // Reverse lookup or just store ID in stats would work. For simplicity, we just look at the shifts we processed for this name.
-      // But multiple people might have same name. 
-      // Better approach: Sort keys of `statsByUser` based on the name in the value.
-      // Refactoring slightly for robustness:
-      // We'll iterate keys, sort them, then produce rows.
-      return; // Handled below
-    });
+        staff.shifts.forEach(shift => {
+            if (shift.endTime) {
+                const hours = (shift.endTime - shift.startTime) / 3600000;
+                const rate = shift.hourlyRate || 0;
+                const pay = hours * rate;
+                
+                totalHours += hours;
+                totalBasePay += pay;
+                shiftCount++;
+            }
+        });
 
-    const sortedUserIds = Object.keys(statsByUser).sort((aId, bId) => {
-        return sortByLastName(statsByUser[aId].name, statsByUser[bId].name);
-    });
+        if (holidayPayEnabled) {
+            totalHolidayPay = totalBasePay * (holidayPayRate / 100);
+        }
+        const grandTotal = totalBasePay + totalHolidayPay;
 
-    sortedUserIds.forEach(userId => {
-        const stats = statsByUser[userId];
-        const userShifts = shiftsByUser[userId];
-        const rateString = formatRateHistory(userShifts);
+        // Skip rows with 0 shifts ONLY if includeInactiveStaff is false
+        if (!includeInactiveStaff && shiftCount === 0) return;
+
+        const rateString = formatRateHistory(staff.shifts);
 
         const row = [
-            stats.name,
-            stats.shiftCount,
-            stats.totalHours.toFixed(2),
+            includeEmployeeId ? (staff.employeeId || '') : null,
+            staff.name,
+            shiftCount,
+            totalHours.toFixed(2),
             rateString,
-            stats.totalBasePay.toFixed(2),
-            holidayPayEnabled ? stats.totalHolidayPay.toFixed(2) : null,
-            stats.grandTotal.toFixed(2)
+            totalBasePay.toFixed(2),
+            holidayPayEnabled ? totalHolidayPay.toFixed(2) : null,
+            grandTotal.toFixed(2)
         ].filter(item => item !== null);
         
         csvRows.push(row);
@@ -478,6 +493,7 @@ export const downloadPayrollReport = (
     csvRows.push([]);
 
     const headers = [
+      includeEmployeeId ? 'Employee ID' : null,
       'Staff Name',
       'Date',
       'Start Time',
@@ -511,7 +527,15 @@ export const downloadPayrollReport = (
       const holidayPay = holidayPayEnabled ? (basePay * (holidayPayRate / 100)) : 0;
       const totalPay = basePay + holidayPay;
 
+      // Find employee ID for this specific shift user
+      let empId = '';
+      if (includeEmployeeId) {
+          const u = allStaff.find(u => u.id === shift.userId);
+          empId = u?.employeeNumber || '';
+      }
+
       const row = [
+        includeEmployeeId ? empId : null,
         shift.userName,
         startTime.toLocaleDateString(),
         formatTime(startTime, timeFormat),

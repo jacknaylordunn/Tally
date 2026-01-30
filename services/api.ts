@@ -113,6 +113,7 @@ export const removeUserFromCompany = async (userId: string): Promise<void> => {
         currentCompanyId: deleteField(),
         activeShiftId: null,
         customHourlyRate: deleteField(),
+        employeeNumber: deleteField(), // Wipe company specific ID
         position: deleteField(),
         isApproved: deleteField(),
         role: UserRole.STAFF // Reset to staff
@@ -143,6 +144,7 @@ export const switchUserCompany = async (userId: string, inviteCode: string): Pro
         activeShiftId: null,
         position: undefined,
         customHourlyRate: undefined,
+        employeeNumber: undefined, // Reset employee ID on switch
         role: UserRole.STAFF, 
         isApproved: isApproved
     });

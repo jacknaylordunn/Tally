@@ -29,6 +29,8 @@ export const AdminTimesheets = () => {
       showTimes: true,
       includeDeductions: false,
       separateHoliday: false,
+      includeInactiveStaff: false, // New: Include staff with no shifts
+      includeEmployeeId: false, // New: Show employee numbers
       timeFormat: '12h' as '12h' | '24h_dot'
   });
 
@@ -50,10 +52,10 @@ export const AdminTimesheets = () => {
 
   // Sort Helper
   const sortByLastName = (a: User, b: User) => {
-      const lastA = a.name.trim().split(' ').pop()?.toLowerCase() || '';
-      const lastB = b.name.trim().split(' ').pop()?.toLowerCase() || '';
-      if (lastA < lastB) return -1;
-      if (lastA > lastB) return 1;
+      const nameA = a.lastName ? a.lastName.toLowerCase() : a.name.trim().split(' ').pop()?.toLowerCase() || '';
+      const nameB = b.lastName ? b.lastName.toLowerCase() : b.name.trim().split(' ').pop()?.toLowerCase() || '';
+      if (nameA < nameB) return -1;
+      if (nameA > nameB) return 1;
       return 0;
   };
 
@@ -219,7 +221,8 @@ export const AdminTimesheets = () => {
   };
 
   const handleGenerateExport = () => {
-    downloadPayrollReport(filteredShifts, {
+    // Pass ALL staff to report generator so it can fill in 0-hour rows if enabled
+    downloadPayrollReport(filteredShifts, staffList, {
         filename: `tally_payroll_${exportFormat}`, 
         currency,
         dateRangeLabel: getExportRangeLabel(),
@@ -229,6 +232,8 @@ export const AdminTimesheets = () => {
         includeDeductions: exportOptions.includeDeductions,
         holidayPayEnabled: exportOptions.separateHoliday,
         holidayPayRate: company?.settings.holidayPayRate,
+        includeInactiveStaff: exportOptions.includeInactiveStaff,
+        includeEmployeeId: exportOptions.includeEmployeeId,
         companyName: company?.name,
         brandColor: company?.settings.primaryColor,
         timeFormat: exportOptions.timeFormat
@@ -523,7 +528,7 @@ export const AdminTimesheets = () => {
                         <div className="text-sm">
                             <span className="font-bold text-blue-800 dark:text-blue-200 block mb-1">Current Range: {getExportRangeLabel()}</span>
                             <p className="text-blue-700 dark:text-blue-300 opacity-90">
-                                The export includes only data currently visible in the table. To download a specific month or year, close this and adjust the date filters on the page.
+                                The export includes data for the selected date range.
                             </p>
                         </div>
                     </div>
@@ -556,30 +561,45 @@ export const AdminTimesheets = () => {
                         </div>
                     </div>
 
-                    {/* Matrix Options */}
-                    {exportFormat === 'matrix' && (
-                        <div className="mt-6 space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5 animate-fade-in">
-                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">Options</label>
-                            
+                    {/* General Options */}
+                    <div className="mt-6 space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5 animate-fade-in">
+                        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">Data Options</label>
+                        
+                        {(exportFormat === 'matrix' || exportFormat === 'grouped') && (
                             <label className="flex items-center justify-between cursor-pointer">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Start/End Times (Split Columns)</span>
-                                <input type="checkbox" checked={exportOptions.showTimes} onChange={e => setExportOptions({...exportOptions, showTimes: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Include Staff with No Shifts</span>
+                                <input type="checkbox" checked={exportOptions.includeInactiveStaff} onChange={e => setExportOptions({...exportOptions, includeInactiveStaff: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                             </label>
-                            
-                            <label className="flex items-center justify-between cursor-pointer">
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Add Deduction Columns</span>
-                                    <span className="text-xs text-slate-500">Includes empty columns for Tax, NI, Net Pay</span>
-                                </div>
-                                <input type="checkbox" checked={exportOptions.includeDeductions} onChange={e => setExportOptions({...exportOptions, includeDeductions: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-                            </label>
+                        )}
 
-                            <label className="flex items-center justify-between cursor-pointer">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Calculate Holiday Pay</span>
-                                <input type="checkbox" checked={exportOptions.separateHoliday} onChange={e => setExportOptions({...exportOptions, separateHoliday: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-                            </label>
-                        </div>
-                    )}
+                        <label className="flex items-center justify-between cursor-pointer">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Employee IDs</span>
+                            <input type="checkbox" checked={exportOptions.includeEmployeeId} onChange={e => setExportOptions({...exportOptions, includeEmployeeId: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                        </label>
+
+                        {/* Matrix Specific Options */}
+                        {exportFormat === 'matrix' && (
+                            <>
+                                <div className="h-px bg-slate-200 dark:bg-white/10 my-2"></div>
+                                <label className="flex items-center justify-between cursor-pointer">
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Start/End Times</span>
+                                    <input type="checkbox" checked={exportOptions.showTimes} onChange={e => setExportOptions({...exportOptions, showTimes: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                </label>
+                                
+                                <label className="flex items-center justify-between cursor-pointer">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Add Deduction Columns</span>
+                                    </div>
+                                    <input type="checkbox" checked={exportOptions.includeDeductions} onChange={e => setExportOptions({...exportOptions, includeDeductions: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                </label>
+
+                                <label className="flex items-center justify-between cursor-pointer">
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Calculate Holiday Pay</span>
+                                    <input type="checkbox" checked={exportOptions.separateHoliday} onChange={e => setExportOptions({...exportOptions, separateHoliday: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                </label>
+                            </>
+                        )}
+                    </div>
 
                     {/* Time Format Option */}
                     {(exportFormat === 'matrix' && exportOptions.showTimes) || exportFormat === 'detailed' ? (
@@ -687,7 +707,7 @@ export const AdminTimesheets = () => {
                     <div className="flex gap-3">
                          <button 
                             onClick={() => setEditingShift(null)}
-                            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition"
+                            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition"
                         >
                             Cancel
                         </button>

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getCompanyStaff, updateUserProfile, updateUserRateAndActiveShift, removeUserFromCompany, getCompany } from '../services/api';
 import { User, Company, UserRole } from '../types';
-import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus, UserMinus } from 'lucide-react';
+import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus, UserMinus, Hash } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { TableRowSkeleton } from '../components/Skeleton';
 import { deleteField } from 'firebase/firestore';
@@ -16,9 +16,13 @@ export const AdminStaff = () => {
   
   // Edit Modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
   const [editRate, setEditRate] = useState('');
+  const [editEmployeeId, setEditEmployeeId] = useState('');
   const [editRoles, setEditRoles] = useState<string[]>([]);
   const [roleInput, setRoleInput] = useState('');
+  const [editApproveUser, setEditApproveUser] = useState(false); // New: Approval Checkbox
   const [saving, setSaving] = useState(false);
 
   // Bulk Update Modal
@@ -32,10 +36,12 @@ export const AdminStaff = () => {
 
   // Helper for sorting by last name
   const sortByLastName = (a: User, b: User) => {
-      const lastA = a.name.trim().split(' ').pop()?.toLowerCase() || '';
-      const lastB = b.name.trim().split(' ').pop()?.toLowerCase() || '';
-      if (lastA < lastB) return -1;
-      if (lastA > lastB) return 1;
+      // Use structured names if available
+      const nameA = a.lastName ? a.lastName.toLowerCase() : a.name.trim().split(' ').pop()?.toLowerCase() || '';
+      const nameB = b.lastName ? b.lastName.toLowerCase() : b.name.trim().split(' ').pop()?.toLowerCase() || '';
+      
+      if (nameA < nameB) return -1;
+      if (nameA > nameB) return 1;
       return 0;
   };
 
@@ -57,7 +63,8 @@ export const AdminStaff = () => {
 
   const filteredStaff = staff.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.email.toLowerCase().includes(searchTerm.toLowerCase())
+    s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.employeeNumber && s.employeeNumber.includes(searchTerm))
   );
 
   // Derive unique existing positions for the dropdown suggestions
@@ -67,11 +74,27 @@ export const AdminStaff = () => {
 
   const handleEdit = (u: User) => {
       setEditingUser(u);
+      
+      // Split Names Logic
+      if (u.firstName && u.lastName) {
+          setEditFirstName(u.firstName);
+          setEditLastName(u.lastName);
+      } else {
+          // Fallback split for legacy users
+          const parts = u.name.split(' ');
+          setEditFirstName(parts[0] || '');
+          setEditLastName(parts.slice(1).join(' ') || '');
+      }
+
       setEditRate(u.customHourlyRate?.toString() || '');
+      setEditEmployeeId(u.employeeNumber || '');
       // Initialize roles from roles array OR legacy position field
       setEditRoles(u.roles && u.roles.length > 0 ? u.roles : (u.position ? [u.position] : []));
       setRoleInput('');
+      setEditApproveUser(u.isApproved === true); // Set initial check state
   };
+
+  const capitalize = (str: string) => str.replace(/\b\w/g, l => l.toUpperCase());
 
   const addRole = (role: string) => {
       if (role && !editRoles.includes(role)) {
@@ -88,12 +111,24 @@ export const AdminStaff = () => {
       if (!editingUser || !user?.currentCompanyId) return;
       setSaving(true);
       try {
+          const finalFirst = capitalize(editFirstName.trim());
+          const finalLast = capitalize(editLastName.trim());
+          const fullName = `${finalFirst} ${finalLast}`;
+
           // Flatten first role to legacy 'position' field for backward compat
           const primaryPosition = editRoles.length > 0 ? editRoles[0] : null;
 
           const updates: any = {
+              name: fullName,
+              firstName: finalFirst,
+              lastName: finalLast,
               position: primaryPosition || deleteField(),
-              roles: editRoles
+              roles: editRoles,
+              employeeNumber: editEmployeeId || deleteField(),
+              // If user was pending and checkbox is checked, approve them. 
+              // If they were already approved, this stays true. 
+              // If unchecking approval for an existing user (suspending), this works too.
+              isApproved: editApproveUser 
           };
 
           let newRate: number | null = null;
@@ -134,20 +169,7 @@ export const AdminStaff = () => {
       }
   };
 
-  const handleApprove = async () => {
-      if (!editingUser) return;
-      setSaving(true);
-      try {
-          await updateUserProfile(editingUser.id, { isApproved: true });
-          await loadData();
-          setEditingUser(null);
-      } catch (e) {
-          console.error(e);
-      } finally {
-          setSaving(false);
-      }
-  };
-
+  // Distinct promote action (separate from general save)
   const handlePromote = async () => {
       if (!editingUser) return;
       if (!confirm(`Are you sure you want to make ${editingUser.name} an Admin? They will have full access to company settings.`)) return;
@@ -260,7 +282,7 @@ export const AdminStaff = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <input 
                     type="text" 
-                    placeholder="Search name or email..." 
+                    placeholder="Search name, ID, or email..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -304,17 +326,20 @@ export const AdminStaff = () => {
                                             </div>
                                             <div>
                                                 <div className="flex items-center space-x-1">
-                                                    <p className="font-medium text-slate-900 dark:text-white">{u.name}</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white">{u.lastName ? `${u.firstName} ${u.lastName}` : u.name}</p>
                                                     {u.role === 'admin' && <ShieldCheck className="w-3 h-3 text-purple-500" />}
                                                 </div>
-                                                <p className="text-xs text-slate-500">{u.email}</p>
+                                                <div className="flex items-center text-xs text-slate-500">
+                                                    {u.employeeNumber && <span className="mr-2 font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">{u.employeeNumber}</span>}
+                                                    {u.email}
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-wrap gap-1">
                                             {roles.length > 0 ? roles.map((r, i) => (
-                                                <span key={i} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                                <span key={i} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-slate-50 text-brand-700 dark:bg-slate-900/30 dark:text-brand-300 border border-brand-100 dark:border-brand-500/20">
                                                     {r}
                                                 </span>
                                             )) : <span className="text-slate-400 italic">None</span>}
@@ -358,7 +383,7 @@ export const AdminStaff = () => {
         {/* Edit Modal */}
         {editingUser && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
+                <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Staff</h2>
                         <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
@@ -367,48 +392,74 @@ export const AdminStaff = () => {
                     </div>
 
                     <div className="space-y-4 mb-8">
-                        <div className="flex items-center justify-between">
+                        {/* Name Fields */}
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <p className="text-sm font-medium text-slate-500">Employee</p>
-                                <p className="font-bold text-lg text-slate-900 dark:text-white">{editingUser.name}</p>
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">First Name</label>
+                                <input 
+                                    type="text" 
+                                    value={editFirstName}
+                                    onChange={(e) => setEditFirstName(capitalize(e.target.value))}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Last Name</label>
+                                <input 
+                                    type="text" 
+                                    value={editLastName}
+                                    onChange={(e) => setEditLastName(capitalize(e.target.value))}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Streamlined Approval Checkbox */}
+                        {editingUser.isApproved === false && (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/30 p-4 rounded-xl flex items-center justify-between">
+                                <div className="text-sm text-yellow-700 dark:text-yellow-400 font-medium flex items-center gap-2">
+                                    <Clock className="w-4 h-4" /> Account Pending
+                                </div>
+                                <label className="flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={editApproveUser} 
+                                        onChange={(e) => setEditApproveUser(e.target.checked)} 
+                                        className="w-5 h-5 rounded border-yellow-400 text-yellow-600 focus:ring-yellow-500" 
+                                    />
+                                    <span className="ml-2 text-sm font-bold text-slate-700 dark:text-slate-300">Approve User</span>
+                                </label>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2">
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Access Level</p>
+                                <p className="font-bold text-slate-900 dark:text-white capitalize">{editingUser.role}</p>
                             </div>
                             {editingUser.role !== 'admin' ? (
                                 <button 
                                     onClick={handlePromote}
-                                    className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 px-3 py-1.5 rounded-lg transition flex items-center space-x-1 border border-purple-200 dark:border-purple-500/20"
+                                    className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 underline"
                                 >
-                                    <ShieldCheck className="w-3 h-3" />
-                                    <span>Make Admin</span>
+                                    Promote to Admin
                                 </button>
                             ) : (
                                 <button 
                                     onClick={handleDemote}
-                                    className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/50 px-3 py-1.5 rounded-lg transition flex items-center space-x-1 border border-amber-200 dark:border-amber-500/20"
+                                    className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 underline"
                                 >
-                                    <UserMinus className="w-3 h-3" />
-                                    <span>Demote to Staff</span>
+                                    Demote to Staff
                                 </button>
                             )}
                         </div>
-
-                        {editingUser.isApproved === false && (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/30 p-4 rounded-xl flex items-center justify-between">
-                                <div className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">Account Pending</div>
-                                <button 
-                                    onClick={handleApprove}
-                                    className="bg-yellow-600 dark:bg-yellow-800 text-white dark:text-yellow-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-yellow-700 transition"
-                                >
-                                    Approve Now
-                                </button>
-                            </div>
-                        )}
                         
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Roles / Positions</label>
                             
                             <div className="flex flex-wrap gap-2 mb-2">
                                 {editRoles.map((role, i) => (
-                                    <span key={i} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 border border-brand-100 dark:border-brand-500/20">
+                                    <span key={i} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-slate-50 text-brand-700 dark:bg-slate-900/30 dark:text-brand-300 border border-brand-100 dark:border-brand-500/20">
                                         {role}
                                         <button onClick={() => removeRole(role)} className="ml-1 hover:text-red-500"><X className="w-3 h-3" /></button>
                                     </span>
@@ -443,6 +494,20 @@ export const AdminStaff = () => {
                                 >
                                     <Plus className="w-4 h-4" />
                                 </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Employee ID / Payroll #</label>
+                            <div className="relative">
+                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                <input 
+                                    type="text"
+                                    value={editEmployeeId}
+                                    onChange={(e) => setEditEmployeeId(e.target.value)}
+                                    placeholder="e.g. 1045"
+                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none font-mono"
+                                />
                             </div>
                         </div>
 

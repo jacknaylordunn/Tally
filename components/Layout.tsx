@@ -23,7 +23,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         if (user?.currentCompanyId) {
             try {
                 const company = await getCompany(user.currentCompanyId);
-                setRotaEnabled(!!company.settings.rotaEnabled);
+                // Ensure explicit boolean check or undefined fallback
+                setRotaEnabled(company.settings.rotaEnabled === true);
                 if (company.settings.logoUrl) {
                     setLogo(company.settings.logoUrl);
                 }
@@ -44,7 +45,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     : NAVIGATION_ITEMS.STAFF;
 
   const navItems = baseNavItems.filter(item => {
-      if (item.name.includes('Rota') && !rotaEnabled) return false;
+      // Strictly hide Rota tab if disabled
+      if (item.name.toLowerCase().includes('rota') && !rotaEnabled) return false;
       return true;
   });
 
@@ -83,7 +85,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   className={`group flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 relative overflow-hidden ${
                       isActive 
                       ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' 
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10'
                   }`}
                 >
                   <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />

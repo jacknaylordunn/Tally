@@ -19,7 +19,8 @@ export const Register = () => {
   const [error, setError] = useState('');
 
   // Form State
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,6 +47,14 @@ export const Register = () => {
   }, [password]);
 
   const isPasswordValid = Object.values(passwordCriteria).every(Boolean);
+
+  const capitalize = (str: string) => {
+      return str.replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const handleNameChange = (val: string, setter: (s: string) => void) => {
+      setter(capitalize(val));
+  };
 
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       // 1. Remove anything that isn't alphanumeric
@@ -124,10 +133,13 @@ export const Register = () => {
         }
 
         // 4. Create User Profile
+        const fullName = `${firstName} ${lastName}`.trim();
         const newUser: UserType = {
             id: uid,
             email,
-            name,
+            name: fullName,
+            firstName,
+            lastName,
             role: activeTab,
             currentCompanyId: companyId,
             activeShiftId: null,
@@ -235,25 +247,35 @@ export const Register = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Full Name</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">First Name</label>
                         <input 
                             type="text" required
-                            value={name} onChange={(e) => setName(e.target.value)}
+                            value={firstName} onChange={(e) => handleNameChange(e.target.value, setFirstName)}
                             className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" 
-                            placeholder="John Doe"
+                            placeholder="John"
                         />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Last Name</label>
                         <input 
-                            type="email" required
-                            value={email} onChange={(e) => setEmail(e.target.value)}
+                            type="text" required
+                            value={lastName} onChange={(e) => handleNameChange(e.target.value, setLastName)}
                             className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" 
-                            placeholder="john@example.com"
+                            placeholder="Doe"
                         />
                     </div>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
+                    <input 
+                        type="email" required
+                        value={email} onChange={(e) => setEmail(e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" 
+                        placeholder="john@example.com"
+                    />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

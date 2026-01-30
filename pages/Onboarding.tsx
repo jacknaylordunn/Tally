@@ -155,6 +155,7 @@ export const Onboarding = () => {
            await updateCompanySettings(user.currentCompanyId, {
                requireApproval: requireApproval,
                rotaEnabled: enableRota,
+               // Only save rota sub-settings if enabled, otherwise they are ignored by logic
                rotaShowFinishTimes: enableRota ? rotaShowFinishTimes : undefined,
                allowShiftBidding: enableRota ? allowBidding : undefined,
                requireTimeOffApproval: enableRota ? requireTimeOffApproval : undefined
@@ -196,9 +197,6 @@ export const Onboarding = () => {
 
   const shareCode = async () => {
         if (!company?.code) return;
-        
-        // Note: URL is embedded in text to ensure it appears in the body of SMS/WhatsApp
-        // instead of just as a link attachment.
         const text = `Hey, we are now using ${APP_NAME} for our clock-in system... ⏰\n\nPlease create an account at https://tallyd.app/#/register using ${company.code} as your invite code.\n\n#TallydUp`;
         
         if (navigator.share) {
@@ -206,7 +204,6 @@ export const Onboarding = () => {
                 await navigator.share({
                     title: `Join ${company.name} on ${APP_NAME}`,
                     text: text,
-                    // Leaving out 'url' property intentionally to force text body in native shares
                 });
             } catch (err) {
                 console.error("Share failed", err);
@@ -217,7 +214,7 @@ export const Onboarding = () => {
         }
   };
 
-  // --- RENDER HELPERS (Replaced Component Definitions) ---
+  // --- RENDER HELPERS ---
 
   const renderAdminFlow = () => (
     <div className="max-w-lg mx-auto animate-fade-in pb-8">
@@ -432,7 +429,7 @@ export const Onboarding = () => {
                             </div>
                             <div>
                                 <h4 className="font-bold text-slate-900 dark:text-white">Enable Rota System</h4>
-                                <p className="text-xs text-slate-500">Plan shifts and manage staff time off.</p>
+                                <p className="text-xs text-slate-500">Plan shifts and manage staff time off. Optional.</p>
                             </div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -535,104 +532,6 @@ export const Onboarding = () => {
                 </div>
             </div>
         )}
-    </div>
-  );
-
-  const renderStaffFlow = () => (
-     <div className="max-w-lg mx-auto animate-fade-in">
-        {step === 1 && (
-            <div className="space-y-6 text-center">
-                 <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <CheckCircle className="w-10 h-10" />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">You're In!</h2>
-                <p className="text-slate-500 text-lg">
-                    You have successfully joined <span className="font-bold text-slate-900 dark:text-white">{company?.name}</span>.
-                </p>
-                
-                {company?.settings.rotaEnabled && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
-                        <Calendar className="w-5 h-5" />
-                        <span className="font-medium">Check your Rota for upcoming shifts.</span>
-                    </div>
-                )}
-
-                <button onClick={() => setStep(2)} className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold hover:bg-brand-700 transition mt-8 shadow-lg shadow-brand-500/30">
-                    Let's get set up
-                </button>
-            </div>
-        )}
-
-        {step === 2 && (
-            <div className="space-y-6">
-                <div className="text-center mb-8">
-                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Permission Priming</h2>
-                     <p className="text-slate-500">We need access to your Camera and Location to verify your attendance.</p>
-                </div>
-
-                <div className="space-y-4">
-                    {/* Camera Button */}
-                    <button 
-                        onClick={requestCamera}
-                        disabled={cameraPerm === 'granted'}
-                        className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                            cameraPerm === 'granted' 
-                            ? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 dark:border-green-500' 
-                            : 'border-slate-200 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500'
-                        }`}
-                    >
-                        <div className="flex items-center space-x-4">
-                            <div className={`p-2 rounded-lg ${cameraPerm === 'granted' ? 'bg-green-200 dark:bg-green-800' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                                <Camera className="w-6 h-6" />
-                            </div>
-                            <div className="text-left">
-                                <h4 className="font-bold text-slate-900 dark:text-white">Camera Access</h4>
-                                <p className="text-xs text-slate-500">Used to scan QR codes</p>
-                            </div>
-                        </div>
-                        {cameraPerm === 'granted' && <CheckCircle className="w-6 h-6" />}
-                    </button>
-
-                     {/* Location Button */}
-                    <button 
-                        onClick={requestLocation}
-                        disabled={locationPerm === 'granted'}
-                        className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                            locationPerm === 'granted' 
-                            ? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 dark:border-green-500' 
-                            : 'border-slate-200 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500'
-                        }`}
-                    >
-                         <div className="flex items-center space-x-4">
-                            <div className={`p-2 rounded-lg ${locationPerm === 'granted' ? 'bg-green-200 dark:bg-green-800' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                                <MapPin className="w-6 h-6" />
-                            </div>
-                            <div className="text-left">
-                                <h4 className="font-bold text-slate-900 dark:text-white">Location Access</h4>
-                                <p className="text-xs text-slate-500">Used for Static Site verification</p>
-                            </div>
-                        </div>
-                        {locationPerm === 'granted' && <CheckCircle className="w-6 h-6" />}
-                    </button>
-                </div>
-
-                <button 
-                    onClick={handleFinish} 
-                    className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-xl font-bold hover:opacity-90 transition mt-8 shadow-lg"
-                >
-                    Finish Setup
-                </button>
-                <p className="text-center text-xs text-slate-400 mt-4">You can change these in your browser settings later.</p>
-            </div>
-        )}
-     </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl w-full max-w-2xl p-8 md:p-12 relative overflow-hidden border border-slate-100 dark:border-slate-700">
-             {user.role === UserRole.ADMIN ? renderAdminFlow() : renderStaffFlow()}
-        </div>
     </div>
   );
 };

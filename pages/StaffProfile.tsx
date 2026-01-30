@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Building, LogOut, Edit2, Key, Trash2, X, AlertTriangle, MapPin, Camera, Check, Settings, RefreshCw } from 'lucide-react';
+import { Mail, Building, LogOut, Edit2, Key, Trash2, X, AlertTriangle, MapPin, Camera, Settings } from 'lucide-react';
 import { updateUserProfile, deleteUser, switchUserCompany, getCompany } from '../services/api';
 import { auth } from '../lib/firebase';
 import { sendPasswordResetEmail, deleteUser as deleteAuthUser } from 'firebase/auth';
@@ -14,7 +14,8 @@ export const StaffProfile = () => {
   const [isJoinOpen, setIsJoinOpen] = useState(false);
   
   // Forms
-  const [newName, setNewName] = useState(user?.name || '');
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
@@ -42,6 +43,21 @@ export const StaffProfile = () => {
     checkPermissions();
   }, [user]);
 
+  // Pre-fill form when modal opens
+  useEffect(() => {
+      if (isEditOpen && user) {
+          if (user.firstName && user.lastName) {
+              setEditFirstName(user.firstName);
+              setEditLastName(user.lastName);
+          } else {
+              // Fallback for legacy users
+              const parts = user.name.split(' ');
+              setEditFirstName(parts[0] || '');
+              setEditLastName(parts.slice(1).join(' ') || '');
+          }
+      }
+  }, [isEditOpen, user]);
+
   const checkPermissions = async () => {
       // Best effort initial check
       if (navigator.permissions && navigator.permissions.query) {
@@ -53,11 +69,21 @@ export const StaffProfile = () => {
       }
   };
 
+  const capitalize = (str: string) => str.replace(/\b\w/g, l => l.toUpperCase());
+
   const handleEditProfile = async () => {
       if (!user) return;
       setLoading(true);
       try {
-          await updateUserProfile(user.id, { name: newName });
+          const finalFirst = capitalize(editFirstName.trim());
+          const finalLast = capitalize(editLastName.trim());
+          const fullName = `${finalFirst} ${finalLast}`;
+
+          await updateUserProfile(user.id, { 
+              name: fullName,
+              firstName: finalFirst,
+              lastName: finalLast
+          });
           await refreshSession();
           setIsEditOpen(false);
           setMsg({ type: 'success', text: 'Profile updated successfully.' });
@@ -305,11 +331,20 @@ export const StaffProfile = () => {
                   </div>
                   <div className="space-y-4">
                       <div>
-                          <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Full Name</label>
+                          <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">First Name</label>
                           <input 
                             type="text" 
-                            value={newName} 
-                            onChange={(e) => setNewName(e.target.value)}
+                            value={editFirstName} 
+                            onChange={(e) => setEditFirstName(capitalize(e.target.value))}
+                            className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Last Name</label>
+                          <input 
+                            type="text" 
+                            value={editLastName} 
+                            onChange={(e) => setEditLastName(capitalize(e.target.value))}
                             className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                           />
                       </div>

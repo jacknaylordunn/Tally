@@ -204,7 +204,7 @@ export const ActionHandler = () => {
                     className="w-full max-w-xs bg-brand-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-brand-500/30 hover:bg-brand-700 transition flex items-center justify-center space-x-2"
                 >
                     <Navigation className="w-5 h-5" />
-                    <span>Verify & Clock In</span>
+                    <span>Verify location</span>
                 </button>
             </div>
         )}

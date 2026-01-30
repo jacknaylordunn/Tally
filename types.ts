@@ -7,7 +7,10 @@ export enum UserRole {
 export interface User {
   id: string;
   email: string;
-  name: string;
+  name: string; // Display name (Composite of First + Last)
+  firstName?: string; // New
+  lastName?: string; // New
+  employeeNumber?: string; // New: Company specific ID
   currentCompanyId?: string;
   activeShiftId?: string | null;
   role: UserRole;
