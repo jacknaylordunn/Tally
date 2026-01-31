@@ -213,15 +213,24 @@ export const AdminDashboard = () => {
   };
 
   const handleSaveEdit = async () => {
-      if (!editingShift) return;
+      if (!editingShift || !user) return;
       setIsSaving(true);
       try {
           const start = new Date(editStartTime).getTime();
           const end = editEndTime ? new Date(editEndTime).getTime() : null;
           
-          await updateShift(editingShift.id, { startTime: start, endTime: end });
+          const updates: any = { 
+              startTime: start, 
+              endTime: end,
+              startMethod: 'manual_entry',
+              editedByName: user.name,
+              editedById: user.id,
+              editedAt: Date.now()
+          };
+
+          await updateShift(editingShift.id, updates);
           
-          setShifts(prev => prev.map(s => s.id === editingShift.id ? { ...s, startTime: start, endTime: end } : s));
+          setShifts(prev => prev.map(s => s.id === editingShift.id ? { ...s, ...updates } : s));
           setEditingShift(null);
       } catch (e) {
           console.error(e);
@@ -235,8 +244,14 @@ export const AdminDashboard = () => {
       if(!confirm(`Force clock out for ${shift.userName}?`)) return;
       try {
           const now = Date.now();
-          await updateShift(shift.id, { endTime: now });
-          setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, endTime: now } : s));
+          const updates = { 
+              endTime: now,
+              editedByName: user?.name,
+              editedById: user?.id,
+              editedAt: Date.now()
+          };
+          await updateShift(shift.id, updates);
+          setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, ...updates } : s));
       } catch (e) {
           console.error(e);
           alert('Failed to clock out.');
