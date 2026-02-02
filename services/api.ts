@@ -607,8 +607,50 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
         const twoHours = 2 * 60 * 60 * 1000;
         let rotaData: Partial<Shift> = {};
 
+        // --- BLOCK EARLY CLOCK IN LOGIC ---
+        if (company.settings.blockEarlyClockIn && company.settings.rotaEnabled) {
+            const earlyInMins = company.settings.auditEarlyInThreshold || 30;
+            const oneHour = 60 * 60 * 1000;
+
+            // Check if there is a shift scheduled within the next 1 hour (Index: companyId, userId, startTime)
+            const scheduleQuery = query(
+                collection(db, SCHEDULE_REF),
+                where("companyId", "==", company.id),
+                where("userId", "==", user.id),
+                where("startTime", ">", now),
+                where("startTime", "<=", now + oneHour)
+            );
+            
+            try {
+                const upcomingSnap = await getDocs(scheduleQuery);
+                if (!upcomingSnap.empty) {
+                    // Find the earliest upcoming shift
+                    const sortedShifts = upcomingSnap.docs
+                        .map(d => d.data() as ScheduleShift)
+                        .sort((a,b) => a.startTime - b.startTime);
+                    
+                    const nextShift = sortedShifts[0];
+                    const diffMins = (nextShift.startTime - now) / 60000;
+
+                    // If we are currently EARLIER than the threshold
+                    if (diffMins > earlyInMins) {
+                        const timeStr = new Date(nextShift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                        return { 
+                            success: false, 
+                            message: `Too early for ${timeStr} shift. Ask manager for manual input if required.` 
+                        };
+                    }
+                }
+                // If no shift found in next hour, we ALLOW (unscheduled shift)
+            } catch (e) {
+                console.error("Early blocking check failed", e);
+            }
+        }
+        // ----------------------------------
+
         if (company.settings.rotaEnabled) {
             try {
+                // Find matching shift from 2 hours ago up to now (for data linking)
                 const schedQ = query(
                     collection(db, SCHEDULE_REF), 
                     where("companyId", "==", company.id),

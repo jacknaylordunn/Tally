@@ -39,6 +39,7 @@ export const Onboarding = () => {
   const [allowBidding, setAllowBidding] = useState(true);
   const [requireTimeOffApproval, setRequireTimeOffApproval] = useState(true);
   const [rotaShowFinishTimes, setRotaShowFinishTimes] = useState(true);
+  const [blockEarlyClockIn, setBlockEarlyClockIn] = useState(false);
   
   // Step 4: Invite
   const [copied, setCopied] = useState(false);
@@ -158,7 +159,8 @@ export const Onboarding = () => {
                // Only save rota sub-settings if enabled, otherwise they are ignored by logic
                rotaShowFinishTimes: enableRota ? rotaShowFinishTimes : undefined,
                allowShiftBidding: enableRota ? allowBidding : undefined,
-               requireTimeOffApproval: enableRota ? requireTimeOffApproval : undefined
+               requireTimeOffApproval: enableRota ? requireTimeOffApproval : undefined,
+               blockEarlyClockIn: enableRota ? blockEarlyClockIn : undefined
            });
            setStep(4);
        } catch (e) {
@@ -415,7 +417,7 @@ export const Onboarding = () => {
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                         </label>
                     </div>
 
@@ -448,7 +450,6 @@ export const Onboarding = () => {
                                     <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
-                            {rotaShowFinishTimes === false && <p className="text-xs text-slate-500 italic">Useful for zero-hour contracts.</p>}
                             <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Shift Bidding</span>
                                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -460,6 +461,16 @@ export const Onboarding = () => {
                                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Approval for Time Off</span>
                                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                     <input type="checkbox" checked={requireTimeOffApproval} onChange={(e) => setRequireTimeOffApproval(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 mt-3">
+                                <div>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Block Early Clock In</span>
+                                    <span className="text-xs text-slate-500">Prevent check-in before "Early In" threshold.</span>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                    <input type="checkbox" checked={blockEarlyClockIn} onChange={(e) => setBlockEarlyClockIn(e.target.checked)} className="sr-only peer" />
                                     <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>

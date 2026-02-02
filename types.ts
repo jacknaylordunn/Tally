@@ -57,6 +57,7 @@ export interface Company {
     auditLateOutThreshold?: number; // mins
     auditShortShiftThreshold?: number; // mins
     auditLongShiftThreshold?: number; // hours
+    blockEarlyClockIn?: boolean; // New: Prevent clocking in too early
   };
 }
 

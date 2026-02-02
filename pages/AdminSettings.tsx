@@ -55,6 +55,7 @@ export const AdminSettings = () => {
   const [auditLateOut, setAuditLateOut] = useState(15);
   const [auditShortShift, setAuditShortShift] = useState(5);
   const [auditLongShift, setAuditLongShift] = useState(14);
+  const [blockEarlyClockIn, setBlockEarlyClockIn] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -98,6 +99,7 @@ export const AdminSettings = () => {
         setAuditLateOut(data.settings.auditLateOutThreshold || 15);
         setAuditShortShift(data.settings.auditShortShiftThreshold || 5);
         setAuditLongShift(data.settings.auditLongShiftThreshold || 14);
+        setBlockEarlyClockIn(data.settings.blockEarlyClockIn || false);
 
         setLoading(false);
     };
@@ -135,12 +137,13 @@ export const AdminSettings = () => {
           auditEarlyOut !== (s.auditEarlyOutThreshold || 15) ||
           auditLateOut !== (s.auditLateOutThreshold || 15) ||
           auditShortShift !== (s.auditShortShiftThreshold || 5) ||
-          auditLongShift !== (s.auditLongShiftThreshold || 14)
+          auditLongShift !== (s.auditLongShiftThreshold || 14) ||
+          blockEarlyClockIn !== (s.blockEarlyClockIn || false)
       );
   }, [
       company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl, showStaffEarnings,
       holidayPayEnabled, holidayPayRate, exportShowTimesWeekly, exportShowTimesMonthly, exportIncludeDeductions, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
-      auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift, updateExistingLocs
+      auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift, updateExistingLocs, blockEarlyClockIn
   ]);
 
   // Prevent Navigation if Dirty
@@ -233,7 +236,8 @@ export const AdminSettings = () => {
               auditEarlyOutThreshold: auditEarlyOut,
               auditLateOutThreshold: auditLateOut,
               auditShortShiftThreshold: auditShortShift,
-              auditLongShiftThreshold: auditLongShift
+              auditLongShiftThreshold: auditLongShift,
+              blockEarlyClockIn
           });
 
           // Handle Batch Location Update
@@ -594,6 +598,17 @@ export const AdminSettings = () => {
                         <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Late Out (mins)</label><input type="number" min="0" value={auditLateOut} onChange={(e) => setAuditLateOut(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
                         <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Short Shift (mins)</label><input type="number" min="0" value={auditShortShift} onChange={(e) => setAuditShortShift(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
                         <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Long Shift (hrs)</label><input type="number" min="0" value={auditLongShift} onChange={(e) => setAuditLongShift(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
+                    </div>
+                    {/* Block Early Clock-In Toggle */}
+                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-200 dark:border-white/10">
+                        <div className="pr-4">
+                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">Block Early Clock In</h4>
+                            <p className="text-xs text-slate-500">Prevent scanning if more than '{auditEarlyIn}m' early for shift.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input type="checkbox" checked={blockEarlyClockIn} onChange={(e) => setBlockEarlyClockIn(e.target.checked)} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
                     </div>
                 </div>
 
