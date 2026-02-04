@@ -435,9 +435,6 @@ export const AdminTimesheets = () => {
                             const timeInColor = getTimeInColorClass(shift);
                             const timeOutColor = getTimeOutColorClass(shift);
                             
-                            // Rate Logic: Compare shift hourly rate to company default to guess if custom
-                            const isDefaultRate = Math.abs(shift.hourlyRate - (company?.settings.defaultHourlyRate || 0)) < 0.01;
-
                             return (
                                 <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition group">
                                     <td className="px-6 py-4">
@@ -490,7 +487,7 @@ export const AdminTimesheets = () => {
                                         {calculateDuration(shift.startTime, shift.endTime)}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className={`font-mono ${!isDefaultRate ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500'}`}>
+                                        <div className="font-mono text-slate-900 dark:text-slate-100">
                                             {calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
                                         </div>
                                     </td>

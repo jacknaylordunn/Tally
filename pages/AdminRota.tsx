@@ -466,8 +466,16 @@ export const AdminRota = () => {
       if (file.type.startsWith('image/')) {
           setAnalyzing(true);
           try {
+              // Validating API Key presence before usage
+              // Ensure we are using the environment variable directly as per instructions
+              const apiKey = process.env.API_KEY; 
+              
+              if (!apiKey) {
+                  throw new Error("Missing API Key. Please configure process.env.API_KEY in your build environment.");
+              }
+
               const base64Data = await fileToBase64(file);
-              const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+              const ai = new GoogleGenAI({ apiKey });
               
               const response = await ai.models.generateContent({
                   model: 'gemini-3-flash-preview',
@@ -515,9 +523,14 @@ export const AdminRota = () => {
               const rawData = JSON.parse(response.text || '[]');
               processImportData(rawData);
 
-          } catch (e) {
+          } catch (e: any) {
               console.error("AI Error", e);
-              alert("Failed to analyze image. Please check the file format or try a CSV.");
+              // Provide more specific feedback for API key error
+              if (e.message?.includes("API Key") || e.toString().includes("API Key")) {
+                  alert("AI Configuration Error: API Key not found. Please contact support.");
+              } else {
+                  alert("Failed to analyze image. Please check the file format or try a CSV.");
+              }
           } finally {
               setAnalyzing(false);
           }
@@ -1812,9 +1825,10 @@ export const AdminRota = () => {
                                 <button 
                                     onClick={handleCommitImport}
                                     disabled={importRows.some(r => r.errors.length > 0 && !r.errors.includes('name_unknown') && !r.errors.includes('missing_end_time')) || importRows.length === 0}
-                                    className="bg-brand-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg"
+                                    className="bg-brand-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg flex items-center gap-2"
                                 >
-                                    Import {importRows.filter(r => r.errors.length === 0 || (r.errors.length === 1 && r.errors[0] === 'name_unknown')).length} Shifts
+                                    <Check className="w-4 h-4" />
+                                    <span>Import {importRows.length} Shifts</span>
                                 </button>
                             </div>
                         </div>

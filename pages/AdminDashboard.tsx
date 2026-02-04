@@ -118,7 +118,7 @@ export const AdminDashboard = () => {
           if (durationMins > (auditLongShiftThreshold * 60)) {
               // Distinguish between active ghost shifts and completed long shifts
               if (!s.endTime) {
-                  alerts.push({ type: 'ghost', message: `Active > ${auditLongShiftThreshold}h (Forgot Clock Out?)`, shift: s });
+                  alerts.push({ type: 'ghost', message: `Active > ${auditLongShiftThreshold}h (Overdue?)`, shift: s });
               } else {
                   alerts.push({ type: 'long', message: `Long shift (> ${auditLongShiftThreshold}h)`, shift: s });
               }
