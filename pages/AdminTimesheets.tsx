@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getShifts, updateShift, deleteShift, getCompany, getCompanyStaff, createManualShift } from '../services/api';
 import { Shift, Company, User } from '../types';
-import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet, FileText, Table, Info, Wand2 } from 'lucide-react';
+import { Download, Edit2, Search, Calendar, ChevronDown, Plus, X, Save, Clock, Trash2, CheckCircle, CalendarCheck, HelpCircle, AlertTriangle, ArrowRight, UserCog, FileSpreadsheet, FileText, Table, Info, Wand2, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { downloadPayrollReport } from '../utils/csv';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -127,6 +127,36 @@ export const AdminTimesheets = () => {
 
   const filteredShifts = useMemo(() => getFilteredShifts(), [shifts, dateRange, customStart, customEnd, searchTerm]);
 
+  // --- Overlap Detection Logic ---
+  const overlapIds = useMemo(() => {
+      const ids = new Set<string>();
+      // Group by User
+      const userGroups: Record<string, Shift[]> = {};
+      filteredShifts.forEach(s => {
+          if (!s.endTime) return; // Skip active shifts for overlap check logic simplicity
+          if (!userGroups[s.userId]) userGroups[s.userId] = [];
+          userGroups[s.userId].push(s);
+      });
+
+      Object.values(userGroups).forEach(group => {
+          // Sort by start time
+          group.sort((a, b) => a.startTime - b.startTime);
+          
+          for (let i = 0; i < group.length - 1; i++) {
+              const current = group[i];
+              const next = group[i+1];
+              
+              // If current ends after next starts, overlap!
+              // (Buffer of 1 minute to avoid flagging simple back-to-back errors)
+              if (current.endTime! > (next.startTime + 60000)) {
+                  ids.add(current.id);
+                  ids.add(next.id);
+              }
+          }
+      });
+      return ids;
+  }, [filteredShifts]);
+
   // Formatter for DD.MM.YY
   const formatDateLabel = (date: Date) => {
       return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '.');
@@ -179,6 +209,11 @@ export const AdminTimesheets = () => {
       const auditLateOut = company.settings.auditLateOutThreshold || 15;
       const auditShortShift = company.settings.auditShortShiftThreshold || 5;
       const auditLongShift = company.settings.auditLongShiftThreshold || 14;
+
+      // Overlap Check
+      if (overlapIds.has(shift.id)) {
+          flags.push({ type: 'red', label: 'Overlap' });
+      }
 
       if (shift.scheduledStartTime) {
           const diffMins = (shift.startTime - shift.scheduledStartTime) / 60000;
@@ -400,6 +435,9 @@ export const AdminTimesheets = () => {
                             const timeInColor = getTimeInColorClass(shift);
                             const timeOutColor = getTimeOutColorClass(shift);
                             
+                            // Rate Logic: Compare shift hourly rate to company default to guess if custom
+                            const isDefaultRate = Math.abs(shift.hourlyRate - (company?.settings.defaultHourlyRate || 0)) < 0.01;
+
                             return (
                                 <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition group">
                                     <td className="px-6 py-4">
@@ -421,6 +459,7 @@ export const AdminTimesheets = () => {
                                             <div className="flex flex-wrap gap-1 mt-1">
                                                 {flags.map((f, i) => (
                                                     <span key={i} className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${f.type === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'}`}>
+                                                        {f.type === 'red' && <AlertTriangle className="w-3 h-3 mr-1" />}
                                                         {f.label}
                                                     </span>
                                                 ))}
@@ -450,8 +489,10 @@ export const AdminTimesheets = () => {
                                     <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-300">
                                         {calculateDuration(shift.startTime, shift.endTime)}
                                     </td>
-                                    <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
-                                        {calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
+                                    <td className="px-6 py-4">
+                                        <div className={`font-mono ${!isDefaultRate ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500'}`}>
+                                            {calculatePay(shift.startTime, shift.endTime, shift.hourlyRate)}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="group/audit relative inline-block cursor-default">

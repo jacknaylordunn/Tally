@@ -116,7 +116,12 @@ export const AdminDashboard = () => {
           const durationMins = ((s.endTime || now) - s.startTime) / 60000;
           
           if (durationMins > (auditLongShiftThreshold * 60)) {
-              alerts.push({ type: 'long', message: `Long shift (> ${auditLongShiftThreshold}h)`, shift: s });
+              // Distinguish between active ghost shifts and completed long shifts
+              if (!s.endTime) {
+                  alerts.push({ type: 'ghost', message: `Active > ${auditLongShiftThreshold}h (Forgot Clock Out?)`, shift: s });
+              } else {
+                  alerts.push({ type: 'long', message: `Long shift (> ${auditLongShiftThreshold}h)`, shift: s });
+              }
           }
           if (s.endTime && durationMins < auditShortShiftThreshold) {
               alerts.push({ type: 'short', message: `Short shift (< ${auditShortShiftThreshold}m)`, shift: s });
@@ -428,11 +433,16 @@ export const AdminDashboard = () => {
                         ) : filteredShifts.map((shift) => {
                             const isActive = !shift.endTime;
                             const durationMs = (isActive ? Date.now() : shift.endTime!) - shift.startTime;
-                            const h = Math.floor(durationMs / 3600000);
+                            const durationHrs = durationMs / 3600000;
+                            const h = Math.floor(durationHrs);
                             const m = Math.floor((durationMs % 3600000) / 60000);
                             
+                            // Check for Ghost Shifts (Active but too long)
+                            const longShiftThreshold = company?.settings.auditLongShiftThreshold || 14;
+                            const isGhostShift = isActive && durationHrs > longShiftThreshold;
+
                             return (
-                                <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition duration-150 group">
+                                <tr key={shift.id} className={`hover:bg-slate-50 dark:hover:bg-white/5 transition duration-150 group ${isGhostShift ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center space-x-3">
                                             <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-gradient-to-tr dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-slate-600 dark:text-white font-bold text-sm shadow-sm">
@@ -449,17 +459,24 @@ export const AdminDashboard = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         {isActive ? (
-                                            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-xs font-bold">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                <span>Active</span>
-                                            </div>
+                                            isGhostShift ? (
+                                                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 text-xs font-bold animate-pulse">
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    <span>Overdue?</span>
+                                                </div>
+                                            ) : (
+                                                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-xs font-bold">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                    <span>Active</span>
+                                                </div>
+                                            )
                                         ) : (
                                             <span className="text-slate-500 font-medium text-xs bg-slate-100 dark:bg-white/5 px-2 py-1 rounded">Completed</span>
                                         )}
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="font-mono text-slate-700 dark:text-white">{new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                        <div className="text-xs text-slate-500 mt-0.5">{h}h {m}m duration</div>
+                                        <div className={`text-xs mt-0.5 ${isGhostShift ? 'text-red-500 font-bold' : 'text-slate-500'}`}>{h}h {m}m duration</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
@@ -560,7 +577,7 @@ export const AdminDashboard = () => {
                                             <div>
                                                 <div className="font-bold text-slate-900 dark:text-white">{item.shift.userName}</div>
                                                 <div className="text-xs text-slate-500 mb-1">{new Date(item.shift.startTime).toLocaleDateString()}</div>
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/30">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${item.type === 'ghost' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'} border border-transparent`}>
                                                     <AlertTriangle className="w-3 h-3 mr-1" />
                                                     {item.message}
                                                 </span>
