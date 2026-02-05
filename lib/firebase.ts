@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDQk5fIToyGp8qxyD2llk_v8N3E0aNO3G4",
@@ -31,6 +32,9 @@ try {
   // If Firestore is already initialized, use the existing instance
   db = getFirestore(app);
 }
+
+// Initialize Storage
+export const storage = getStorage(app);
 
 export { db };
 export const auth = getAuth(app);

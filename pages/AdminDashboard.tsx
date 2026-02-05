@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
-import { getShifts, getLocations, getCompany, getSchedule, updateShift, deleteShift, getCompanyStaff, updateUserProfile } from '../services/api';
+import React, { useEffect, useState, useRef } from 'react';
+import { updateShift, deleteShift, getLocations, getCompany, getCompanyStaff, getSchedule, subscribeToCompanyShifts } from '../services/api';
 import { Shift, Location, Company, User, ScheduleShift } from '../types';
-import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown, ClipboardList, Check, UserPlus, AlertTriangle, EyeOff, Wand2 } from 'lucide-react';
+import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown, ClipboardList, Check, UserPlus, AlertTriangle, EyeOff, Wand2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -33,6 +33,10 @@ export const AdminDashboard = () => {
   // Review Modal State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewTab, setReviewTab] = useState<'alerts' | 'pending' | 'rota'>('alerts');
+  const [returnToReview, setReturnToReview] = useState(false);
+
+  // Active Schedule Modal
+  const [isActiveScheduleModalOpen, setIsActiveScheduleModalOpen] = useState(false);
 
   // Action Menu State
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -43,23 +47,26 @@ export const AdminDashboard = () => {
   const [editEndTime, setEditEndTime] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Data Loading & Subscriptions
   useEffect(() => {
-    const loadData = async () => {
-        if (!user || !user.currentCompanyId) return;
-        const [shiftsData, locationsData, companyData, staffData] = await Promise.all([
-            getShifts(user.currentCompanyId),
-            getLocations(user.currentCompanyId),
-            getCompany(user.currentCompanyId),
-            getCompanyStaff(user.currentCompanyId)
-        ]);
-        setShifts(shiftsData);
-        setLocations(locationsData);
-        setCompany(companyData);
-        setStaff(staffData);
+    if (!user || !user.currentCompanyId) return;
 
-        if (companyData.settings.rotaEnabled) {
-            try {
-                // Fetch schedule for Yesterday AND Today to catch overnight shifts
+    let unsubscribeShifts: () => void;
+
+    const loadStaticData = async () => {
+        setLoading(true);
+        try {
+            const [locationsData, companyData, staffData] = await Promise.all([
+                getLocations(user.currentCompanyId!),
+                getCompany(user.currentCompanyId!),
+                getCompanyStaff(user.currentCompanyId!)
+            ]);
+            setLocations(locationsData);
+            setCompany(companyData);
+            setStaff(staffData);
+
+            if (companyData.settings.rotaEnabled) {
+                // Fetch schedule for Yesterday AND Today
                 const now = new Date();
                 const startOfYesterday = new Date(now);
                 startOfYesterday.setDate(now.getDate() - 1);
@@ -68,16 +75,64 @@ export const AdminDashboard = () => {
                 const endOfToday = new Date(now);
                 endOfToday.setHours(23,59,59,999);
 
-                const recentSchedule = await getSchedule(user.currentCompanyId, startOfYesterday.getTime(), endOfToday.getTime());
+                const recentSchedule = await getSchedule(user.currentCompanyId!, startOfYesterday.getTime(), endOfToday.getTime());
                 setActiveSchedule(recentSchedule);
-            } catch (e) { console.error(e); }
+            }
+        } catch (e) {
+            console.error("Error loading dashboard data", e);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
-        
-        setTimeout(() => startTutorial(), 1000);
     };
-    loadData();
+
+    // 1. Load Static
+    loadStaticData();
+
+    // 2. Subscribe to Real-time Shifts
+    unsubscribeShifts = subscribeToCompanyShifts(user.currentCompanyId, (data) => {
+        setShifts(data);
+    });
+
+    setTimeout(() => startTutorial(), 1000);
+
+    return () => {
+        if (unsubscribeShifts) unsubscribeShifts();
+    };
   }, [user]);
+
+  // Self-Healing Logic: Link Shifts to Rota if missing
+  // Runs whenever shifts or activeSchedule changes
+  useEffect(() => {
+      if (shifts.length === 0 || activeSchedule.length === 0) return;
+
+      const healLinks = async () => {
+          for (const s of shifts) {
+              // Only check recent shifts (last 24h) to avoid huge processing
+              if (!s.scheduleShiftId && s.startTime > Date.now() - 86400000) {
+                  // Find matching schedule
+                  // Logic: Same User, Same Company. Start time within +/- 4 hours of planned start
+                  const match = activeSchedule.find(sched => 
+                      sched.userId === s.userId &&
+                      Math.abs(sched.startTime - s.startTime) < (4 * 60 * 60 * 1000)
+                  );
+
+                  if (match) {
+                      console.log(`Auto-linking Shift ${s.id} to Rota ${match.id}`);
+                      // Fire and forget update
+                      await updateShift(s.id, { 
+                          scheduleShiftId: match.id,
+                          scheduledStartTime: match.startTime,
+                          scheduledEndTime: match.endTime
+                      });
+                  }
+              }
+          }
+      };
+      
+      // Debounce slightly to avoid rapid updates
+      const timer = setTimeout(healLinks, 2000);
+      return () => clearTimeout(timer);
+  }, [shifts, activeSchedule]);
 
   const filteredShifts = shifts.filter(s => {
       const matchesSearch = s.userName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -87,9 +142,10 @@ export const AdminDashboard = () => {
 
   const activeShiftsCount = shifts.filter(s => !s.endTime).length;
   
-  // Calculate expected shifts RIGHT NOW (handles overnight shifts correctly)
   const nowTs = Date.now();
-  const scheduledNowCount = activeSchedule.filter(s => s.userId && s.startTime <= nowTs && s.endTime > nowTs).length;
+  // Get currently scheduled shifts (active right now)
+  const scheduledNow = activeSchedule.filter(s => s.userId && s.startTime <= nowTs && s.endTime > nowTs);
+  const scheduledNowCount = scheduledNow.length;
   
   const currency = company?.settings.currency || '£';
 
@@ -108,15 +164,12 @@ export const AdminDashboard = () => {
       const alerts: { type: string, message: string, shift: Shift }[] = [];
 
       shifts.forEach(s => {
-          // If manually dismissed, skip
           if (s.warningsDismissed) return;
 
           const now = Date.now();
-          // 1. Duration Checks
           const durationMins = ((s.endTime || now) - s.startTime) / 60000;
           
           if (durationMins > (auditLongShiftThreshold * 60)) {
-              // Distinguish between active ghost shifts and completed long shifts
               if (!s.endTime) {
                   alerts.push({ type: 'ghost', message: `Active > ${auditLongShiftThreshold}h (Overdue?)`, shift: s });
               } else {
@@ -127,10 +180,23 @@ export const AdminDashboard = () => {
               alerts.push({ type: 'short', message: `Short shift (< ${auditShortShiftThreshold}m)`, shift: s });
           }
 
-          // 2. Schedule Adherence Checks
-          if (s.scheduledStartTime) {
-              const diffStart = (s.startTime - s.scheduledStartTime) / 60000;
-              
+          // Use either linked schedule data OR try to find a match in activeSchedule for alert calculation
+          let scheduledStart = s.scheduledStartTime;
+          let scheduledEnd = s.scheduledEndTime;
+
+          if (!scheduledStart) {
+              const match = activeSchedule.find(sched => 
+                  sched.userId === s.userId &&
+                  Math.abs(sched.startTime - s.startTime) < (4 * 60 * 60 * 1000)
+              );
+              if (match) {
+                  scheduledStart = match.startTime;
+                  scheduledEnd = match.endTime;
+              }
+          }
+
+          if (scheduledStart) {
+              const diffStart = (s.startTime - scheduledStart) / 60000;
               if (diffStart > auditLateInThreshold) {
                   alerts.push({ type: 'late_in', message: `Late In (+${Math.round(diffStart)}m)`, shift: s });
               } else if (diffStart < -auditEarlyInThreshold) {
@@ -138,9 +204,8 @@ export const AdminDashboard = () => {
               }
           }
 
-          if (s.scheduledEndTime && s.endTime) {
-              const diffEnd = (s.endTime - s.scheduledEndTime) / 60000;
-              
+          if (scheduledEnd && s.endTime) {
+              const diffEnd = (s.endTime - scheduledEnd) / 60000;
               if (diffEnd < -auditEarlyOutThreshold) {
                   alerts.push({ type: 'early_out', message: `Early Out (${Math.abs(Math.round(diffEnd))}m)`, shift: s });
               } else if (diffEnd > auditLateOutThreshold) {
@@ -152,12 +217,11 @@ export const AdminDashboard = () => {
   };
 
   const pendingStaff = staff.filter(u => u.isApproved === false);
-  const uncoveredRota = activeSchedule.filter(s => !s.userId && s.startTime > Date.now() && s.startTime < Date.now() + 86400000); // Uncovered in next 24h
+  const uncoveredRota = activeSchedule.filter(s => !s.userId && s.startTime > Date.now() && s.startTime < Date.now() + 86400000); 
   const alerts = getAlerts();
   
   const totalReviewItems = alerts.length + pendingStaff.length + uncoveredRota.length;
 
-  // --- ROLLING COST CALCULATION ---
   const calculateRollingCost = () => {
       const now = Date.now();
       const cutoff = now - (costWindow * 60 * 60 * 1000);
@@ -189,18 +253,24 @@ export const AdminDashboard = () => {
       return d.toISOString().slice(0, 16);
   };
 
-  const handleEditClick = (shift: Shift) => {
+  const handleEditClick = (shift: Shift, fromReview = false) => {
       setEditingShift(shift);
       setEditStartTime(toLocalISO(shift.startTime));
       setEditEndTime(shift.endTime ? toLocalISO(shift.endTime) : '');
       setOpenActionMenuId(null);
-      setIsReviewModalOpen(false); // Close review modal if opened from there
+      if (fromReview) {
+          setReturnToReview(true);
+          setIsReviewModalOpen(false);
+      } else {
+          setReturnToReview(false);
+          setIsReviewModalOpen(false);
+      }
   };
 
   const handleDismissAlert = async (shift: Shift) => {
       try {
           await updateShift(shift.id, { warningsDismissed: true });
-          setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, warningsDismissed: true } : s));
+          // No need to update local state manually as subscription will catch it
       } catch (e) {
           console.error("Dismiss failed", e);
       }
@@ -209,8 +279,9 @@ export const AdminDashboard = () => {
   const handleApproveStaff = async (userId: string) => {
       if(!confirm("Approve this staff member?")) return;
       try {
-          await updateUserProfile(userId, { isApproved: true });
-          setStaff(prev => prev.map(u => u.id === userId ? { ...u, isApproved: true } : u));
+          // This creates a new profile in firebase/api so no subscription logic for staff list yet
+          // Manually update local state for immediate feedback
+          await getCompanyStaff(user!.currentCompanyId!).then(setStaff); 
       } catch (e) {
           console.error(e);
           alert("Failed to approve.");
@@ -234,14 +305,26 @@ export const AdminDashboard = () => {
           };
 
           await updateShift(editingShift.id, updates);
-          
-          setShifts(prev => prev.map(s => s.id === editingShift.id ? { ...s, ...updates } : s));
           setEditingShift(null);
+          
+          // Return to review flow if needed
+          if (returnToReview) {
+              setIsReviewModalOpen(true);
+              setReturnToReview(false);
+          }
       } catch (e) {
           console.error(e);
           alert('Failed to update shift.');
       } finally {
           setIsSaving(false);
+      }
+  };
+
+  const handleCancelEdit = () => {
+      setEditingShift(null);
+      if (returnToReview) {
+          setIsReviewModalOpen(true);
+          setReturnToReview(false);
       }
   };
 
@@ -256,7 +339,6 @@ export const AdminDashboard = () => {
               editedAt: Date.now()
           };
           await updateShift(shift.id, updates);
-          setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, ...updates } : s));
       } catch (e) {
           console.error(e);
           alert('Failed to clock out.');
@@ -268,12 +350,15 @@ export const AdminDashboard = () => {
       if(!confirm('Are you sure you want to delete this record? This cannot be undone.')) return;
       try {
           await deleteShift(shiftId);
-          setShifts(prev => prev.filter(s => s.id !== shiftId));
       } catch (e) {
           console.error(e);
           alert('Failed to delete.');
       }
       setOpenActionMenuId(null);
+  };
+
+  const handleRefresh = () => {
+      window.location.reload();
   };
 
   const StatWidget = ({ label, value, subtext, icon: Icon, color, isDropdown = false, onClick }: any) => (
@@ -324,7 +409,16 @@ export const AdminDashboard = () => {
     <div className="space-y-8 pb-12" onClick={() => { setOpenActionMenuId(null); setIsCostMenuOpen(false); }}>
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Command Center</h1>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+                    Command Center
+                    <button 
+                        onClick={handleRefresh} 
+                        className="p-2 bg-slate-100 dark:bg-white/10 rounded-full hover:bg-slate-200 dark:hover:bg-white/20 transition" 
+                        title="Reload Data"
+                    >
+                        <RefreshCw className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+                    </button>
+                </h1>
                 <p className="text-slate-500 dark:text-slate-400 mt-1">Overview for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
             </div>
             
@@ -349,6 +443,7 @@ export const AdminDashboard = () => {
                     subtext="On-Shift"
                     icon={Calendar}
                     color="purple"
+                    onClick={() => setIsActiveScheduleModalOpen(true)}
                 />
             )}
             <StatWidget 
@@ -359,7 +454,6 @@ export const AdminDashboard = () => {
                 color="emerald"
             />
             
-            {/* Interactive Cost Widget */}
             <div onClick={(e) => e.stopPropagation()}>
                 <StatWidget 
                     label={`Est. Cost (Last ${costWindow}h)`} 
@@ -437,7 +531,6 @@ export const AdminDashboard = () => {
                             const h = Math.floor(durationHrs);
                             const m = Math.floor((durationMs % 3600000) / 60000);
                             
-                            // Check for Ghost Shifts (Active but too long)
                             const longShiftThreshold = company?.settings.auditLongShiftThreshold || 14;
                             const isGhostShift = isActive && durationHrs > longShiftThreshold;
 
@@ -529,6 +622,59 @@ export const AdminDashboard = () => {
 
         {/* --- MODALS --- */}
         
+        {/* Active Schedule Modal */}
+        {isActiveScheduleModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setIsActiveScheduleModalOpen(false)}>
+                <div className="glass-panel w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 overflow-hidden flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <Calendar className="w-6 h-6 text-purple-500" />
+                            Active Schedule ({scheduledNowCount})
+                        </h2>
+                        <button onClick={() => setIsActiveScheduleModalOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-black/10">
+                        {scheduledNow.length === 0 ? (
+                            <div className="text-center py-8 text-slate-500">No shifts scheduled for this specific time.</div>
+                        ) : (
+                            <div className="space-y-3">
+                                {scheduledNow.map(s => {
+                                    // Check if user is active
+                                    const activeShift = shifts.find(shift => !shift.endTime && shift.userId === s.userId);
+                                    const isClockedIn = !!activeShift;
+                                    
+                                    return (
+                                        <div key={s.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-white/5 flex justify-between items-center">
+                                            <div>
+                                                <div className="font-bold text-slate-900 dark:text-white">{s.userName}</div>
+                                                <div className="text-xs text-slate-500 font-mono">
+                                                    {new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                </div>
+                                                <div className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">{s.role}</div>
+                                            </div>
+                                            <div>
+                                                {isClockedIn ? (
+                                                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-500/20">
+                                                        <CheckCircle2 className="w-3 h-3 mr-1" /> Working
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold border border-red-200 dark:border-red-500/20">
+                                                        <AlertCircle className="w-3 h-3 mr-1" /> Missing
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Review Modal */}
         {isReviewModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setIsReviewModalOpen(false)}>
@@ -590,7 +736,7 @@ export const AdminDashboard = () => {
                                                     <EyeOff className="w-3 h-3" /> Dismiss
                                                 </button>
                                                 <button 
-                                                    onClick={() => handleEditClick(item.shift)}
+                                                    onClick={() => handleEditClick(item.shift, true)}
                                                     className="px-3 py-2 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 rounded-lg text-xs font-bold transition text-slate-700 dark:text-white"
                                                 >
                                                     View / Edit
@@ -748,7 +894,7 @@ export const AdminDashboard = () => {
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
                      <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Shift</h2>
-                        <button onClick={() => setEditingShift(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                        <button onClick={handleCancelEdit} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
@@ -807,7 +953,7 @@ export const AdminDashboard = () => {
 
                     <div className="flex gap-3">
                          <button 
-                            onClick={() => setEditingShift(null)}
+                            onClick={handleCancelEdit}
                             className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition"
                         >
                             Cancel

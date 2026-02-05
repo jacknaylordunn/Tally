@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile, updateAllLocationsRadius, getLocations } from '../services/api';
+import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile, updateAllLocationsRadius, getLocations, uploadCompanyLogo } from '../services/api';
 import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText, TableProperties } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText, TableProperties, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useBlocker } from 'react-router-dom';
@@ -30,7 +30,11 @@ export const AdminSettings = () => {
   const [defaultRate, setDefaultRate] = useState(15);
   const [currency, setCurrency] = useState('£');
   const [primaryColor, setPrimaryColor] = useState('#0ea5e9');
+  
+  // Logo
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  
   const [showStaffEarnings, setShowStaffEarnings] = useState(true);
   
   // Export Settings
@@ -56,6 +60,8 @@ export const AdminSettings = () => {
   const [auditShortShift, setAuditShortShift] = useState(5);
   const [auditLongShift, setAuditLongShift] = useState(14);
   const [blockEarlyClockIn, setBlockEarlyClockIn] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -122,6 +128,7 @@ export const AdminSettings = () => {
           currency !== (s.currency || '£') ||
           primaryColor !== (s.primaryColor || '#0ea5e9') ||
           logoUrl !== (s.logoUrl || '') ||
+          logoFile !== null ||
           showStaffEarnings !== clean(s.showStaffEarnings, true) ||
           holidayPayEnabled !== (s.holidayPayEnabled || false) ||
           holidayPayRate !== (s.holidayPayRate || 12.07) ||
@@ -141,7 +148,7 @@ export const AdminSettings = () => {
           blockEarlyClockIn !== (s.blockEarlyClockIn || false)
       );
   }, [
-      company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl, showStaffEarnings,
+      company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl, logoFile, showStaffEarnings,
       holidayPayEnabled, holidayPayRate, exportShowTimesWeekly, exportShowTimesMonthly, exportIncludeDeductions, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
       auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift, updateExistingLocs, blockEarlyClockIn
   ]);
@@ -202,12 +209,25 @@ export const AdminSettings = () => {
         }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          setLogoFile(e.target.files[0]);
+      }
+  };
+
   const handleSave = async () => {
       if (!user?.currentCompanyId) return;
       isSavingRef.current = true; // Bypass blockers
       setSaving(true);
       
       try {
+          let finalLogoUrl = logoUrl;
+
+          // 1. Upload Logo if changed
+          if (logoFile) {
+              finalLogoUrl = await uploadCompanyLogo(user.currentCompanyId, logoFile);
+          }
+
           // Update Company Details
           await updateCompany(user.currentCompanyId, {
               name: companyName
@@ -220,7 +240,7 @@ export const AdminSettings = () => {
               defaultHourlyRate: defaultRate,
               currency: currency,
               primaryColor,
-              logoUrl,
+              logoUrl: finalLogoUrl,
               showStaffEarnings,
               holidayPayEnabled,
               holidayPayRate,
@@ -398,27 +418,53 @@ export const AdminSettings = () => {
                             </div>
                         </div>
 
-                        {/* Logo URL */}
+                        {/* Logo Upload/URL */}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Logo URL</label>
-                            <div className="flex items-center space-x-3">
-                                <div className="relative flex-1">
-                                    <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Company Logo</label>
+                            <div className="space-y-3">
+                                {/* Upload Button */}
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 transition border border-slate-200 dark:border-slate-700"
+                                    >
+                                        <Upload className="w-4 h-4" />
+                                        <span>Upload File</span>
+                                    </button>
                                     <input 
-                                        type="url" 
-                                        value={logoUrl} 
-                                        onChange={(e) => setLogoUrl(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" 
-                                        placeholder="https://example.com/logo.png"
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        onChange={handleFileSelect}
+                                        accept="image/*"
+                                        className="hidden"
                                     />
+                                    {logoFile && <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">{logoFile.name} selected</span>}
                                 </div>
-                                {logoUrl && (
-                                    <div className="h-10 w-10 bg-white rounded-lg border border-slate-200 p-1 flex items-center justify-center">
-                                        <img src={logoUrl} alt="Preview" className="max-h-full max-w-full object-contain" />
+
+                                <div className="relative flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase">OR</span>
+                                    <div className="relative flex-1">
+                                        <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                        <input 
+                                            type="url" 
+                                            value={logoUrl} 
+                                            onChange={(e) => setLogoUrl(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm" 
+                                            placeholder="Paste direct image URL..."
+                                        />
+                                    </div>
+                                </div>
+
+                                {(logoUrl || logoFile) && (
+                                    <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg inline-block">
+                                        <img 
+                                            src={logoFile ? URL.createObjectURL(logoFile) : logoUrl} 
+                                            alt="Preview" 
+                                            className="h-12 w-auto object-contain rounded" 
+                                        />
                                     </div>
                                 )}
                             </div>
-                            <p className="text-xs text-slate-500 mt-1">Direct link to image (PNG/JPG).</p>
                         </div>
                     </div>
                 </div>
@@ -607,7 +653,7 @@ export const AdminSettings = () => {
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input type="checkbox" checked={blockEarlyClockIn} onChange={(e) => setBlockEarlyClockIn(e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                         </label>
                     </div>
                 </div>

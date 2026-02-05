@@ -17,9 +17,11 @@ import {
     arrayRemove,
     onSnapshot,
     addDoc,
-    getCountFromServer
+    getCountFromServer,
+    Unsubscribe
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../lib/firebase';
 import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest, Conversation, ChatMessage } from '../types';
 
 // Collection References
@@ -30,6 +32,19 @@ const SHIFTS_REF = 'shifts';
 const SCHEDULE_REF = 'schedule_shifts';
 const TIMEOFF_REF = 'time_off_requests';
 const CONVERSATIONS_REF = 'conversations';
+
+// --- STORAGE ---
+
+export const uploadCompanyLogo = async (companyId: string, file: File): Promise<string> => {
+    // Create a reference to 'company_logos/companyId/filename'
+    // We add a timestamp to the filename to avoid caching issues with same filenames
+    const filename = `${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, `company_logos/${companyId}/${filename}`);
+    
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+};
 
 // --- USER ---
 
@@ -478,6 +493,23 @@ export const getShifts = async (companyId: string): Promise<Shift[]> => {
         const data = snap.docs.map(doc => doc.data() as Shift);
         return data.sort((a, b) => b.startTime - a.startTime);
     }
+};
+
+// NEW: Real-time Shift Subscription
+export const subscribeToCompanyShifts = (companyId: string, callback: (shifts: Shift[]) => void): Unsubscribe => {
+    const q = query(
+        collection(db, SHIFTS_REF),
+        where("companyId", "==", companyId),
+        orderBy("startTime", "desc"),
+        limit(500)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const shifts = snapshot.docs.map(doc => doc.data() as Shift);
+        callback(shifts);
+    }, (error) => {
+        console.error("Error subscribing to shifts:", error);
+    });
 };
 
 export const getStaffActivity = async (userId: string): Promise<Shift[]> => {
