@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts, updateBatchScheduleShifts, getGlobalDraftCount } from '../services/api';
@@ -457,6 +458,29 @@ export const AdminRota = () => {
       });
   };
 
+  // Helper to safely get the API key with fallback logic
+  const getApiKey = () => {
+      // 1. Try Vite standard (most likely for Netlify + Vite)
+      if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+          // Explicitly check properties by name for static replacement
+          if ((import.meta as any).env.VITE_GOOGLEGENAI_KEY) return (import.meta as any).env.VITE_GOOGLEGENAI_KEY;
+          if ((import.meta as any).env.VITE_API_KEY) return (import.meta as any).env.VITE_API_KEY;
+      }
+      
+      // 2. Try process.env (Fallback for non-Vite or specific server envs)
+      try {
+          if (typeof process !== 'undefined' && process.env) {
+              if (process.env.VITE_GOOGLEGENAI_KEY) return process.env.VITE_GOOGLEGENAI_KEY;
+              if (process.env.GOOGLEGENAI_KEY) return process.env.GOOGLEGENAI_KEY;
+              if (process.env.API_KEY) return process.env.API_KEY;
+          }
+      } catch (e) {
+          // ignore process access errors
+      }
+
+      return '';
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -465,21 +489,10 @@ export const AdminRota = () => {
       if (file.type.startsWith('image/')) {
           setAnalyzing(true);
           try {
-              // Validating API Key presence before usage
-              // We check multiple sources because Vite/Netlify handles env vars differently
-              // 1. process.env.API_KEY (Preview environments)
-              // 2. process.env.GOOGLEGENAI_KEY (User fallback)
-              // 3. import.meta.env.VITE_GOOGLEGENAI_KEY (Vite production standard)
-              // 4. import.meta.env.VITE_API_KEY (Vite production standard)
-              
-              let apiKey = process.env.API_KEY || process.env.GOOGLEGENAI_KEY;
-              
-              if (!apiKey && typeof import.meta !== 'undefined' && (import.meta as any).env) {
-                  apiKey = (import.meta as any).env.VITE_GOOGLEGENAI_KEY || (import.meta as any).env.VITE_API_KEY || (import.meta as any).env.GOOGLEGENAI_KEY;
-              }
+              const apiKey = getApiKey();
               
               if (!apiKey) {
-                  throw new Error("Missing API Key. Please add VITE_GOOGLEGENAI_KEY to your Netlify Environment Variables.");
+                  throw new Error("Missing API Key. Please ensure VITE_GOOGLEGENAI_KEY is set in Netlify and you have triggered a Rebuild.");
               }
 
               const base64Data = await fileToBase64(file);
@@ -535,7 +548,7 @@ export const AdminRota = () => {
               console.error("AI Error", e);
               // Provide more specific feedback for API key error
               if (e.message?.includes("API Key") || e.toString().includes("API Key")) {
-                  alert("AI Error: API Key not found. Ensure VITE_GOOGLEGENAI_KEY is set in Netlify.");
+                  alert(`AI Error: ${e.message}`);
               } else {
                   alert("Failed to analyze image. Please check the file format or try a CSV.");
               }
