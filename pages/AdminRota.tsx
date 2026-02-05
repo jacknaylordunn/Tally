@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSchedule, createScheduleShift, updateScheduleShift, deleteScheduleShift, getCompanyStaff, getLocations, assignShiftToUser, getTimeOffRequests, updateTimeOffStatus, publishDrafts, createBatchScheduleShifts, copyScheduleWeek, getCompany, getShifts, updateBatchScheduleShifts, getGlobalDraftCount } from '../services/api';
@@ -467,11 +466,20 @@ export const AdminRota = () => {
           setAnalyzing(true);
           try {
               // Validating API Key presence before usage
-              // Ensure we are using the environment variable directly as per instructions
-              const apiKey = process.env.API_KEY; 
+              // We check multiple sources because Vite/Netlify handles env vars differently
+              // 1. process.env.API_KEY (Preview environments)
+              // 2. process.env.GOOGLEGENAI_KEY (User fallback)
+              // 3. import.meta.env.VITE_GOOGLEGENAI_KEY (Vite production standard)
+              // 4. import.meta.env.VITE_API_KEY (Vite production standard)
+              
+              let apiKey = process.env.API_KEY || process.env.GOOGLEGENAI_KEY;
+              
+              if (!apiKey && typeof import.meta !== 'undefined' && (import.meta as any).env) {
+                  apiKey = (import.meta as any).env.VITE_GOOGLEGENAI_KEY || (import.meta as any).env.VITE_API_KEY || (import.meta as any).env.GOOGLEGENAI_KEY;
+              }
               
               if (!apiKey) {
-                  throw new Error("Missing API Key. Please configure process.env.API_KEY in your build environment.");
+                  throw new Error("Missing API Key. Please add VITE_GOOGLEGENAI_KEY to your Netlify Environment Variables.");
               }
 
               const base64Data = await fileToBase64(file);
@@ -527,7 +535,7 @@ export const AdminRota = () => {
               console.error("AI Error", e);
               // Provide more specific feedback for API key error
               if (e.message?.includes("API Key") || e.toString().includes("API Key")) {
-                  alert("AI Configuration Error: API Key not found. Please contact support.");
+                  alert("AI Error: API Key not found. Ensure VITE_GOOGLEGENAI_KEY is set in Netlify.");
               } else {
                   alert("Failed to analyze image. Please check the file format or try a CSV.");
               }
