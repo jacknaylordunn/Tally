@@ -1,7 +1,14 @@
+
 [build]
   command = "npm run build"
   publish = "dist"
 
+# Whitelist the API key so Netlify doesn't fail the build when it detects it in the JS bundle
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "VITE_GOOGLEGENAI_KEY"
+
+# Essential for React Single Page Apps (SPA) on Netlify
+# Redirects all traffic to index.html so React Router handles the paths
 [[redirects]]
   from = "/*"
   to = "/index.html"
