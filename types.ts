@@ -4,6 +4,31 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
+// Vetting Standards
+export type VettingLevel = 'NONE' | 'BS7858' | 'BPSS' | 'PCI_DSS' | 'AIRSIDE' | 'CQC' | 'CUSTOM';
+
+export type VettingStatus = 'not_started' | 'in_progress' | 'submitted' | 'verified' | 'rejected' | 'changes_requested';
+
+export interface VettingItem {
+  id: string;
+  label: string;
+  description?: string;
+  type: 'file' | 'declaration' | 'check'; // 'check' is for admin to tick off manually (e.g. credit check)
+  required: boolean;
+  
+  // User Data
+  status: 'pending' | 'uploaded' | 'accepted' | 'rejected';
+  fileUrl?: string;
+  fileName?: string;
+  submittedAt?: number;
+  
+  // Admin Data
+  verifiedAt?: number;
+  verifiedBy?: string;
+  expiryDate?: number; // For expiring docs like insurance/passport
+  adminNotes?: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -19,6 +44,10 @@ export interface User {
   roles?: string[]; // New: Multiple roles for Rota filtering
   isApproved?: boolean; // If true, can clock in. If undefined, assume true (migration).
   tutorialSeen?: boolean; // Tracks if the user has completed the welcome tour
+  
+  // Vetting
+  vettingStatus?: VettingStatus;
+  vettingData?: VettingItem[]; // The specific requirements and their state for this user
 }
 
 export interface Company {
@@ -58,6 +87,9 @@ export interface Company {
     auditShortShiftThreshold?: number; // mins
     auditLongShiftThreshold?: number; // hours
     blockEarlyClockIn?: boolean; // New: Prevent clocking in too early
+    // Vetting Settings
+    vettingEnabled?: boolean;
+    vettingLevel?: VettingLevel;
   };
 }
 

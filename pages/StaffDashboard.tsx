@@ -2,14 +2,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
-import { getStaffActivity, getCompany, getSchedule } from '../services/api';
-import { Shift, Company, ScheduleShift } from '../types';
-import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle, Play, StopCircle, MapPin, ChevronRight } from 'lucide-react';
+import { getStaffActivity, getCompany, getSchedule, updateUserProfile, uploadVettingDocument } from '../services/api';
+import { Shift, Company, ScheduleShift, VettingItem } from '../types';
+import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle, Play, StopCircle, MapPin, ChevronRight, FileCheck, Upload, Check, Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { useNavigate } from 'react-router-dom';
+import { VETTING_TEMPLATES } from '../constants';
 
 export const StaffDashboard = () => {
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const { startTutorial } = useTutorial();
   const navigate = useNavigate();
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -22,6 +23,11 @@ export const StaffDashboard = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Vetting State
+  const [isVettingOpen, setIsVettingOpen] = useState(false);
+  const [vettingItems, setVettingItems] = useState<VettingItem[]>([]);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -41,6 +47,19 @@ export const StaffDashboard = () => {
       
       const current = shiftsData.find(s => !s.endTime);
       setActiveShift(current || null);
+
+      // Prepare Vetting Data
+      if (companyData?.settings.vettingEnabled) {
+          const level = companyData.settings.vettingLevel || 'BS7858';
+          const template = VETTING_TEMPLATES[level];
+          
+          // Merge template with user's existing data
+          const mergedItems = template.map(tItem => {
+              const existing = user.vettingData?.find(uItem => uItem.id === tItem.id);
+              return existing ? { ...tItem, ...existing } : tItem;
+          });
+          setVettingItems(mergedItems);
+      }
 
       if (companyData?.settings.rotaEnabled && user.currentCompanyId) {
           try {
@@ -141,6 +160,46 @@ export const StaffDashboard = () => {
 
   const duration = activeShift ? calculateDuration(activeShift.startTime) : {h:0, m:0};
 
+  // Vetting Handlers
+  const handleVettingUpload = async (itemId: string, file: File) => {
+      if (!user?.currentCompanyId) return;
+      setUploadingId(itemId);
+      try {
+          const url = await uploadVettingDocument(user.currentCompanyId, user.id, file);
+          
+          // Update local state
+          const updatedItems = vettingItems.map(item => {
+              if (item.id === itemId) {
+                  return { ...item, status: 'uploaded' as const, fileUrl: url, fileName: file.name, submittedAt: Date.now() };
+              }
+              return item;
+          });
+          setVettingItems(updatedItems);
+
+          // Save to User Profile
+          await updateUserProfile(user.id, {
+              vettingStatus: 'in_progress',
+              vettingData: updatedItems
+          });
+          
+      } catch (e) {
+          console.error("Upload failed", e);
+          alert("Failed to upload document.");
+      } finally {
+          setUploadingId(null);
+      }
+  };
+
+  const submitVetting = async () => {
+      if (!user) return;
+      await updateUserProfile(user.id, { vettingStatus: 'submitted' });
+      await refreshSession();
+      setIsVettingOpen(false);
+      alert("Vetting submitted for review.");
+  };
+
+  const needsVetting = company?.settings.vettingEnabled && user?.vettingStatus !== 'verified';
+
   return (
     <div className="max-w-md mx-auto space-y-8 animate-fade-in relative pb-20">
        
@@ -153,6 +212,27 @@ export const StaffDashboard = () => {
               {user?.name.charAt(0)}
           </div>
        </header>
+
+       {/* Vetting Alert */}
+       {needsVetting && (
+           <div 
+                onClick={() => setIsVettingOpen(true)}
+                className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition shadow-sm"
+           >
+               <div className="flex items-center gap-3">
+                   <div className="p-2 bg-amber-100 dark:bg-amber-800 rounded-lg text-amber-600 dark:text-amber-200">
+                       <FileCheck className="w-5 h-5" />
+                   </div>
+                   <div>
+                       <h3 className="font-bold text-amber-800 dark:text-amber-200 text-sm">Vetting Required</h3>
+                       <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                           {user?.vettingStatus === 'submitted' ? 'Under Review' : 'Complete your compliance checks'}
+                       </p>
+                   </div>
+               </div>
+               <ChevronRight className="w-5 h-5 text-amber-400" />
+           </div>
+       )}
 
        {/* HERO CLOCK UI */}
        <div className="relative flex justify-center py-4">
@@ -227,6 +307,86 @@ export const StaffDashboard = () => {
                     </>
                 )}
             </div>
+       )}
+
+       {/* VETTING MODAL */}
+       {isVettingOpen && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+               <div className="glass-panel w-full max-w-lg p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 max-h-[85vh] flex flex-col">
+                   <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Compliance Check</h2>
+                            <p className="text-xs text-slate-500">{company?.settings.vettingLevel} Standard</p>
+                        </div>
+                        <button onClick={() => setIsVettingOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                            <X className="w-6 h-6" />
+                        </button>
+                   </div>
+
+                   <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                       {vettingItems.map(item => (
+                           <div key={item.id} className="border border-slate-200 dark:border-white/10 rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
+                               <div className="flex justify-between items-start mb-2">
+                                   <div>
+                                       <h4 className="font-bold text-slate-900 dark:text-white text-sm">{item.label}</h4>
+                                       {item.description && <p className="text-xs text-slate-500 mt-1">{item.description}</p>}
+                                   </div>
+                                   {item.status === 'accepted' ? (
+                                       <div className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-lg font-bold flex items-center gap-1">
+                                           <Check className="w-3 h-3" /> Verified
+                                       </div>
+                                   ) : item.status === 'uploaded' ? (
+                                       <div className="bg-blue-100 text-blue-700 text-[10px] px-2 py-1 rounded-lg font-bold">In Review</div>
+                                   ) : item.status === 'rejected' ? (
+                                       <div className="bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded-lg font-bold">Rejected</div>
+                                   ) : (
+                                       <div className="bg-slate-200 text-slate-600 text-[10px] px-2 py-1 rounded-lg font-bold">Required</div>
+                                   )}
+                               </div>
+
+                               {item.type === 'file' && item.status !== 'accepted' && (
+                                   <div className="mt-3">
+                                       <input 
+                                            type="file" 
+                                            id={`file-${item.id}`}
+                                            className="hidden" 
+                                            onChange={(e) => {
+                                                if (e.target.files?.[0]) handleVettingUpload(item.id, e.target.files[0]);
+                                            }}
+                                       />
+                                       <label 
+                                            htmlFor={`file-${item.id}`}
+                                            className={`flex items-center justify-center w-full py-2 border-2 border-dashed rounded-lg text-xs font-bold cursor-pointer transition ${uploadingId === item.id ? 'opacity-50 cursor-wait' : 'hover:border-brand-500 hover:text-brand-600'}`}
+                                       >
+                                           {uploadingId === item.id ? (
+                                               <span className="flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Uploading...</span>
+                                           ) : (
+                                               <span className="flex items-center gap-2"><Upload className="w-3 h-3" /> {item.fileName || 'Select File'}</span>
+                                           )}
+                                       </label>
+                                   </div>
+                               )}
+                               
+                               {item.type === 'check' && (
+                                   <div className="mt-2 text-xs text-slate-400 italic bg-black/5 dark:bg-white/5 p-2 rounded">
+                                       Pending manual verification by admin.
+                                   </div>
+                               )}
+                           </div>
+                       ))}
+                   </div>
+
+                   <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                       <button 
+                            onClick={submitVetting}
+                            disabled={vettingItems.some(i => i.required && i.status === 'pending')}
+                            className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                       >
+                           Submit for Approval
+                       </button>
+                   </div>
+               </div>
+           </div>
        )}
 
        {/* Activity List */}

@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { updateShift, deleteShift, getLocations, getCompany, getCompanyStaff, getSchedule, subscribeToCompanyShifts } from '../services/api';
-import { Shift, Location, Company, User, ScheduleShift } from '../types';
-import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown, ClipboardList, Check, UserPlus, AlertTriangle, EyeOff, Wand2, RefreshCw } from 'lucide-react';
+import { updateShift, deleteShift, getLocations, getCompany, getCompanyStaff, getSchedule, subscribeToCompanyShifts, updateUserRateAndActiveShift } from '../services/api';
+import { Shift, Location, Company, User, ScheduleShift, UserRole } from '../types';
+import { Users, Clock, AlertCircle, Search, Download, ArrowUpRight, QrCode, Printer, MapPin, X, Building, ChevronRight, Zap, Calendar, CheckCircle2, MoreHorizontal, Edit2, Trash2, LogOut, Save, DollarSign, ChevronDown, ClipboardList, Check, UserPlus, AlertTriangle, EyeOff, Wand2, RefreshCw, Briefcase, Hash } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import { Link, useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import { APP_NAME } from '../constants';
+import { deleteField } from 'firebase/firestore';
 
 export const AdminDashboard = () => {
   const { user } = useAuth();
@@ -41,11 +42,17 @@ export const AdminDashboard = () => {
   // Action Menu State
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   
-  // Edit Modal State
+  // Edit Shift Modal State
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // User Approval Modal State
+  const [approvingUser, setApprovingUser] = useState<User | null>(null);
+  const [approveRole, setApproveRole] = useState('Staff');
+  const [approveRate, setApproveRate] = useState('');
+  const [approveId, setApproveId] = useState('');
 
   // Data Loading & Subscriptions
   useEffect(() => {
@@ -270,21 +277,50 @@ export const AdminDashboard = () => {
   const handleDismissAlert = async (shift: Shift) => {
       try {
           await updateShift(shift.id, { warningsDismissed: true });
-          // No need to update local state manually as subscription will catch it
       } catch (e) {
           console.error("Dismiss failed", e);
       }
   };
 
-  const handleApproveStaff = async (userId: string) => {
-      if(!confirm("Approve this staff member?")) return;
+  const handleApproveStaffClick = (u: User) => {
+      setApprovingUser(u);
+      setApproveRole('Staff');
+      setApproveRate('');
+      setApproveId('');
+      setIsReviewModalOpen(false);
+  };
+
+  const confirmApproval = async () => {
+      if (!approvingUser || !user?.currentCompanyId) return;
+      setIsSaving(true);
       try {
-          // This creates a new profile in firebase/api so no subscription logic for staff list yet
-          // Manually update local state for immediate feedback
-          await getCompanyStaff(user!.currentCompanyId!).then(setStaff); 
+          const updates: any = {
+              role: UserRole.STAFF, // Usually standard staff, Admin can be set in full profile
+              isApproved: true,
+              position: approveRole || 'Staff',
+              roles: [approveRole || 'Staff'],
+              employeeNumber: approveId || deleteField()
+          };
+
+          let newRate: number | null = null;
+          if (approveRate && !isNaN(parseFloat(approveRate))) {
+              newRate = parseFloat(approveRate);
+          }
+
+          await updateUserRateAndActiveShift(approvingUser.id, user.currentCompanyId, newRate, updates);
+          
+          // Refresh local list
+          const updatedStaff = await getCompanyStaff(user.currentCompanyId);
+          setStaff(updatedStaff);
+          setApprovingUser(null);
+          
+          // Return to review
+          setIsReviewModalOpen(true);
       } catch (e) {
           console.error(e);
           alert("Failed to approve.");
+      } finally {
+          setIsSaving(false);
       }
   };
 
@@ -407,6 +443,7 @@ export const AdminDashboard = () => {
 
   return (
     <div className="space-y-8 pb-12" onClick={() => { setOpenActionMenuId(null); setIsCostMenuOpen(false); }}>
+        {/* ... Header and Stats logic remains identical ... */}
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
@@ -771,8 +808,9 @@ export const AdminDashboard = () => {
                                                 >
                                                     View Profile
                                                 </button>
+                                                {/* Smart Approval Trigger */}
                                                 <button 
-                                                    onClick={() => handleApproveStaff(u.id)}
+                                                    onClick={() => handleApproveStaffClick(u)}
                                                     className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition flex items-center gap-1"
                                                 >
                                                     <UserPlus className="w-3 h-3" /> Approve
@@ -813,7 +851,68 @@ export const AdminDashboard = () => {
             </div>
         )}
         
-        {/* Poster Modal - UPDATED TO MATCH LOCATIONS PRINT STYLE */}
+        {/* Approve User Modal */}
+        {approvingUser && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={e => e.stopPropagation()}>
+                <div className="glass-panel w-full max-w-sm p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Approve {approvingUser.name}</h2>
+                        <button onClick={() => { setApprovingUser(null); setIsReviewModalOpen(true); }} className="text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="w-6 h-6" /></button>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Role / Position</label>
+                            <div className="relative">
+                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                <input 
+                                    type="text" 
+                                    value={approveRole} 
+                                    onChange={(e) => setApproveRole(e.target.value)} 
+                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-green-500" 
+                                    placeholder="Staff"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Hourly Rate (Optional)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">{currency}</span>
+                                <input 
+                                    type="number" step="0.01"
+                                    value={approveRate} 
+                                    onChange={(e) => setApproveRate(e.target.value)} 
+                                    className="w-full pl-8 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-green-500" 
+                                    placeholder={`Default: ${company?.settings.defaultHourlyRate}`}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Employee ID (Optional)</label>
+                            <div className="relative">
+                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                <input 
+                                    type="text" 
+                                    value={approveId} 
+                                    onChange={(e) => setApproveId(e.target.value)} 
+                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-green-500" 
+                                    placeholder="e.g. 1045"
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            onClick={confirmApproval} 
+                            disabled={isSaving}
+                            className="w-full mt-4 bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition flex items-center justify-center gap-2"
+                        >
+                            <CheckCircle2 className="w-5 h-5" />
+                            <span>{isSaving ? 'Approving...' : 'Confirm Approval'}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ... (Edit/Poster/Location Select Modals remain unchanged) ... */}
         {selectedLocationForPoster && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white rounded-none md:rounded-3xl p-8 max-w-lg w-full text-center relative shadow-2xl print:shadow-none print:w-screen print:h-screen print:max-w-none print:rounded-none print:flex print:flex-col print:items-center print:justify-center">
@@ -888,7 +987,7 @@ export const AdminDashboard = () => {
             </div>
         )}
 
-        {/* Edit Modal */}
+        {/* Edit Shift Modal */}
         {editingShift && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={(e) => e.stopPropagation()}>
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">

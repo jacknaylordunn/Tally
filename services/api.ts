@@ -22,7 +22,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
-import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest, Conversation, ChatMessage } from '../types';
+import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest, Conversation, ChatMessage, VettingItem, VettingStatus } from '../types';
 
 // Collection References
 const USERS_REF = 'users';
@@ -40,6 +40,18 @@ export const uploadCompanyLogo = async (companyId: string, file: File): Promise<
     // We add a timestamp to the filename to avoid caching issues with same filenames
     const filename = `${Date.now()}_${file.name}`;
     const storageRef = ref(storage, `company_logos/${companyId}/${filename}`);
+    
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+};
+
+// NEW: Upload Vetting Document
+export const uploadVettingDocument = async (companyId: string, userId: string, file: File): Promise<string> => {
+    // Secured path: vetting/{companyId}/{userId}/{filename}
+    // Rules ensure only user or company admin can access
+    const filename = `${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, `vetting/${companyId}/${userId}/${filename}`);
     
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
@@ -131,7 +143,9 @@ export const removeUserFromCompany = async (userId: string): Promise<void> => {
         employeeNumber: deleteField(), // Wipe company specific ID
         position: deleteField(),
         isApproved: deleteField(),
-        role: UserRole.STAFF // Reset to staff
+        role: UserRole.STAFF, // Reset to staff
+        vettingStatus: deleteField(), // Reset vetting
+        vettingData: deleteField()
     });
 };
 
@@ -161,7 +175,9 @@ export const switchUserCompany = async (userId: string, inviteCode: string): Pro
         customHourlyRate: undefined,
         employeeNumber: undefined, // Reset employee ID on switch
         role: UserRole.STAFF, 
-        isApproved: isApproved
+        isApproved: isApproved,
+        vettingStatus: 'not_started', // Reset vetting
+        vettingData: []
     });
 
     // 2. Auto-Join Channels

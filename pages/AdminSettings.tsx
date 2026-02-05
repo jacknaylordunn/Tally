@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile, updateAllLocationsRadius, getLocations, uploadCompanyLogo } from '../services/api';
-import { Company } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText, TableProperties, Upload } from 'lucide-react';
+import { Company, VettingLevel } from '../types';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText, TableProperties, Upload, FileCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useBlocker } from 'react-router-dom';
@@ -52,6 +52,10 @@ export const AdminSettings = () => {
   const [allowShiftBidding, setAllowShiftBidding] = useState(true);
   const [requireTimeOffApproval, setRequireTimeOffApproval] = useState(true);
 
+  // Vetting Settings
+  const [vettingEnabled, setVettingEnabled] = useState(false);
+  const [vettingLevel, setVettingLevel] = useState<VettingLevel>('BS7858');
+
   // Audit Settings
   const [auditLateIn, setAuditLateIn] = useState(15);
   const [auditEarlyIn, setAuditEarlyIn] = useState(30); // New default
@@ -98,6 +102,10 @@ export const AdminSettings = () => {
         setAllowShiftBidding(data.settings.allowShiftBidding !== undefined ? data.settings.allowShiftBidding : true);
         setRequireTimeOffApproval(data.settings.requireTimeOffApproval !== undefined ? data.settings.requireTimeOffApproval : true);
         
+        // Vetting
+        setVettingEnabled(data.settings.vettingEnabled || false);
+        setVettingLevel(data.settings.vettingLevel || 'BS7858');
+
         // Audit
         setAuditLateIn(data.settings.auditLateInThreshold || 15);
         setAuditEarlyIn(data.settings.auditEarlyInThreshold || 30);
@@ -139,6 +147,8 @@ export const AdminSettings = () => {
           rotaShowFinishTimes !== clean(s.rotaShowFinishTimes, true) ||
           allowShiftBidding !== clean(s.allowShiftBidding, true) ||
           requireTimeOffApproval !== clean(s.requireTimeOffApproval, true) ||
+          vettingEnabled !== (s.vettingEnabled || false) ||
+          vettingLevel !== (s.vettingLevel || 'BS7858') ||
           auditLateIn !== (s.auditLateInThreshold || 15) ||
           auditEarlyIn !== (s.auditEarlyInThreshold || 30) ||
           auditEarlyOut !== (s.auditEarlyOutThreshold || 15) ||
@@ -150,6 +160,7 @@ export const AdminSettings = () => {
   }, [
       company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl, logoFile, showStaffEarnings,
       holidayPayEnabled, holidayPayRate, exportShowTimesWeekly, exportShowTimesMonthly, exportIncludeDeductions, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
+      vettingEnabled, vettingLevel,
       auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift, updateExistingLocs, blockEarlyClockIn
   ]);
 
@@ -251,6 +262,8 @@ export const AdminSettings = () => {
               rotaShowFinishTimes,
               allowShiftBidding,
               requireTimeOffApproval,
+              vettingEnabled,
+              vettingLevel,
               auditLateInThreshold: auditLateIn,
               auditEarlyInThreshold: auditEarlyIn,
               auditEarlyOutThreshold: auditEarlyOut,
@@ -632,38 +645,52 @@ export const AdminSettings = () => {
                     </div>
                 </div>
 
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><AlertTriangle className="w-5 h-5" /></div>
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Attendance Auditing</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Early In (mins)</label><input type="number" min="0" value={auditEarlyIn} onChange={(e) => setAuditEarlyIn(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
-                        <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Late In (mins)</label><input type="number" min="0" value={auditLateIn} onChange={(e) => setAuditLateIn(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
-                        <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Early Out (mins)</label><input type="number" min="0" value={auditEarlyOut} onChange={(e) => setAuditEarlyOut(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
-                        <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Late Out (mins)</label><input type="number" min="0" value={auditLateOut} onChange={(e) => setAuditLateOut(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
-                        <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Short Shift (mins)</label><input type="number" min="0" value={auditShortShift} onChange={(e) => setAuditShortShift(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
-                        <div><label className="block text-xs font-bold uppercase text-slate-500 mb-2">Long Shift (hrs)</label><input type="number" min="0" value={auditLongShift} onChange={(e) => setAuditLongShift(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
-                    </div>
-                    {/* Block Early Clock-In Toggle */}
-                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-200 dark:border-white/10">
-                        <div className="pr-4">
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">Block Early Clock In</h4>
-                            <p className="text-xs text-slate-500">Prevent scanning if more than '{auditEarlyIn}m' early for shift.</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input type="checkbox" checked={blockEarlyClockIn} onChange={(e) => setBlockEarlyClockIn(e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                        </label>
-                    </div>
-                </div>
-
+                {/* Vetting & Compliance */}
                 <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
                     <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
                         <div className="flex items-center space-x-3">
-                             <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><CalendarDays className="w-5 h-5" /></div>
-                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Rota System</h3>
+                             <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><FileCheck className="w-5 h-5" /></div>
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Compliance & Vetting</h3>
                         </div>
+                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input type="checkbox" checked={vettingEnabled} onChange={(e) => setVettingEnabled(e.target.checked)} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                    </div>
+                    {vettingEnabled && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                             <div>
+                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Vetting Standard</label>
+                                 <div className="relative">
+                                     <select 
+                                        value={vettingLevel}
+                                        onChange={e => setVettingLevel(e.target.value as VettingLevel)}
+                                        className="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                                     >
+                                         <option value="BS7858">BS7858 (Security Standard)</option>
+                                         <option value="BPSS">BPSS (Gov Standard)</option>
+                                         <option value="PCI_DSS">PCI DSS (Finance)</option>
+                                         <option value="AIRSIDE">Airside Pass (Airport)</option>
+                                         <option value="CQC">CQC (Care)</option>
+                                         <option value="CUSTOM">Custom (Basic Checks)</option>
+                                     </select>
+                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500"><Building className="w-4 h-4" /></div>
+                                 </div>
+                                 <p className="text-xs text-slate-500 mt-2">
+                                     Selected standard determines the documents staff must upload.
+                                 </p>
+                             </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><CalendarDays className="w-5 h-5" /></div>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Rota System</h3>
+                    </div>
+                    <div className="flex items-center justify-between mb-4">
+                        <span className="text-sm font-medium">Enable Rota</span>
                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input type="checkbox" checked={rotaEnabled} onChange={(e) => setRotaEnabled(e.target.checked)} className="sr-only peer" />
                             <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>

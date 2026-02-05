@@ -37,12 +37,11 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
     // 2. Auth Listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
-            // A. Optimistic Load: Check Local Storage first to prevent UI flicker/redirect
+            // A. Optimistic Load: Check Local Storage first to prevent UI flicker
             const cachedData = localStorage.getItem(CACHE_KEY);
-            if (cachedData) {
+            if (cachedData && !user) {
                 try {
                     const parsedUser = JSON.parse(cachedData);
-                    // Only use cache if it matches current auth user
                     if (parsedUser.id === firebaseUser.uid) {
                         setUser(parsedUser);
                     }
@@ -53,30 +52,25 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
 
             // B. Network/Firestore Fetch (The Source of Truth)
             try {
-                const profile = await getUserProfile(firebaseUser.uid);
+                let profile = await getUserProfile(firebaseUser.uid);
                 
+                // Retry logic for registration race conditions
+                if (!profile) {
+                    console.warn("User authenticated but profile not found. Retrying...");
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s
+                    profile = await getUserProfile(firebaseUser.uid);
+                }
+
                 if (profile) {
                     setUser(profile);
-                    // Update cache with fresh data
                     localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
                 } else {
-                    // Rare edge case: Auth exists but Firestore profile missing
-                    console.warn("User authenticated but profile not found.");
-                    
-                    // Retry once after delay (fixes race conditions on new account creation)
-                    setTimeout(async () => {
-                        const retry = await getUserProfile(firebaseUser.uid);
-                        if (retry) {
-                            setUser(retry);
-                            localStorage.setItem(CACHE_KEY, JSON.stringify(retry));
-                        }
-                    }, 2000);
+                    console.error("Profile missing after retry.");
+                    // Do not setUser(null) here immediately if we have a cache, 
+                    // but if cache was empty, user stays null and app will redirect to login.
                 }
             } catch (e) {
                 console.error("Error fetching profile", e);
-                // If fetch fails (offline), we rely on the cached user set in step A.
-                // If no cache and no network, user stays technically logged in via Firebase SDK
-                // but might lack profile data until connection restores.
             }
         } else {
             // User definitely logged out

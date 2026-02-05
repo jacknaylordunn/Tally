@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { getCompanyStaff, updateUserProfile, updateUserRateAndActiveShift, removeUserFromCompany, getCompany } from '../services/api';
-import { User, Company, UserRole } from '../types';
-import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus, UserMinus, Hash } from 'lucide-react';
+import { User, Company, UserRole, VettingItem } from '../types';
+import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus, UserMinus, Hash, FileText, ExternalLink, Check, AlertOctagon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { TableRowSkeleton } from '../components/Skeleton';
 import { deleteField } from 'firebase/firestore';
@@ -22,8 +22,11 @@ export const AdminStaff = () => {
   const [editEmployeeId, setEditEmployeeId] = useState('');
   const [editRoles, setEditRoles] = useState<string[]>([]);
   const [roleInput, setRoleInput] = useState('');
-  const [editApproveUser, setEditApproveUser] = useState(false); // New: Approval Checkbox
+  const [editApproveUser, setEditApproveUser] = useState(false); 
   const [saving, setSaving] = useState(false);
+
+  // Vetting Modal
+  const [vettingUser, setVettingUser] = useState<User | null>(null);
 
   // Bulk Update Modal
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -94,6 +97,13 @@ export const AdminStaff = () => {
       setEditApproveUser(u.isApproved === true); // Set initial check state
   };
 
+  // Smart Approval: Open Edit Modal directly but visually distinct logic handled by UX
+  const handleApproveClick = (u: User) => {
+      // Trigger standard edit logic but force the approval tick internally
+      handleEdit(u);
+      setEditApproveUser(true); // Default to approving
+  };
+
   const capitalize = (str: string) => str.replace(/\b\w/g, l => l.toUpperCase());
 
   const addRole = (role: string) => {
@@ -125,21 +135,15 @@ export const AdminStaff = () => {
               position: primaryPosition || deleteField(),
               roles: editRoles,
               employeeNumber: editEmployeeId || deleteField(),
-              // If user was pending and checkbox is checked, approve them. 
-              // If they were already approved, this stays true. 
-              // If unchecking approval for an existing user (suspending), this works too.
               isApproved: editApproveUser 
           };
 
           let newRate: number | null = null;
 
-          // Handle Custom Rate Logic
           if (editRate && editRate.trim() !== '' && !isNaN(parseFloat(editRate))) {
               newRate = parseFloat(editRate);
           } 
-          // If empty, newRate remains null, effectively deleting the custom rate
 
-          // Use the smart update function that handles active shifts
           await updateUserRateAndActiveShift(editingUser.id, user.currentCompanyId, newRate, updates);
           
           await loadData();
@@ -167,6 +171,32 @@ export const AdminStaff = () => {
             setSaving(false);
           }
       }
+  };
+
+  // Vetting Actions
+  const handleVettingAction = async (itemId: string, status: 'accepted' | 'rejected') => {
+      if (!vettingUser) return;
+      
+      const updatedData = vettingUser.vettingData?.map(item => {
+          if (item.id === itemId) {
+              return { ...item, status, verifiedAt: Date.now(), verifiedBy: user?.name };
+          }
+          return item;
+      });
+
+      // Optimistic Update
+      setVettingUser({ ...vettingUser, vettingData: updatedData });
+
+      await updateUserProfile(vettingUser.id, { vettingData: updatedData });
+  };
+
+  const handleCompleteVetting = async () => {
+      if (!vettingUser) return;
+      
+      // Mark as verified
+      await updateUserProfile(vettingUser.id, { vettingStatus: 'verified' });
+      await loadData();
+      setVettingUser(null);
   };
 
   // Distinct promote action (separate from general save)
@@ -300,7 +330,7 @@ export const AdminStaff = () => {
                             <th className="px-6 py-4">Roles / Position</th>
                             <th className="px-6 py-4">Hourly Rate</th>
                             <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4"></th>
+                            <th className="px-6 py-4">Action</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-white/5">
@@ -316,6 +346,7 @@ export const AdminStaff = () => {
                             const isCustom = u.customHourlyRate !== undefined;
                             const isPending = u.isApproved === false;
                             const roles = u.roles && u.roles.length > 0 ? u.roles : (u.position ? [u.position] : []);
+                            const needsVettingReview = company?.settings.vettingEnabled && u.vettingStatus === 'submitted';
                             
                             return (
                                 <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition group">
@@ -358,19 +389,41 @@ export const AdminStaff = () => {
                                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-700/50">
                                                 <Clock className="w-3 h-3 mr-1" /> Pending
                                             </span>
+                                        ) : needsVettingReview ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-700/50">
+                                                Vetting
+                                            </span>
                                         ) : (
                                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/50">
                                                 Active
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button 
-                                            onClick={() => handleEdit(u)}
-                                            className="p-2 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
+                                    <td className="px-6 py-4">
+                                        <div className="flex gap-2">
+                                            {isPending ? (
+                                                <button 
+                                                    onClick={() => handleApproveClick(u)}
+                                                    className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 transition"
+                                                >
+                                                    Approve
+                                                </button>
+                                            ) : needsVettingReview ? (
+                                                <button 
+                                                    onClick={() => setVettingUser(u)}
+                                                    className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition"
+                                                >
+                                                    Review Vetting
+                                                </button>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleEdit(u)}
+                                                    className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1"
+                                                >
+                                                    <Edit2 className="w-3 h-3" /> Edit
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             );
@@ -385,7 +438,9 @@ export const AdminStaff = () => {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
                 <div className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Staff</h2>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                            {editingUser.isApproved === false ? 'Approve New Staff' : 'Edit Staff'}
+                        </h2>
                         <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
                             <X className="w-6 h-6" />
                         </button>
@@ -552,7 +607,62 @@ export const AdminStaff = () => {
                             className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2"
                         >
                             <Save className="w-4 h-4" />
-                            <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+                            <span>{saving ? 'Saving...' : (editingUser.isApproved === false && editApproveUser ? 'Confirm & Approve' : 'Save Changes')}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Vetting Review Modal */}
+        {vettingUser && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="glass-panel w-full max-w-2xl p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Review Vetting</h2>
+                            <p className="text-sm text-slate-500">{vettingUser.name} ({company?.settings.vettingLevel})</p>
+                        </div>
+                        <button onClick={() => setVettingUser(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                        {vettingUser.vettingData?.map(item => (
+                            <div key={item.id} className="border border-slate-200 dark:border-white/10 rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h4 className="font-bold text-slate-900 dark:text-white text-sm">{item.label}</h4>
+                                        {item.fileName && (
+                                            <a href={item.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                                                <FileText className="w-3 h-3" /> {item.fileName} <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        )}
+                                        {item.submittedAt && <p className="text-[10px] text-slate-400 mt-1">Submitted: {new Date(item.submittedAt).toLocaleString()}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {item.status === 'accepted' ? (
+                                            <span className="text-green-600 text-xs font-bold flex items-center gap-1"><Check className="w-4 h-4" /> Verified</span>
+                                        ) : (
+                                            <>
+                                                <button onClick={() => handleVettingAction(item.id, 'rejected')} className="px-3 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200">Reject</button>
+                                                <button onClick={() => handleVettingAction(item.id, 'accepted')} className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded hover:bg-green-200">Accept</button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-200 dark:border-white/5">
+                        <button 
+                            onClick={handleCompleteVetting}
+                            disabled={vettingUser.vettingData?.some(i => i.required && i.status !== 'accepted')}
+                            className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                            Finalize Verification
                         </button>
                     </div>
                 </div>

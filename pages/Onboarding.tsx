@@ -79,7 +79,8 @@ export const Onboarding = () => {
   }, []);
 
   if (!user) {
-      navigate('/login');
+      // Don't redirect immediately to avoid flicker, just return null 
+      // The ProtectedRoute or AuthContext will handle auth flow
       return null;
   }
 
@@ -171,23 +172,6 @@ export const Onboarding = () => {
   };
 
   // --- STAFF HANDLERS ---
-
-  const requestCamera = async () => {
-      try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          stream.getTracks().forEach(track => track.stop()); 
-          setCameraPerm('granted');
-      } catch (e) {
-          setCameraPerm('denied');
-      }
-  };
-
-  const requestLocation = () => {
-      navigator.geolocation.getCurrentPosition(
-          () => setLocationPerm('granted'),
-          () => setLocationPerm('denied')
-      );
-  };
 
   const copyCode = () => {
       if (company?.code) {
@@ -509,7 +493,6 @@ export const Onboarding = () => {
                             {company?.code}
                         </div>
                         
-                        {/* Buttons now flow naturally on mobile, positioned absolute on desktop */}
                         <div className="flex space-x-3 md:absolute md:top-4 md:right-4 w-full md:w-auto justify-center md:justify-end">
                             <button 
                                 onClick={copyCode} 
@@ -541,6 +524,27 @@ export const Onboarding = () => {
                         Go to Dashboard
                     </button>
                 </div>
+            </div>
+        )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+        {user.role === UserRole.ADMIN ? renderAdminFlow() : (
+            // STAFF ONBOARDING FLOW
+            <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 text-center space-y-6">
+                <div className="w-16 h-16 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto">
+                    <Check className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">You're all set!</h2>
+                <p className="text-slate-500 dark:text-slate-400">
+                    You have joined {company?.name || 'the team'}.
+                    {company?.settings.requireApproval && " Your account is pending approval by an admin."}
+                </p>
+                <button onClick={handleFinish} className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition">
+                    Go to Dashboard
+                </button>
             </div>
         )}
     </div>

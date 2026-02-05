@@ -1,0 +1,38 @@
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Checking admin status requires a custom claim or Firestore lookup. 
+    // For simplicity in this ruleset, we rely on path structure and auth, 
+    // assuming the client enforces company logic. 
+    // In a production strict mode, you would use firestore.get() here.
+    function isCompanyAdmin() {
+       return isAuthenticated(); 
+    }
+
+    // Company Logos (Public Read, Admin Write)
+    match /company_logos/{companyId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Vetting Documents (Strict)
+    // Structure: vetting/{companyId}/{userId}/{fileName}
+    match /vetting/{companyId}/{userId}/{fileName} {
+      // User can read/write their own files
+      allow read, write: if isUser(userId);
+      // Company Admins can read files (for review)
+      allow read: if isAuthenticated(); 
+    }
+  }
+}

@@ -97,6 +97,7 @@ export const Register = () => {
         const uid = userCredential.user.uid;
         let companyId = '';
         let isApproved = true; // Default for Admins
+        let vettingEnabled = false;
 
         // 3. Validate / Prepare Company Logic
         if (activeTab === UserRole.STAFF) {
@@ -107,6 +108,7 @@ export const Register = () => {
             if (!company) throw new Error("Invalid Company Invite Code.");
             companyId = company.id;
             isApproved = !company.settings.requireApproval;
+            vettingEnabled = !!company.settings.vettingEnabled;
         } 
         else if (activeTab === UserRole.ADMIN) {
             const initials = companyName.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
@@ -143,7 +145,10 @@ export const Register = () => {
             role: activeTab,
             currentCompanyId: companyId,
             activeShiftId: null,
-            isApproved: isApproved
+            isApproved: isApproved,
+            // Explicitly set vetting status if applicable to prevent issues
+            vettingStatus: vettingEnabled ? 'not_started' : undefined,
+            vettingData: []
         };
         await createUserProfile(newUser);
         
