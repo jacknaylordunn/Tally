@@ -154,11 +154,13 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
 
   const loginWithMagicLink = async (email: string) => {
       // Construct a clean, absolute URL for the redirect
-      // Using origin ensures protocol and host are correct (e.g. http://localhost:5173 or https://myapp.com)
+      // Using origin ensures protocol and host are correct (e.g. http://localhost:5173 or https://www.tallyd.app)
       const origin = window.location.origin;
+      // We use hash routing in App.tsx, so /#/login is the correct return path
       const cleanUrl = `${origin}/#/login`;
 
-      console.log(`Attempting Magic Link to: ${cleanUrl}`);
+      console.log(`[Auth] Preparing Magic Link. Redirect URL: ${cleanUrl}`);
+      console.log(`[Auth] If this fails with auth/unauthorized-domain, ensure ${window.location.hostname} is whitelisted in Firebase Console.`);
 
       const actionCodeSettings = {
           url: cleanUrl, 

@@ -160,7 +160,7 @@ export const Login = () => {
         } else if (err.code === 'auth/operation-not-allowed') {
             setError('This sign-in method is currently disabled in system settings. Please contact admin.');
         } else if (err.code === 'auth/unauthorized-domain') {
-            setError(`Domain "${window.location.hostname}" is not authorized. Add it to Firebase Console > Authentication > Settings.`);
+            setError(`Configuration Error: The domain "${window.location.hostname}" is not authorized. You MUST add it to the Firebase Console under Authentication > Settings > Authorized Domains.`);
         } else if (err.code === 'auth/invalid-continue-uri') {
             setError(`The redirect URL for "${window.location.hostname}" is not authorized. Check Firebase Console whitelists.`);
         } else {
@@ -183,7 +183,7 @@ export const Login = () => {
           } else if (err.code === 'auth/operation-not-allowed') {
               setError('Google Sign-In is not enabled in Firebase Console.');
           } else if (err.code === 'auth/unauthorized-domain') {
-              setError(`Domain "${window.location.hostname}" is not authorized for Google Sign-In. Please add it to Firebase Console.`);
+              setError(`Configuration Error: The domain "${window.location.hostname}" is not authorized. You MUST add it to the Firebase Console under Authentication > Settings > Authorized Domains.`);
           } else {
               setError(err.message || "Google Sign-In failed.");
           }
@@ -223,7 +223,7 @@ export const Login = () => {
                 {error && (
                     <div className="p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm rounded-2xl flex items-center animate-shake">
                         <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0" />
-                        {error}
+                        <span className="flex-1">{error}</span>
                     </div>
                 )}
                 
