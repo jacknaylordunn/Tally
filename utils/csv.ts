@@ -1,6 +1,6 @@
 
 import { Shift, User } from '../types';
-import * as XLSX_M from 'xlsx';
+import * as XLSX_M from 'xlsx-js-style';
 
 // Handle esm.sh default export behavior for CommonJS modules
 const XLSX = (XLSX_M as any).default || XLSX_M;
