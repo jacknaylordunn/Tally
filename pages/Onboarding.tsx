@@ -67,7 +67,7 @@ export const Onboarding = () => {
         }
         
         // Auto-detect Currency preference based on Timezone
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const tz = Intl.DateTimeFormat(undefined).resolvedOptions().timeZone;
         if (tz.includes('America')) setCurrency('$');
         else if (tz.includes('Europe') && !tz.includes('London')) setCurrency('€');
         else setCurrency('£'); // Default to GBP as requested

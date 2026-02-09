@@ -320,7 +320,7 @@ export const StaffDashboard = () => {
                                                            item.status === 'rejected' ? 'bg-red-100 text-red-700' :
                                                            'bg-slate-200 text-slate-600'
                                                        }`}>
-                                                           {item.status === 'not_started' ? 'To Do' : item.status.replace('_', ' ')}
+                                                           {item.status === 'pending' ? 'To Do' : item.status.replace('_', ' ')}
                                                        </span>
                                                    </div>
                                                    

@@ -362,7 +362,9 @@ export const AdminTimesheets = () => {
                                         <div className="flex items-center space-x-2 text-slate-700 dark:text-slate-300">
                                             <span>{new Date(shift.startTime).toLocaleDateString()}</span>
                                             {shift.scheduleShiftId && (
-                                                <CalendarCheck className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" title="Linked to Rota" />
+                                                <span title="Linked to Rota">
+                                                    <CalendarCheck className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
+                                                </span>
                                             )}
                                         </div>
                                     </td>
