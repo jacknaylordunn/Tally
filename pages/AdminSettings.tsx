@@ -2,16 +2,19 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { getCompany, updateCompanySettings, updateCompany, deleteCompanyFull, updateUserProfile, updateAllLocationsRadius, getLocations, uploadCompanyLogo } from '../services/api';
 import { Company, VettingLevel } from '../types';
-import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText, TableProperties, Upload, FileCheck } from 'lucide-react';
+import { Copy, Save, Building, Shield, Check, Palette, DollarSign, Image, Globe, Trash2, AlertOctagon, Share2, Percent, CalendarDays, AlertTriangle, User, Sun, Moon, Laptop, Eye, EyeOff, FileText, TableProperties, Upload, FileCheck, Clock, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useBlocker } from 'react-router-dom';
 import { APP_NAME } from '../constants';
 
+type SettingsTab = 'general' | 'brand' | 'pay' | 'rota' | 'compliance' | 'danger';
+
 export const AdminSettings = () => {
   const { user, refreshSession } = useAuth();
   const { theme, setTheme, setBrandColor } = useTheme();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,6 +49,9 @@ export const AdminSettings = () => {
   const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
   const [holidayPayRate, setHolidayPayRate] = useState(12.07);
 
+  // Break Settings
+  const [breakType, setBreakType] = useState<'paid' | 'unpaid'>('unpaid');
+
   // Rota Settings
   const [rotaEnabled, setRotaEnabled] = useState(false);
   const [rotaShowFinishTimes, setRotaShowFinishTimes] = useState(true);
@@ -58,7 +64,7 @@ export const AdminSettings = () => {
 
   // Audit Settings
   const [auditLateIn, setAuditLateIn] = useState(15);
-  const [auditEarlyIn, setAuditEarlyIn] = useState(30); // New default
+  const [auditEarlyIn, setAuditEarlyIn] = useState(30);
   const [auditEarlyOut, setAuditEarlyOut] = useState(15);
   const [auditLateOut, setAuditLateOut] = useState(15);
   const [auditShortShift, setAuditShortShift] = useState(5);
@@ -90,9 +96,10 @@ export const AdminSettings = () => {
         setShowStaffEarnings(data.settings.showStaffEarnings !== false);
         setHolidayPayEnabled(data.settings.holidayPayEnabled || false);
         setHolidayPayRate(data.settings.holidayPayRate || 12.07);
+        setBreakType(data.settings.breakType || 'unpaid');
         
         // Export
-        setExportShowTimesWeekly(data.settings.exportShowShiftTimesWeekly !== false); // default true
+        setExportShowTimesWeekly(data.settings.exportShowShiftTimesWeekly !== false);
         setExportShowTimesMonthly(data.settings.exportShowShiftTimesMonthly || false);
         setExportIncludeDeductions(data.settings.exportIncludeDeductions || false);
 
@@ -130,7 +137,7 @@ export const AdminSettings = () => {
           companyName !== company.name ||
           personalName !== user.name ||
           radius !== s.geofenceRadius ||
-          updateExistingLocs || // consider dirty if checkbox is ticked
+          updateExistingLocs ||
           requireApproval !== (s.requireApproval || false) ||
           defaultRate !== (s.defaultHourlyRate || 15) ||
           currency !== (s.currency || '£') ||
@@ -140,6 +147,7 @@ export const AdminSettings = () => {
           showStaffEarnings !== clean(s.showStaffEarnings, true) ||
           holidayPayEnabled !== (s.holidayPayEnabled || false) ||
           holidayPayRate !== (s.holidayPayRate || 12.07) ||
+          breakType !== (s.breakType || 'unpaid') ||
           exportShowTimesWeekly !== clean(s.exportShowShiftTimesWeekly, true) ||
           exportShowTimesMonthly !== (s.exportShowShiftTimesMonthly || false) ||
           exportIncludeDeductions !== (s.exportIncludeDeductions || false) ||
@@ -159,12 +167,11 @@ export const AdminSettings = () => {
       );
   }, [
       company, user, companyName, personalName, radius, requireApproval, defaultRate, currency, primaryColor, logoUrl, logoFile, showStaffEarnings,
-      holidayPayEnabled, holidayPayRate, exportShowTimesWeekly, exportShowTimesMonthly, exportIncludeDeductions, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
+      holidayPayEnabled, holidayPayRate, breakType, exportShowTimesWeekly, exportShowTimesMonthly, exportIncludeDeductions, rotaEnabled, rotaShowFinishTimes, allowShiftBidding, requireTimeOffApproval,
       vettingEnabled, vettingLevel,
       auditLateIn, auditEarlyIn, auditEarlyOut, auditLateOut, auditShortShift, auditLongShift, updateExistingLocs, blockEarlyClockIn
   ]);
 
-  // Prevent Navigation if Dirty
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       isDirty && currentLocation.pathname !== nextLocation.pathname && !isSavingRef.current
@@ -172,8 +179,7 @@ export const AdminSettings = () => {
 
   useEffect(() => {
     if (blocker.state === "blocked") {
-        const proceed = window.confirm("You have unsaved changes. Do you really want to leave?");
-        if (proceed) {
+        if (window.confirm("You have unsaved changes. Do you really want to leave?")) {
             blocker.proceed();
         } else {
             blocker.reset();
@@ -181,43 +187,12 @@ export const AdminSettings = () => {
     }
   }, [blocker]);
 
-  // Prevent Browser Tab Close/Refresh if Dirty
-  useEffect(() => {
-      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-          if (isDirty && !isSavingRef.current) {
-              e.preventDefault();
-              e.returnValue = ''; // Legacy standard
-          }
-      };
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
-
   const handleCopyCode = () => {
       if (company?.code) {
           navigator.clipboard.writeText(company.code);
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
       }
-  };
-
-  const handleShareCode = async () => {
-        if (!company?.code) return;
-        const text = `Hey, we are now using ${APP_NAME} for our clock-in system... ⏰\n\nPlease create an account at https://tallyd.app/#/register using ${company.code} as your invite code.\n\n#TallydUp`;
-        
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: `Join ${company.name} on ${APP_NAME}`,
-                    text: text,
-                });
-            } catch (err) {
-                console.error("Share failed", err);
-            }
-        } else {
-            handleCopyCode();
-            alert("Sharing not supported on this device. Code copied to clipboard.");
-        }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,23 +203,17 @@ export const AdminSettings = () => {
 
   const handleSave = async () => {
       if (!user?.currentCompanyId) return;
-      isSavingRef.current = true; // Bypass blockers
+      isSavingRef.current = true;
       setSaving(true);
       
       try {
           let finalLogoUrl = logoUrl;
-
-          // 1. Upload Logo if changed
           if (logoFile) {
               finalLogoUrl = await uploadCompanyLogo(user.currentCompanyId, logoFile);
           }
 
-          // Update Company Details
-          await updateCompany(user.currentCompanyId, {
-              name: companyName
-          });
+          await updateCompany(user.currentCompanyId, { name: companyName });
 
-          // Update Settings
           await updateCompanySettings(user.currentCompanyId, {
               geofenceRadius: radius,
               requireApproval,
@@ -255,6 +224,7 @@ export const AdminSettings = () => {
               showStaffEarnings,
               holidayPayEnabled,
               holidayPayRate,
+              breakType,
               exportShowShiftTimesWeekly: exportShowTimesWeekly,
               exportShowShiftTimesMonthly: exportShowTimesMonthly,
               exportIncludeDeductions: exportIncludeDeductions,
@@ -273,22 +243,17 @@ export const AdminSettings = () => {
               blockEarlyClockIn
           });
 
-          // Handle Batch Location Update
           if (updateExistingLocs) {
               await updateAllLocationsRadius(user.currentCompanyId, radius);
           }
 
-          // Update User Details
           if (user.name !== personalName) {
               await updateUserProfile(user.id, { name: personalName });
               await refreshSession();
           }
           
-          // Update global theme immediately
           setBrandColor(primaryColor);
-          
           setSaving(false);
-          // Reload to reflect all changes nicely
           window.location.reload(); 
       } catch (e) {
           console.error(e);
@@ -303,7 +268,7 @@ export const AdminSettings = () => {
       const confirmName = prompt(`To confirm deletion, please type the company name: ${company?.name}`);
       if (confirmName === company?.name) {
           try {
-              isSavingRef.current = true; // Bypass blockers
+              isSavingRef.current = true; 
               await deleteCompanyFull(user.currentCompanyId);
               alert("Company deleted successfully.");
               window.location.reload();
@@ -315,406 +280,294 @@ export const AdminSettings = () => {
       }
   };
 
-  const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setPrimaryColor(e.target.value);
-  };
-
   if (loading) return <div className="p-8 text-center flex justify-center"><div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column code remains unchanged */}
-            <div className="space-y-6">
-                <div 
-                    className="rounded-2xl p-8 text-white relative overflow-hidden shadow-lg transition-all duration-500"
-                    style={{ backgroundColor: primaryColor }}
-                >
-                    <div className="relative z-10">
-                        <h2 className="text-white/80 font-medium mb-1 uppercase tracking-wider text-xs">Company Invite Code</h2>
-                        <div className="flex items-center space-x-2">
-                            <span className="text-4xl font-bold tracking-widest">{company?.code}</span>
-                            <div className="flex space-x-1">
-                                <button onClick={handleCopyCode} className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition backdrop-blur-sm">
-                                    {copied ? <Check className="w-5 h-5 text-emerald-300" /> : <Copy className="w-5 h-5" />}
-                                </button>
-                                <button onClick={handleShareCode} className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition backdrop-blur-sm">
-                                    <Share2 className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-                        <p className="mt-4 text-white/80 text-sm">Share this code with your staff.</p>
-                    </div>
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-20 rounded-full -translate-y-1/2 translate-x-1/4"></div>
-                </div>
+    <div className="max-w-6xl mx-auto pb-12 animate-fade-in h-[calc(100vh-6rem)] flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6 shrink-0">
+            <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Settings</h1>
+                <p className="text-slate-500 dark:text-slate-400">Manage your company configuration.</p>
+            </div>
+            <button 
+                onClick={handleSave} 
+                disabled={saving || !isDirty} 
+                className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-bold transition shadow-lg ${isDirty ? 'bg-brand-600 hover:bg-brand-700 text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}
+            >
+                <Save className="w-5 h-5" />
+                <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+            </button>
+        </div>
 
-                <div className="space-y-2">
-                    {isDirty && (
-                        <div className="bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-lg text-sm font-medium text-center border border-amber-200 dark:border-amber-900/30">Unsaved changes</div>
-                    )}
-                    <button onClick={handleSave} disabled={saving} className={`w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-bold transition disabled:opacity-70 shadow-lg ${isDirty ? 'bg-brand-600 hover:bg-brand-700 text-white animate-pulse' : 'glass-panel hover:bg-white/10 text-slate-900 dark:text-white'}`}>
-                        <Save className="w-5 h-5" />
-                        <span>{saving ? 'Saving...' : (isDirty ? 'Save Changes' : 'Save All Changes')}</span>
+        {/* Layout: Sidebar + Content */}
+        <div className="flex flex-col lg:flex-row gap-6 flex-1 overflow-hidden">
+            
+            {/* Sidebar Navigation */}
+            <div className="w-full lg:w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-white/10 flex flex-col overflow-hidden shrink-0 h-fit">
+                <nav className="p-2 space-y-1">
+                    <button onClick={() => setActiveTab('general')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === 'general' ? 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                        <Building className="w-5 h-5" /> General
                     </button>
+                    <button onClick={() => setActiveTab('brand')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === 'brand' ? 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                        <Palette className="w-5 h-5" /> Branding
+                    </button>
+                    <button onClick={() => setActiveTab('pay')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === 'pay' ? 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                        <DollarSign className="w-5 h-5" /> Time & Pay
+                    </button>
+                    <button onClick={() => setActiveTab('rota')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === 'rota' ? 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                        <CalendarDays className="w-5 h-5" /> Rota System
+                    </button>
+                    <button onClick={() => setActiveTab('compliance')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === 'compliance' ? 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                        <Shield className="w-5 h-5" /> Compliance
+                    </button>
+                    <button onClick={() => setActiveTab('danger')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === 'danger' ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                        <AlertOctagon className="w-5 h-5" /> Danger Zone
+                    </button>
+                </nav>
+                
+                {/* Invite Code Widget */}
+                <div className="mt-auto p-4 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-slate-800/50">
+                    <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Invite Code</p>
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl font-mono font-bold text-slate-900 dark:text-white">{company?.code}</span>
+                        <button onClick={handleCopyCode} className="p-1.5 hover:bg-slate-200 dark:hover:bg-white/10 rounded transition">
+                            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-slate-500" />}
+                        </button>
+                    </div>
+                    <p className="text-xs text-slate-500">Share with staff to join.</p>
                 </div>
             </div>
 
-            {/* Right Column: Settings Forms */}
-            <div className="lg:col-span-2 space-y-6">
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                 
-                {/* Identity */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><User className="w-5 h-5" /></div>
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Identity</h3>
-                    </div>
-                    <div className="space-y-4">
-                        <div><label className="block text-sm font-medium mb-2">Company Name</label><input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" /></div>
-                        <div><label className="block text-sm font-medium mb-2">Your Full Name</label><input type="text" value={personalName} onChange={(e) => setPersonalName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" /></div>
-                    </div>
-                </div>
-
-                {/* Branding & Appearance */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
-                            <Palette className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Branding & Appearance</h3>
-                    </div>
-                    
+                {/* TAB: GENERAL */}
+                {activeTab === 'general' && (
                     <div className="space-y-6">
-                        {/* Theme Toggle */}
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Identity & Location</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Company Name</label>
+                                    <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Your Name</label>
+                                    <input type="text" value={personalName} onChange={e => setPersonalName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">GPS Radius (meters)</label>
+                                    <input type="number" min="20" value={radius} onChange={e => setRadius(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                                    {locationCount > 0 && (
+                                        <div className="flex items-center mt-2">
+                                            <input type="checkbox" id="update-locs" checked={updateExistingLocs} onChange={e => setUpdateExistingLocs(e.target.checked)} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                            <label htmlFor="update-locs" className="ml-2 text-xs font-medium text-slate-600 dark:text-slate-400">Update all {locationCount} existing locations?</label>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Security</h3>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-medium text-sm text-slate-900 dark:text-white">Require Admin Approval</h4>
+                                    <p className="text-xs text-slate-500">New staff accounts must be manually approved.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={requireApproval} onChange={e => setRequireApproval(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* TAB: BRANDING */}
+                {activeTab === 'brand' && (
+                    <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10 space-y-6">
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Interface Theme</span>
                             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                                <button 
-                                    onClick={() => setTheme('light')}
-                                    className={`p-2 rounded-md transition ${theme === 'light' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                                    title="Light Mode"
-                                >
-                                    <Sun className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setTheme('dark')}
-                                    className={`p-2 rounded-md transition ${theme === 'dark' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                                    title="Dark Mode"
-                                >
-                                    <Moon className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setTheme('system')}
-                                    className={`p-2 rounded-md transition ${theme === 'system' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                                    title="System Default"
-                                >
-                                    <Laptop className="w-4 h-4" />
-                                </button>
+                                <button onClick={() => setTheme('light')} className={`p-2 rounded-md transition ${theme === 'light' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400'}`}><Sun className="w-4 h-4" /></button>
+                                <button onClick={() => setTheme('dark')} className={`p-2 rounded-md transition ${theme === 'dark' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400'}`}><Moon className="w-4 h-4" /></button>
+                                <button onClick={() => setTheme('system')} className={`p-2 rounded-md transition ${theme === 'system' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-400'}`}><Laptop className="w-4 h-4" /></button>
                             </div>
                         </div>
-
-                        {/* Brand Color */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Brand Color</label>
                             <div className="flex items-center space-x-3">
-                                <input 
-                                    type="color" 
-                                    value={primaryColor}
-                                    onChange={handleColorChange}
-                                    className="h-10 w-14 rounded cursor-pointer bg-transparent"
-                                />
-                                <input 
-                                    type="text" 
-                                    value={primaryColor} 
-                                    onChange={handleColorChange}
-                                    className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none uppercase font-mono" 
-                                />
+                                <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="h-10 w-14 rounded cursor-pointer bg-transparent" />
+                                <input type="text" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 uppercase font-mono" />
                             </div>
                         </div>
-
-                        {/* Logo Upload/URL */}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Company Logo</label>
-                            <div className="space-y-3">
-                                {/* Upload Button */}
-                                <div className="flex items-center gap-3">
-                                    <button 
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 transition border border-slate-200 dark:border-slate-700"
-                                    >
-                                        <Upload className="w-4 h-4" />
-                                        <span>Upload File</span>
-                                    </button>
-                                    <input 
-                                        type="file" 
-                                        ref={fileInputRef}
-                                        onChange={handleFileSelect}
-                                        accept="image/*"
-                                        className="hidden"
-                                    />
-                                    {logoFile && <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">{logoFile.name} selected</span>}
-                                </div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Logo</label>
+                            <div className="flex items-center gap-3 mb-2">
+                                <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700"><Upload className="w-4 h-4 inline mr-2" /> Upload</button>
+                                <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
+                                {logoFile && <span className="text-xs text-green-600 font-bold">{logoFile.name}</span>}
+                            </div>
+                            <div className="relative">
+                                <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                <input type="url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm" placeholder="Or paste image URL..." />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-                                <div className="relative flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-400 uppercase">OR</span>
-                                    <div className="relative flex-1">
-                                        <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                                        <input 
-                                            type="url" 
-                                            value={logoUrl} 
-                                            onChange={(e) => setLogoUrl(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm" 
-                                            placeholder="Paste direct image URL..."
-                                        />
-                                    </div>
+                {/* TAB: TIME & PAY */}
+                {activeTab === 'pay' && (
+                    <div className="space-y-6">
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Payroll Basics</h3>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Currency</label>
+                                    <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                        <option value="£">GBP (£)</option>
+                                        <option value="$">USD ($)</option>
+                                        <option value="€">EUR (€)</option>
+                                    </select>
                                 </div>
-
-                                {(logoUrl || logoFile) && (
-                                    <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg inline-block">
-                                        <img 
-                                            src={logoFile ? URL.createObjectURL(logoFile) : logoUrl} 
-                                            alt="Preview" 
-                                            className="h-12 w-auto object-contain rounded" 
-                                        />
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Default Rate</label>
+                                    <input type="number" step="0.01" value={defaultRate} onChange={e => setDefaultRate(parseFloat(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                                </div>
+                            </div>
+                            
+                            <div className="border-t border-slate-100 dark:border-white/5 pt-4 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <div><h4 className="text-sm font-bold">Staff View Earnings</h4><p className="text-xs text-slate-500">Show estimated pay in app.</p></div>
+                                    <input type="checkbox" checked={showStaffEarnings} onChange={e => setShowStaffEarnings(e.target.checked)} className="rounded text-brand-600 focus:ring-brand-500 w-5 h-5" />
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div><h4 className="text-sm font-bold">Holiday Pay</h4><p className="text-xs text-slate-500">Calculate accrual on exports.</p></div>
+                                    <input type="checkbox" checked={holidayPayEnabled} onChange={e => setHolidayPayEnabled(e.target.checked)} className="rounded text-brand-600 focus:ring-brand-500 w-5 h-5" />
+                                </div>
+                                {holidayPayEnabled && (
+                                    <div className="pl-4 border-l-2 border-slate-200 dark:border-white/10">
+                                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Rate (%)</label>
+                                        <input type="number" value={holidayPayRate} onChange={e => setHolidayPayRate(parseFloat(e.target.value))} className="w-24 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm" />
                                     </div>
                                 )}
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                {/* Payroll & Localization - UPDATED */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400">
-                            <DollarSign className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Payroll & Currency</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                Currency
-                            </label>
-                            <div className="relative">
-                                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                                <select 
-                                    value={currency}
-                                    onChange={(e) => setCurrency(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none transition-colors"
-                                >
-                                    <option value="£">GBP (£)</option>
-                                    <option value="$">USD ($)</option>
-                                    <option value="€">EUR (€)</option>
-                                    <option value="¥">JPY (¥)</option>
-                                    <option value="A$">AUD ($)</option>
-                                    <option value="C$">CAD ($)</option>
-                                </select>
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Breaks & Tracking</h3>
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-slate-100 dark:bg-white/5 rounded-xl"><Clock className="w-6 h-6 text-slate-500" /></div>
+                                <div className="flex-1">
+                                    <label className="block text-sm font-bold text-slate-900 dark:text-white mb-1">Break Policy</label>
+                                    <div className="flex gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" name="breakType" value="unpaid" checked={breakType === 'unpaid'} onChange={() => setBreakType('unpaid')} className="text-brand-600 focus:ring-brand-500" />
+                                            <span className="text-sm">Unpaid (Deducted)</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" name="breakType" value="paid" checked={breakType === 'paid'} onChange={() => setBreakType('paid')} className="text-brand-600 focus:ring-brand-500" />
+                                            <span className="text-sm">Paid</span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                Default Hourly Rate
-                            </label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{currency}</span>
-                                <input 
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={defaultRate}
-                                    onChange={(e) => setDefaultRate(parseFloat(e.target.value))}
-                                    className="w-full pl-8 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
-                                />
+
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Export Preferences</h3>
+                            <div className="space-y-3">
+                                <label className="flex items-center gap-2"><input type="checkbox" checked={exportShowTimesWeekly} onChange={e => setExportShowTimesWeekly(e.target.checked)} className="rounded text-brand-600" /><span className="text-sm">Show times in Weekly Matrix</span></label>
+                                <label className="flex items-center gap-2"><input type="checkbox" checked={exportIncludeDeductions} onChange={e => setExportIncludeDeductions(e.target.checked)} className="rounded text-brand-600" /><span className="text-sm">Include deduction columns (Tax/NI)</span></label>
                             </div>
-                            <p className="text-xs text-slate-500 mt-1">Applied to new staff automatically.</p>
                         </div>
                     </div>
+                )}
 
-                    <div className="mt-4 border-t border-slate-200 dark:border-white/10 pt-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div className="pr-4">
-                                <h4 className="font-medium text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                                    {showStaffEarnings ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
-                                    Staff View Earnings
-                                </h4>
-                                <p className="text-xs text-slate-500">Allow staff to see their estimated pay in the app.</p>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                <input type="checkbox" checked={showStaffEarnings} onChange={(e) => setShowStaffEarnings(e.target.checked)} className="sr-only peer" />
-                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                            </label>
-                        </div>
-
-                        {/* Export Settings */}
-                        <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-white/5">
-                            <h4 className="font-bold text-xs uppercase text-slate-500 mb-2 flex items-center gap-2"><FileText className="w-3 h-3" /> Export Customization</h4>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-700 dark:text-slate-300">Show Times in Weekly Matrix</span>
-                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                    <input type="checkbox" checked={exportShowTimesWeekly} onChange={(e) => setExportShowTimesWeekly(e.target.checked)} className="sr-only peer" />
-                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                {/* TAB: ROTA */}
+                {activeTab === 'rota' && (
+                    <div className="space-y-6">
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Rota System</h3>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={rotaEnabled} onChange={e => setRotaEnabled(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
                             
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-700 dark:text-slate-300">Show Times in Monthly Matrix</span>
-                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                    <input type="checkbox" checked={exportShowTimesMonthly} onChange={(e) => setExportShowTimesMonthly(e.target.checked)} className="sr-only peer" />
-                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                                </label>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                                <div className="pr-4">
-                                    <span className="text-sm text-slate-700 dark:text-slate-300">Include Payroll Deduction Columns</span>
-                                    <p className="text-[10px] text-slate-500">Adds empty columns for Tax, NI, and Net Pay to the Matrix export for your accountant.</p>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                    <input type="checkbox" checked={exportIncludeDeductions} onChange={(e) => setExportIncludeDeductions(e.target.checked)} className="sr-only peer" />
-                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* Holiday Pay Toggle */}
-                        <div className="flex items-center justify-between">
-                            <div className="pr-4">
-                                <h4 className="font-medium text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
-                                <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                <input type="checkbox" checked={holidayPayEnabled} onChange={(e) => setHolidayPayEnabled(e.target.checked)} className="sr-only peer" />
-                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                            </label>
-                        </div>
-                        
-                        {holidayPayEnabled && (
-                            <div className="animate-in fade-in slide-in-from-top-2">
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                    Holiday Pay Rate (%)
-                                </label>
-                                <div className="relative">
-                                    <input 
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={holidayPayRate}
-                                        onChange={(e) => setHolidayPayRate(parseFloat(e.target.value))}
-                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-colors"
-                                        placeholder="12.07"
-                                    />
-                                    <Percent className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                                </div>
-                                <p className="text-xs text-slate-500 mt-1">12.07% is standard for UK casual workers.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><Building className="w-5 h-5" /></div>
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">General & Security</h3>
-                    </div>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">GPS Geofence Radius (meters)</label>
-                            <input type="number" min="20" value={radius} onChange={(e) => setRadius(parseInt(e.target.value))} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none" />
-                            {locationCount > 0 && (
-                                <div className="flex items-center mt-2 animate-fade-in">
-                                    <input 
-                                        type="checkbox" 
-                                        id="update-locs"
-                                        checked={updateExistingLocs}
-                                        onChange={(e) => setUpdateExistingLocs(e.target.checked)}
-                                        className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                                    />
-                                    <label htmlFor="update-locs" className="ml-2 text-xs font-medium text-slate-600 dark:text-slate-400">
-                                        Update radius for all {locationCount} existing locations?
-                                    </label>
+                            {rotaEnabled && (
+                                <div className="space-y-4 animate-in fade-in">
+                                    <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-xl space-y-3">
+                                        <label className="flex items-center justify-between"><span className="text-sm font-medium">Show Finish Times on Rota</span><input type="checkbox" checked={rotaShowFinishTimes} onChange={e => setRotaShowFinishTimes(e.target.checked)} className="rounded text-brand-600" /></label>
+                                        <label className="flex items-center justify-between"><span className="text-sm font-medium">Allow Shift Bidding</span><input type="checkbox" checked={allowShiftBidding} onChange={e => setAllowShiftBidding(e.target.checked)} className="rounded text-brand-600" /></label>
+                                        <label className="flex items-center justify-between"><span className="text-sm font-medium">Require Approval for Time Off</span><input type="checkbox" checked={requireTimeOffApproval} onChange={e => setRequireTimeOffApproval(e.target.checked)} className="rounded text-brand-600" /></label>
+                                    </div>
+                                    
+                                    <div className="border-t border-slate-100 dark:border-white/5 pt-4">
+                                        <h4 className="font-bold text-sm mb-3">Enforcement Rules</h4>
+                                        <label className="flex items-center justify-between">
+                                            <div>
+                                                <span className="text-sm font-medium">Block Early Clock-In</span>
+                                                <p className="text-xs text-slate-500">Prevent staff starting before their scheduled time (within tolerance).</p>
+                                            </div>
+                                            <input type="checkbox" checked={blockEarlyClockIn} onChange={e => setBlockEarlyClockIn(e.target.checked)} className="rounded text-brand-600" />
+                                        </label>
+                                    </div>
                                 </div>
                             )}
                         </div>
-                        <div className="flex items-center justify-between pt-2">
-                            <div className="pr-4"><h4 className="font-medium text-sm">Require Admin Approval</h4><p className="text-xs text-slate-500">New staff must be approved.</p></div>
-                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} className="sr-only peer" />
-                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                            </label>
-                        </div>
                     </div>
-                </div>
+                )}
 
-                {/* Vetting & Compliance */}
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
-                        <div className="flex items-center space-x-3">
-                             <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><FileCheck className="w-5 h-5" /></div>
-                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Compliance & Vetting</h3>
+                {/* TAB: COMPLIANCE */}
+                {activeTab === 'compliance' && (
+                    <div className="space-y-6">
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Vetting & Docs</h3>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={vettingEnabled} onChange={e => setVettingEnabled(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                </label>
+                            </div>
+                            {vettingEnabled && (
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Vetting Standard</label>
+                                    <select value={vettingLevel} onChange={e => setVettingLevel(e.target.value as VettingLevel)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                        <option value="BS7858">BS7858 (Security)</option>
+                                        <option value="BPSS">BPSS (Gov)</option>
+                                        <option value="PCI_DSS">PCI DSS (Finance)</option>
+                                        <option value="AIRSIDE">Airside (Airport)</option>
+                                        <option value="CQC">CQC (Care)</option>
+                                        <option value="CUSTOM">Custom</option>
+                                    </select>
+                                </div>
+                            )}
                         </div>
-                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input type="checkbox" checked={vettingEnabled} onChange={(e) => setVettingEnabled(e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                        </label>
-                    </div>
-                    {vettingEnabled && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                             <div>
-                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Vetting Standard</label>
-                                 <div className="relative">
-                                     <select 
-                                        value={vettingLevel}
-                                        onChange={e => setVettingLevel(e.target.value as VettingLevel)}
-                                        className="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
-                                     >
-                                         <option value="BS7858">BS7858 (Security Standard)</option>
-                                         <option value="BPSS">BPSS (Gov Standard)</option>
-                                         <option value="PCI_DSS">PCI DSS (Finance)</option>
-                                         <option value="AIRSIDE">Airside Pass (Airport)</option>
-                                         <option value="CQC">CQC (Care)</option>
-                                         <option value="CUSTOM">Custom (Basic Checks)</option>
-                                     </select>
-                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500"><Building className="w-4 h-4" /></div>
-                                 </div>
-                                 <p className="text-xs text-slate-500 mt-2">
-                                     Selected standard determines the documents staff must upload.
-                                 </p>
-                             </div>
-                        </div>
-                    )}
-                </div>
 
-                <div className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-slate-200 dark:border-white/10 mb-4">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-slate-500 dark:text-slate-400"><CalendarDays className="w-5 h-5" /></div>
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">Rota System</h3>
-                    </div>
-                    <div className="flex items-center justify-between mb-4">
-                        <span className="text-sm font-medium">Enable Rota</span>
-                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input type="checkbox" checked={rotaEnabled} onChange={(e) => setRotaEnabled(e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                        </label>
-                    </div>
-                    {rotaEnabled && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                             <div className="flex items-center justify-between"><span className="text-sm font-medium">Show Finish Times</span><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={rotaShowFinishTimes} onChange={(e) => setRotaShowFinishTimes(e.target.checked)} className="sr-only peer" /><div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div></label></div>
-                             <div className="flex items-center justify-between"><span className="text-sm font-medium">Allow Shift Bidding</span><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={allowShiftBidding} onChange={(e) => setAllowShiftBidding(e.target.checked)} className="sr-only peer" /><div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div></label></div>
-                             <div className="flex items-center justify-between"><span className="text-sm font-medium">Approval for Time Off</span><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={requireTimeOffApproval} onChange={(e) => setRequireTimeOffApproval(e.target.checked)} className="sr-only peer" /><div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div></label></div>
+                        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Audit Thresholds (Minutes)</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs font-bold uppercase text-slate-500">Late In</label><input type="number" value={auditLateIn} onChange={e => setAuditLateIn(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
+                                <div><label className="text-xs font-bold uppercase text-slate-500">Early In</label><input type="number" value={auditEarlyIn} onChange={e => setAuditEarlyIn(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
+                                <div><label className="text-xs font-bold uppercase text-slate-500">Late Out</label><input type="number" value={auditLateOut} onChange={e => setAuditLateOut(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
+                                <div><label className="text-xs font-bold uppercase text-slate-500">Early Out</label><input type="number" value={auditEarlyOut} onChange={e => setAuditEarlyOut(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" /></div>
+                            </div>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
 
-                <div className="bg-red-50 dark:bg-red-900/10 rounded-2xl p-6 border border-red-200 dark:border-red-900/30">
-                    <div className="flex items-center space-x-3 pb-4 border-b border-red-200 dark:border-red-900/30 mb-4">
-                        <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-lg text-red-500"><AlertOctagon className="w-5 h-5" /></div>
-                        <h3 className="font-bold text-lg text-red-500 dark:text-red-400">Danger Zone</h3>
+                {/* TAB: DANGER */}
+                {activeTab === 'danger' && (
+                    <div className="glass-panel p-6 rounded-2xl border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10">
+                        <h3 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2">Danger Zone</h3>
+                        <p className="text-sm text-red-700 dark:text-red-300 mb-4">Actions here cannot be undone.</p>
+                        <button onClick={handleDeleteCompany} className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition">Delete Company</button>
                     </div>
-                    <div className="flex items-center justify-between">
-                        <div><h4 className="font-bold text-red-500 dark:text-red-400">Delete Company</h4><p className="text-sm text-red-600/70 dark:text-red-400/70">Permanently delete organization.</p></div>
-                        <button onClick={handleDeleteCompany} className="px-4 py-2 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-800 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800 rounded-lg font-bold text-sm transition">Delete Company</button>
-                    </div>
-                </div>
+                )}
 
             </div>
         </div>

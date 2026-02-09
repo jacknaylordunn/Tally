@@ -20,9 +20,9 @@ import {
     getCountFromServer,
     Unsubscribe
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
-import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest, Conversation, ChatMessage, VettingItem, VettingStatus } from '../types';
+import { Shift, Company, User, Location, ValidationResult, UserRole, ScheduleShift, TimeOffRequest, Conversation, ChatMessage, VettingItem, VettingStatus, Break } from '../types';
 
 // Collection References
 const USERS_REF = 'users';
@@ -36,8 +36,6 @@ const CONVERSATIONS_REF = 'conversations';
 // --- STORAGE ---
 
 export const uploadCompanyLogo = async (companyId: string, file: File): Promise<string> => {
-    // Create a reference to 'company_logos/companyId/filename'
-    // We add a timestamp to the filename to avoid caching issues with same filenames
     const filename = `${Date.now()}_${file.name}`;
     const storageRef = ref(storage, `company_logos/${companyId}/${filename}`);
     
@@ -48,14 +46,23 @@ export const uploadCompanyLogo = async (companyId: string, file: File): Promise<
 
 // NEW: Upload Vetting Document
 export const uploadVettingDocument = async (companyId: string, userId: string, file: File): Promise<string> => {
-    // Secured path: vetting/{companyId}/{userId}/{filename}
-    // Rules ensure only user or company admin can access
     const filename = `${Date.now()}_${file.name}`;
+    // Store with predictable path
     const storageRef = ref(storage, `vetting/${companyId}/${userId}/${filename}`);
     
-    const snapshot = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(snapshot.ref);
+    await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(storageRef);
     return downloadURL;
+};
+
+// NEW: Delete a specific file from storage
+export const deleteVettingFileFromStorage = async (url: string): Promise<void> => {
+    try {
+        const storageRef = ref(storage, url);
+        await deleteObject(storageRef);
+    } catch (e) {
+        console.warn("Failed to delete file from storage (might already be gone)", e);
+    }
 };
 
 // --- USER ---
@@ -78,6 +85,38 @@ export const createUserProfile = async (user: User): Promise<void> => {
 export const updateUserProfile = async (userId: string, updates: Partial<User>): Promise<void> => {
     const docRef = doc(db, USERS_REF, userId);
     await updateDoc(docRef, updates);
+};
+
+// NEW: Purge all vetting data for a user (GDPR)
+export const purgeVettingData = async (userId: string, vettingData: VettingItem[]): Promise<void> => {
+    // 1. Delete all files associated with vetting items
+    const deletePromises: Promise<void>[] = [];
+    
+    vettingData.forEach(item => {
+        if (item.files) {
+            item.files.forEach(file => {
+                if (file.url) {
+                    deletePromises.push(deleteVettingFileFromStorage(file.url));
+                }
+            });
+        }
+        // Legacy single file support
+        if (item.fileUrl) {
+            deletePromises.push(deleteVettingFileFromStorage(item.fileUrl));
+        }
+    });
+
+    await Promise.allSettled(deletePromises);
+
+    // 2. Wipe vetting fields from User document
+    const docRef = doc(db, USERS_REF, userId);
+    await updateDoc(docRef, {
+        vettingStatus: 'not_started',
+        vettingData: deleteField(),
+        vettingProgress: deleteField(),
+        vettingLastUpdated: deleteField(),
+        isApproved: false // Revoke approval if vetting is purged
+    });
 };
 
 // SPECIAL: Update Rate and Active Shift
@@ -158,7 +197,7 @@ export const getCompanyStaff = async (companyId: string): Promise<User[]> => {
     return querySnapshot.docs.map(doc => doc.data() as User);
 };
 
-// --- JOINING LOGIC WITH AUTO-JOIN CHATS ---
+// ... (Rest of existing API functions: switchUserCompany, company, locations, rota, etc. remain unchanged) ...
 export const switchUserCompany = async (userId: string, inviteCode: string): Promise<{ success: boolean, message: string }> => {
     const company = await getCompanyByCode(inviteCode);
     if (!company) {
@@ -548,6 +587,34 @@ export const getStaffActivity = async (userId: string): Promise<Shift[]> => {
 export const updateShift = async (shiftId: string, updates: Partial<Shift>): Promise<void> => {
     const docRef = doc(db, SHIFTS_REF, shiftId);
     await updateDoc(docRef, updates);
+};
+
+// NEW: Break Management
+export const toggleShiftBreak = async (shiftId: string, isStarting: boolean): Promise<void> => {
+    const docRef = doc(db, SHIFTS_REF, shiftId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return;
+    
+    const shift = snap.data() as Shift;
+    const breaks = shift.breaks || [];
+    
+    if (isStarting) {
+        // Start break
+        const newBreak: Break = {
+            id: `brk_${Date.now()}`,
+            startTime: Date.now()
+        };
+        await updateDoc(docRef, { breaks: [...breaks, newBreak] });
+    } else {
+        // End break
+        const updatedBreaks = [...breaks];
+        const lastBreakIndex = updatedBreaks.length - 1;
+        if (lastBreakIndex >= 0 && !updatedBreaks[lastBreakIndex].endTime) {
+            updatedBreaks[lastBreakIndex].endTime = Date.now();
+            updatedBreaks[lastBreakIndex].duration = updatedBreaks[lastBreakIndex].endTime! - updatedBreaks[lastBreakIndex].startTime;
+            await updateDoc(docRef, { breaks: updatedBreaks });
+        }
+    }
 };
 
 export const deleteShift = async (shiftId: string): Promise<void> => {

@@ -16,6 +16,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [rotaEnabled, setRotaEnabled] = useState(false);
+  const [vettingEnabled, setVettingEnabled] = useState(false);
   const [logo, setLogo] = useState(LOGO_URL);
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 const company = await getCompany(user.currentCompanyId);
                 // Ensure explicit boolean check or undefined fallback
                 setRotaEnabled(company.settings.rotaEnabled === true);
+                setVettingEnabled(company.settings.vettingEnabled === true);
                 if (company.settings.logoUrl) {
                     setLogo(company.settings.logoUrl);
                 }
@@ -45,8 +47,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     : NAVIGATION_ITEMS.STAFF;
 
   const navItems = baseNavItems.filter(item => {
-      // Strictly hide Rota tab if disabled
+      // Hide Rota tab if disabled
       if (item.name.toLowerCase().includes('rota') && !rotaEnabled) return false;
+      // Hide Vetting tab if disabled
+      if (item.name.toLowerCase().includes('vetting') && !vettingEnabled) return false;
       return true;
   });
 

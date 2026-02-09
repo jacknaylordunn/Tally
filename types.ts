@@ -9,15 +9,70 @@ export type VettingLevel = 'NONE' | 'BS7858' | 'BPSS' | 'PCI_DSS' | 'AIRSIDE' | 
 
 export type VettingStatus = 'not_started' | 'in_progress' | 'submitted' | 'verified' | 'rejected' | 'changes_requested';
 
+export type VettingSection = 'identity' | 'history' | 'financial' | 'security' | 'qualifications';
+
+export interface VettingFile {
+  url: string;
+  name: string;
+  type: string;
+  uploadedAt: number;
+  storagePath?: string; // Added for easier deletion
+}
+
+export interface AddressData {
+  id: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  postcode: string;
+  dateFrom: string; // YYYY-MM
+  dateTo?: string; // YYYY-MM or empty if current
+  current: boolean;
+}
+
+export interface EmploymentData {
+  id: string;
+  employerName: string;
+  role: string;
+  dateFrom: string; // YYYY-MM
+  dateTo?: string; // YYYY-MM
+  current: boolean;
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
 export interface VettingItem {
   id: string;
   label: string;
   description?: string;
-  type: 'file' | 'declaration' | 'check'; // 'check' is for admin to tick off manually (e.g. credit check)
+  instruction?: string; // New: Detailed user-facing instruction
+  section: VettingSection; 
+  type: 'file' | 'declaration' | 'check' | 'address_history' | 'employment_history'; 
   required: boolean;
+  adminOnly?: boolean; 
   
+  // Specific Form Fields
+  formFields?: {
+      key: string;
+      label: string;
+      type: 'text' | 'date';
+      required?: boolean;
+  }[];
+
   // User Data
   status: 'pending' | 'uploaded' | 'accepted' | 'rejected';
+  
+  // Modern Data Structure
+  files?: VettingFile[];
+  data?: {
+    addresses?: AddressData[];
+    employment?: EmploymentData[];
+    declarationText?: string;
+    formValues?: Record<string, string>;
+    [key: string]: any;
+  };
+
+  // Legacy/Simple support
   fileUrl?: string;
   fileName?: string;
   submittedAt?: number;
@@ -25,40 +80,42 @@ export interface VettingItem {
   // Admin Data
   verifiedAt?: number;
   verifiedBy?: string;
-  expiryDate?: number; // For expiring docs like insurance/passport
+  expiryDate?: number; 
   adminNotes?: string;
 }
 
 export interface User {
   id: string;
   email: string;
-  name: string; // Display name (Composite of First + Last)
-  firstName?: string; // New
-  lastName?: string; // New
-  employeeNumber?: string; // New: Company specific ID
+  name: string; 
+  firstName?: string; 
+  lastName?: string; 
+  employeeNumber?: string; 
   currentCompanyId?: string;
   activeShiftId?: string | null;
   role: UserRole;
-  customHourlyRate?: number; // Override company default
-  position?: string; // Primary/Legacy position
-  roles?: string[]; // New: Multiple roles for Rota filtering
-  isApproved?: boolean; // If true, can clock in. If undefined, assume true (migration).
-  tutorialSeen?: boolean; // Tracks if the user has completed the welcome tour
+  customHourlyRate?: number; 
+  position?: string; 
+  roles?: string[]; 
+  isApproved?: boolean; 
+  tutorialSeen?: boolean; 
   
   // Vetting
   vettingStatus?: VettingStatus;
-  vettingData?: VettingItem[]; // The specific requirements and their state for this user
+  vettingData?: VettingItem[]; 
+  vettingProgress?: number; // 0-100
+  vettingLastUpdated?: number;
 }
 
 export interface Company {
   id: string;
   name: string;
   ownerId: string;
-  code: string; // The invite code
+  code: string; 
   settings: {
     geofenceRadius: number;
     adminSecret: string;
-    allowManualClockIn: boolean; // Kept for DB compatibility, but UI control removed
+    allowManualClockIn: boolean; 
     requireApproval: boolean;
     // Branding
     logoUrl?: string;
@@ -66,45 +123,60 @@ export interface Company {
     // Payroll
     defaultHourlyRate?: number;
     currency?: string;
-    showStaffEarnings?: boolean; // New: Toggle staff seeing their pay
+    showStaffEarnings?: boolean; 
     // Payroll Export Settings
     exportShowShiftTimesWeekly?: boolean;
     exportShowShiftTimesMonthly?: boolean;
-    exportIncludeDeductions?: boolean; // New: Add tax/net columns to export
+    exportIncludeDeductions?: boolean; 
     // Holiday Pay
     holidayPayEnabled?: boolean;
-    holidayPayRate?: number; // Percentage (e.g. 12.07)
+    holidayPayRate?: number; 
+    // Rounding & Compliance
+    payrollSnapToSchedule?: boolean; // If clock in early, pay from schedule start
+    payrollRoundToMinutes?: number; // 0, 5, 15, 30
+    breakType?: 'paid' | 'unpaid';
+    
     // Rota Settings
     rotaEnabled?: boolean;
-    rotaShowFinishTimes?: boolean; // New: Toggle end times on/off
+    rotaShowFinishTimes?: boolean; 
     allowShiftBidding?: boolean;
     requireTimeOffApproval?: boolean;
     // Audit Settings
-    auditLateInThreshold?: number; // mins
-    auditEarlyInThreshold?: number; // mins (New)
-    auditEarlyOutThreshold?: number; // mins
-    auditLateOutThreshold?: number; // mins
-    auditShortShiftThreshold?: number; // mins
-    auditLongShiftThreshold?: number; // hours
-    blockEarlyClockIn?: boolean; // New: Prevent clocking in too early
+    auditLateInThreshold?: number; 
+    auditEarlyInThreshold?: number; 
+    auditEarlyOutThreshold?: number; 
+    auditLateOutThreshold?: number; 
+    auditShortShiftThreshold?: number; 
+    auditLongShiftThreshold?: number; 
+    blockEarlyClockIn?: boolean; 
     // Vetting Settings
     vettingEnabled?: boolean;
     vettingLevel?: VettingLevel;
   };
 }
 
+export interface Break {
+    id: string;
+    startTime: number;
+    endTime?: number;
+    duration?: number; // Calculated on close (ms)
+}
+
 export interface Shift {
   id: string;
   userId: string;
-  userName: string; // Denormalized for easier display
+  userName: string; 
   companyId: string;
-  startTime: number; // Timestamp
-  endTime: number | null; // Timestamp
-  startMethod: 'dynamic_qr' | 'static_gps' | 'manual' | 'manual_entry'; // Added manual_entry for admin creation
+  startTime: number; 
+  endTime: number | null; 
+  startMethod: 'dynamic_qr' | 'static_gps' | 'manual' | 'manual_entry'; 
   hourlyRate: number;
-  scheduleShiftId?: string; // Link to the planned shift on the rota
-  scheduledStartTime?: number; // Snapshot of planned start time
-  scheduledEndTime?: number;   // Snapshot of planned end time
+  scheduleShiftId?: string; 
+  scheduledStartTime?: number; 
+  scheduledEndTime?: number;   
+  
+  // New: Breaks
+  breaks?: Break[];
   
   // Audit Trail
   createdByName?: string;
@@ -114,7 +186,7 @@ export interface Shift {
   editedAt?: number;
   
   // Review Status
-  warningsDismissed?: boolean; // If true, alerts for this shift are ignored in the dashboard
+  warningsDismissed?: boolean; 
 }
 
 // --- ROTA SYSTEM TYPES ---
@@ -122,17 +194,17 @@ export interface Shift {
 export interface ScheduleShift {
   id: string;
   companyId: string;
-  locationId: string; // Optional: bind shift to a location
-  locationName?: string; // Denormalized
-  userId: string | null; // Null means "Open Shift"
+  locationId: string; 
+  locationName?: string; 
+  userId: string | null; 
   userName?: string;
-  role: string; // e.g. "Bar Staff", "Security"
+  role: string; 
   startTime: number;
   endTime: number;
   notes?: string;
   status: 'draft' | 'published';
-  bids?: string[]; // Array of User IDs who want this shift
-  isOffered?: boolean; // If true, the current assignee is offering this shift for swap/cover
+  bids?: string[]; 
+  isOffered?: boolean; 
 }
 
 export interface TimeOffRequest {
@@ -140,8 +212,8 @@ export interface TimeOffRequest {
   userId: string;
   userName: string;
   companyId: string;
-  startDate: number; // Start of day timestamp
-  endDate: number;   // End of day timestamp
+  startDate: number; 
+  endDate: number;   
   type: 'holiday' | 'sickness' | 'other';
   reason?: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -171,22 +243,22 @@ export interface ValidationResult {
 // --- TUTORIAL & GUIDE SYSTEM ---
 
 export interface TutorialStep {
-  targetId: string; // ID of the DOM element to highlight
+  targetId: string; 
   title: string;
   content: string;
-  requiredRoute?: string; // If set, tutorial waits until user navigates here
+  requiredRoute?: string; 
   position?: 'top' | 'bottom' | 'left' | 'right' | 'center';
-  action?: 'click' | 'next'; // 'click' means user must click target to advance
-  transparentBackdrop?: boolean; // If true, the dark overlay is removed
+  action?: 'click' | 'next'; 
+  transparentBackdrop?: boolean; 
 }
 
 export interface InteractiveGuide {
   id: string;
   title: string;
   steps: {
-    targetId?: string; // Optional: if null, just shows text
+    targetId?: string; 
     content: string;
-    route: string; // Route to navigate to for this step
+    route: string; 
   }[];
 }
 

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
-import { ChevronDown, ChevronUp, User, Shield, HelpCircle, PlayCircle, Zap, BookOpen, ExternalLink, Briefcase, CalendarDays, DollarSign, MapPin, QrCode, FileText, Smartphone } from 'lucide-react';
+import { ChevronDown, ChevronUp, User, Shield, HelpCircle, PlayCircle, Zap, BookOpen, ExternalLink, Briefcase, CalendarDays, DollarSign, MapPin, QrCode, FileText, Smartphone, ClipboardCheck, FileSpreadsheet } from 'lucide-react';
 import { InteractiveGuide } from '../types';
 
 interface FAQItem {
@@ -32,14 +32,23 @@ export const Help = () => {
       ]
   };
 
-  const duplicateShiftGuide: InteractiveGuide = {
-      id: 'dup-shift',
-      title: 'Duplicating Shifts',
+  const publishRotaGuide: InteractiveGuide = {
+      id: 'publish-rota',
+      title: 'Publishing the Rota',
       steps: [
-          { content: 'Go to the **Rota**.', route: '/admin/rota' },
-          { content: 'Right-click (or long press) the shift you want to copy.', route: '/admin/rota' },
-          { content: 'Select **Duplicate** to create an instant copy on the same day.', route: '/admin/rota' },
-          { content: 'Or select **Copy**, then right-click another day to **Paste**.', route: '/admin/rota' }
+          { content: 'Navigate to the **Rota** page.', route: '/admin/rota' },
+          { content: 'Click the **Publish** button in the top right corner.', targetId: 'rota-publish-menu-btn', route: '/admin/rota' },
+          { content: 'Select "Publish Current Week". This will turn all draft (grey) shifts into active shifts visible to staff.', targetId: 'publish-week-btn', route: '/admin/rota' }
+      ]
+  };
+
+  const timeOffGuide: InteractiveGuide = {
+      id: 'time-off',
+      title: 'Managing Time Off',
+      steps: [
+          { content: 'Requests appear on the Rota page.', route: '/admin/rota' },
+          { content: 'Click the **Time Off** button in the toolbar.', route: '/admin/rota' },
+          { content: 'Review pending requests here. Clicking "Approve" will notify the staff member.', route: '/admin/rota' }
       ]
   };
 
@@ -51,18 +60,18 @@ export const Help = () => {
           { content: 'Go to the **Staff** management page.', route: '/admin/staff' },
           { content: 'Look for staff with a yellow "Pending" badge.', targetId: 'staff-bulk-btn', route: '/admin/staff' },
           { content: 'Click the **Edit (Pencil)** icon on their row.', route: '/admin/staff' },
-          { content: 'Click the **Approve Now** button at the top of the form.', route: '/admin/staff' }
+          { content: 'Click the **Confirm & Approve** button at the bottom of the form.', route: '/admin/staff' }
       ]
   };
 
-  const changeWageGuide: InteractiveGuide = {
-      id: 'change-wage',
-      title: 'Changing Pay Rates',
+  const vettingGuide: InteractiveGuide = {
+      id: 'vetting-review',
+      title: 'Reviewing Vetting Documents',
       steps: [
-          { content: 'Go to **Staff**.', route: '/admin/staff' },
-          { content: 'Click **Edit** on the staff member.', route: '/admin/staff' },
-          { content: 'Enter a new value in the **Hourly Rate** box. Leave it blank to use the Company Default.', route: '/admin/staff' },
-          { content: 'Click **Save Changes**.', route: '/admin/staff' }
+          { content: 'Go to the **Vetting** page.', route: '/admin/vetting' },
+          { content: 'Select a staff member from the left list.', route: '/admin/vetting' },
+          { content: 'Review their uploaded documents in the center panel.', route: '/admin/vetting' },
+          { content: 'Click **Pass Check** or **Accept** for each item. Once all are cleared, click **Finalize & Verify User**.', route: '/admin/vetting' }
       ]
   };
 
@@ -77,17 +86,7 @@ export const Help = () => {
       ]
   };
 
-  const gdprGuide: InteractiveGuide = {
-      id: 'gdpr-export',
-      title: 'Exporting Staff Data',
-      steps: [
-          { content: 'Navigate to **Staff**.', route: '/admin/staff' },
-          { content: 'Click the **Edit** button for the staff member.', route: '/admin/staff' },
-          { content: 'Scroll to the bottom and click **Export Data (GDPR)**. This downloads a JSON file of their profile.', route: '/admin/staff' }
-      ]
-  };
-
-  // 3. Infrastructure Guides
+  // 3. Infrastructure & Export
   const locationGuide: InteractiveGuide = {
       id: 'create-location',
       title: 'Creating a Location',
@@ -100,11 +99,12 @@ export const Help = () => {
 
   const exportGuide: InteractiveGuide = {
       id: 'export-timesheets',
-      title: 'Exporting Payroll',
+      title: 'Exporting Payroll Matrix',
       steps: [
           { content: 'Go to **Timesheets**.', route: '/admin/timesheets' },
-          { content: 'Click the **Export** button.', targetId: 'export-timesheets-btn', route: '/admin/timesheets' },
-          { content: 'Choose **Detailed CSV** for raw data or **Grouped by Staff** for payroll totals.', route: '/admin/timesheets' }
+          { content: 'Click the **Export** button in the top right.', route: '/admin/timesheets' },
+          { content: 'Select "Matrix View" for a grid layout. Ensure "Show In/Out Times" is checked for full detail.', route: '/admin/timesheets' },
+          { content: 'Click **Download Report**.', route: '/admin/timesheets' }
       ]
   };
 
@@ -127,79 +127,62 @@ export const Help = () => {
     },
     {
         id: 's4', category: 'staff',
-        question: 'Can I view my past pay?',
-        answer: 'Yes, go to the "Activity" tab. You can filter by month to see your estimated earnings based on your logged hours.'
+        question: 'What documents do I need to upload?',
+        answer: 'If your company has enabled Vetting, you will see an "Onboarding Checklist" on your dashboard. Follow the instructions to upload ID, proof of address, or other required documents.'
     },
 
-    // === ADMIN: SCHEDULING ===
+    // === ADMIN: ROTA ===
     {
         id: 'a1', category: 'admin',
-        question: 'How do I create a recurring shift?',
-        answer: 'You can repeat any shift for the rest of the week or specific days.',
-        guide: repeatShiftGuide
+        question: 'How do I publish the rota?',
+        answer: 'Shifts are created as drafts (grey). You must publish them to make them visible to staff.',
+        guide: publishRotaGuide
     },
     {
         id: 'a2', category: 'admin',
-        question: 'How do I quickly copy shifts?',
-        answer: 'You can duplicate a shift instantly or copy/paste it to another day using the right-click menu.',
-        guide: duplicateShiftGuide
+        question: 'How do I repeat a shift pattern?',
+        answer: 'You can repeat any shift for the rest of the week or specific days using the right-click menu.',
+        guide: repeatShiftGuide
     },
     {
         id: 'a3', category: 'admin',
-        question: 'Why can\'t my staff see the shifts?',
-        answer: 'Shifts are created as "Drafts" (grey/dashed) by default. You must click the **Publish** button in the top right of the Rota page to make them visible to staff.'
+        question: 'How do I handle time off requests?',
+        answer: 'Requests appear in the "Time Off" modal on the Rota page. You can approve or deny them there.',
+        guide: timeOffGuide
     },
 
-    // === ADMIN: STAFF MANAGEMENT ===
+    // === ADMIN: VETTING & STAFF ===
     {
         id: 'a4', category: 'admin',
-        question: 'New staff cannot clock in?',
-        answer: 'If "Require Approval" is enabled in settings, you must manually approve them first.',
-        guide: approveStaffGuide
+        question: 'How do I verify staff documents?',
+        answer: 'Go to the Vetting page. Select a user to see their uploads. You can accept or reject documents. Once all checks are passed, click "Finalize" to verify the user.',
+        guide: vettingGuide
     },
     {
         id: 'a5', category: 'admin',
-        question: 'How do I change a staff member\'s pay rate?',
-        answer: 'You can set a custom rate for an individual, or update the company default in Settings.',
-        guide: changeWageGuide
-    },
-    {
-        id: 'a6', category: 'admin',
         question: 'Can I update pay rates for multiple people?',
         answer: 'Yes, use the Bulk Adjust tool to update everyone on a specific rate at once (e.g. for minimum wage increases).',
         guide: bulkWageGuide
     },
     {
+        id: 'a6', category: 'admin',
+        question: 'New staff cannot clock in?',
+        answer: 'If "Require Approval" is enabled in settings, you must manually approve them first in the Staff section.',
+        guide: approveStaffGuide
+    },
+
+    // === ADMIN: PAYROLL & EXPORT ===
+    {
         id: 'a7', category: 'admin',
-        question: 'How do I delete a staff member?',
-        answer: (
-            <span>Go to the <strong>Staff</strong> page, click Edit on the user, then select "Remove Staff" at the bottom. This revokes their access immediately.</span>
-        )
+        question: 'What is the Payroll Matrix?',
+        answer: 'The Matrix is a high-level Excel view that lists Staff on rows and Dates on columns. It shows In/Out times and Total Hours in a grid, perfect for payroll entry.',
+        guide: exportGuide
     },
     {
         id: 'a8', category: 'admin',
-        question: 'How do I export data for a GDPR request?',
-        answer: 'You can download a full raw data dump for any specific employee from their profile.',
-        guide: gdprGuide
-    },
-
-    // === ADMIN: INFRASTRUCTURE ===
-    {
-        id: 'a9', category: 'admin',
-        question: 'How do I set up a new site?',
-        answer: 'You need to create a Location with a GPS geofence.',
+        question: 'How do I generate a QR poster?',
+        answer: 'Go to Locations, add a site, and then click "Poster". You can print this for staff to scan.',
         guide: locationGuide
-    },
-    {
-        id: 'a10', category: 'admin',
-        question: 'What is Kiosk Mode?',
-        answer: 'Kiosk Mode turns a tablet into a dedicated clock-in terminal. It generates a dynamic QR code that changes every 10 seconds to prevent "buddy punching" (cheating). You can find it in the main menu.'
-    },
-    {
-        id: 'a11', category: 'admin',
-        question: 'How do I get the payroll data?',
-        answer: 'You can export timesheets as CSV files, compatible with Excel, Xero, and Sage.',
-        guide: exportGuide
     },
 
     // === GENERAL ===
@@ -222,7 +205,7 @@ export const Help = () => {
   );
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8 pb-20">
+    <div className="max-w-3xl mx-auto space-y-8 pb-20 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">

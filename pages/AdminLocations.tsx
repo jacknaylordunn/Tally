@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getLocations, createLocation, deleteLocation, getCompany } from '../services/api';
 import { Location, Company } from '../types';
-import { MapPin, Plus, Printer, Trash2, X, Save, Building } from 'lucide-react';
+import { MapPin, Plus, Printer, Trash2, X, Save, Building, ArrowRight, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { LocationMap } from '../components/LocationMap';
 import QRCode from 'react-qr-code';
@@ -101,44 +101,49 @@ export const AdminLocations = () => {
         </header>
 
         {locations.length === 0 && !loading && (
-            <div className="text-center py-12 text-slate-500">
+            <div className="text-center py-12 text-slate-500 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-white/10">
                 <MapPin className="w-12 h-12 mx-auto mb-3 opacity-20" />
                 <p>No locations found. Add one to get started.</p>
             </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-3">
             {locations.map((loc, idx) => (
-                <div key={loc.id} className="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-white/10 flex flex-col justify-between min-h-[12rem] bg-white dark:bg-slate-800">
-                    <div>
-                        <div className="flex justify-between items-start mb-2">
-                            <div className="p-2 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-lg inline-block border border-brand-500/20">
-                                <MapPin className="w-6 h-6" />
-                            </div>
-                            <button 
-                                onClick={() => handleDelete(loc.id)}
-                                className="text-slate-400 hover:text-red-500 transition"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white truncate">{loc.name}</h3>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-mono bg-slate-100 dark:bg-white/5 inline-block px-2 py-0.5 rounded">
-                            {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-2 flex items-center space-x-1">
-                            <span>Radius: {loc.radius}m</span>
-                        </p>
-                    </div>
+                <div key={loc.id} className="glass-panel bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:shadow-md transition group">
                     
-                    <button 
-                        onClick={() => handlePrint(loc)}
-                        id={idx === 0 ? 'location-print-btn' : undefined}
-                        className="w-full mt-4 py-2 border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 rounded-lg flex items-center justify-center space-x-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition font-medium"
-                    >
-                        <Printer className="w-4 h-4" />
-                        <span>Generate Poster</span>
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 rounded-lg flex items-center justify-center border border-brand-100 dark:border-brand-500/20">
+                            <MapPin className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                {loc.name}
+                            </h3>
+                            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                <span className="font-mono bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded">{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
+                                <span>•</span>
+                                <span>Radius: {loc.radius}m</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 border-t md:border-t-0 border-slate-100 dark:border-white/5 pt-3 md:pt-0">
+                        <button 
+                            onClick={() => handlePrint(loc)}
+                            id={idx === 0 ? 'location-print-btn' : undefined}
+                            className="flex-1 md:flex-none px-4 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg transition flex items-center justify-center gap-2"
+                        >
+                            <Printer className="w-4 h-4" />
+                            <span>Poster</span>
+                        </button>
+                        <button 
+                            onClick={() => handleDelete(loc.id)}
+                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                            title="Delete Location"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             ))}
         </div>

@@ -1,11 +1,33 @@
 
 import React, { useEffect, useState } from 'react';
 import { getCompanyStaff, updateUserProfile, updateUserRateAndActiveShift, removeUserFromCompany, getCompany } from '../services/api';
-import { User, Company, UserRole, VettingItem } from '../types';
-import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus, UserMinus, Hash, FileText, ExternalLink, Check, AlertOctagon } from 'lucide-react';
+import { User, Company, UserRole, VettingItem, VettingSection } from '../types';
+import { Search, Save, Edit2, X, DollarSign, Briefcase, Trash2, Download, ArrowRightLeft, Users, ShieldCheck, CheckCircle, Clock, ChevronDown, Plus, UserMinus, Hash, FileText, ExternalLink, Check, AlertOctagon, Home, Lock, AlertTriangle, ChevronUp, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { TableRowSkeleton } from '../components/Skeleton';
 import { deleteField } from 'firebase/firestore';
+
+// External Verification Tools
+const CHECK_RESOURCES: Record<string, { label: string; url: string }[]> = {
+    'sia_license': [
+        { label: 'Check SIA Register', url: 'https://services.sia.homeoffice.gov.uk/ROL/' }
+    ],
+    'right_to_work': [
+        { label: 'Check Share Code', url: 'https://www.gov.uk/view-right-to-work' }
+    ],
+    'id_check': [
+        { label: 'Validate Identity Docs', url: 'https://www.gov.uk/validate-identity-document-for-employers' }
+    ],
+    'financial_bankruptcy': [
+        { label: 'Search Insolvency Register', url: 'https://www.gov.uk/search-bankruptcy-insolvency-register' }
+    ],
+    'criminal_basic': [
+        { label: 'Verify DBS Certificate', url: 'https://secure.crbonline.gov.uk/crsc/check?execution=e1s1' }
+    ],
+    'gap_reference': [
+        { label: 'HMRC Employment History', url: 'https://www.gov.uk/get-proof-employment-history' }
+    ]
+};
 
 export const AdminStaff = () => {
   const { user } = useAuth();
@@ -27,6 +49,7 @@ export const AdminStaff = () => {
 
   // Vetting Modal
   const [vettingUser, setVettingUser] = useState<User | null>(null);
+  const [vettingExpandedSection, setVettingExpandedSection] = useState<VettingSection>('identity');
 
   // Bulk Update Modal
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -174,11 +197,14 @@ export const AdminStaff = () => {
   };
 
   // Vetting Actions
-  const handleVettingAction = async (itemId: string, status: 'accepted' | 'rejected') => {
+  const handleVettingAction = async (itemId: string, status: 'accepted' | 'rejected' | 'pending') => {
       if (!vettingUser) return;
       
       const updatedData = vettingUser.vettingData?.map(item => {
           if (item.id === itemId) {
+              if (status === 'pending') {
+                  return { ...item, status, verifiedAt: undefined, verifiedBy: undefined };
+              }
               return { ...item, status, verifiedAt: Date.now(), verifiedBy: user?.name };
           }
           return item;
@@ -289,6 +315,159 @@ export const AdminStaff = () => {
 
   const currency = company?.settings.currency || '£';
 
+  // --- RENDER HELPERS ---
+  const renderItemDetails = (item: VettingItem) => {
+      return (
+          <div className="space-y-3 mt-2">
+              {/* Form Data Visualization */}
+              {item.formFields && item.data?.formValues && (
+                  <div className="grid grid-cols-2 gap-2 mb-2 bg-white dark:bg-white/5 p-2 rounded border border-slate-200 dark:border-white/10">
+                      {item.formFields.map(field => (
+                          <div key={field.key}>
+                              <span className="block text-[10px] text-slate-400 uppercase">{field.label}</span>
+                              <span className="text-sm font-bold text-slate-800 dark:text-slate-200 font-mono select-all">
+                                  {item.data?.formValues?.[field.key] || 'N/A'}
+                              </span>
+                          </div>
+                      ))}
+                  </div>
+              )}
+
+              {/* Address Logic */}
+              {item.type === 'address_history' && item.data?.addresses && (
+                  <div className="space-y-2">
+                      <p className="text-xs font-bold text-slate-500 uppercase">History</p>
+                      {item.data.addresses.map(addr => (
+                          <div key={addr.id} className="text-xs bg-white dark:bg-white/5 p-2 rounded border border-slate-200 dark:border-white/10 flex items-start gap-2">
+                              <Home className="w-3 h-3 mt-0.5 text-slate-400" />
+                              <div>
+                                  <span className="font-bold">{addr.line1}, {addr.city} {addr.postcode}</span>
+                                  <div className="text-slate-500">{addr.dateFrom} - {addr.current ? 'Present' : addr.dateTo}</div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              )}
+
+              {/* Employment Logic with Gaps */}
+              {item.type === 'employment_history' && item.data?.employment && (
+                  <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                          <p className="text-xs font-bold text-slate-500 uppercase">History</p>
+                          <span className="text-[10px] text-blue-500 font-bold bg-blue-50 dark:bg-blue-900/20 px-2 rounded">Gap Analysis Auto-Run</span>
+                      </div>
+                      
+                      {/* Calculate Gaps Visualization */}
+                      {(() => {
+                          const sortedJobs = [...item.data?.employment || []].sort((a,b) => a.dateFrom.localeCompare(b.dateFrom));
+                          const timeline = [];
+                          
+                          for(let i=0; i < sortedJobs.length; i++) {
+                              const job = sortedJobs[i];
+                              const prevJob = sortedJobs[i-1];
+                              
+                              // Gap Check
+                              if (prevJob) {
+                                  const prevEnd = prevJob.current ? new Date() : new Date(prevJob.dateTo!);
+                                  const currStart = new Date(job.dateFrom);
+                                  const diffTime = Math.abs(currStart.getTime() - prevEnd.getTime());
+                                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                                  
+                                  if (diffDays > 31) {
+                                      timeline.push(
+                                          <div key={`gap-${i}`} className="bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-900/50 flex items-center gap-2">
+                                              <AlertTriangle className="w-4 h-4 text-red-500" />
+                                              <div>
+                                                  <span className="text-xs font-bold text-red-600 dark:text-red-400">{Math.round(diffDays/30)} Month Gap</span>
+                                                  <div className="text-[10px] text-red-500">Between {prevJob.employerName} and {job.employerName}</div>
+                                              </div>
+                                          </div>
+                                      );
+                                  }
+                              }
+
+                              timeline.push(
+                                  <div key={job.id} className="text-xs bg-white dark:bg-white/5 p-2 rounded border border-slate-200 dark:border-white/10 flex items-start gap-2">
+                                      <Briefcase className="w-3 h-3 mt-0.5 text-slate-400" />
+                                      <div>
+                                          <span className="font-bold">{job.employerName}</span> - {job.role}
+                                          <div className="text-slate-500">{job.dateFrom} - {job.current ? 'Present' : job.dateTo}</div>
+                                      </div>
+                                  </div>
+                              );
+                          }
+                          return timeline;
+                      })()}
+                  </div>
+              )}
+
+              {/* Show Files (Support for multiple) */}
+              {(item.files && item.files.length > 0) && (
+                  <div className="space-y-1">
+                      <p className="text-xs font-bold text-slate-500 uppercase">Documents</p>
+                      {item.files.map((f, i) => (
+                          <a key={i} href={f.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-blue-600 hover:underline p-1 hover:bg-blue-50 rounded">
+                              <FileText className="w-3 h-3" />
+                              <span>{f.name}</span>
+                              <ExternalLink className="w-3 h-3 opacity-50" />
+                          </a>
+                      ))}
+                  </div>
+              )}
+              {/* Legacy Single File Support */}
+              {(!item.files || item.files.length === 0) && item.fileUrl && (
+                  <a href={item.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-blue-600 hover:underline p-1">
+                      <FileText className="w-3 h-3" />
+                      <span>{item.fileName || 'View Document'}</span>
+                      <ExternalLink className="w-3 h-3 opacity-50" />
+                  </a>
+              )}
+
+              {/* Admin Check Resources */}
+              {CHECK_RESOURCES[item.id] && (
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Verification Tools</p>
+                      <div className="flex flex-wrap gap-2">
+                          {CHECK_RESOURCES[item.id].map((res, idx) => (
+                              <a 
+                                  key={idx} 
+                                  href={res.url} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:text-brand-400 hover:border-brand-200 transition"
+                              >
+                                  <Globe className="w-3 h-3" />
+                                  {res.label}
+                                  <ExternalLink className="w-3 h-3 opacity-50" />
+                              </a>
+                          ))}
+                      </div>
+                  </div>
+              )}
+          </div>
+      );
+  };
+
+  const SECTION_TITLES: Record<string, string> = {
+      identity: 'Identity & Address',
+      history: 'Employment History',
+      financial: 'Financial Checks',
+      security: 'Security Clearance',
+      qualifications: 'Qualifications'
+  };
+
+  // Group items for display
+  const getGroupedVettingItems = () => {
+      if (!vettingUser?.vettingData) return {};
+      const groups: Record<string, VettingItem[]> = {};
+      vettingUser.vettingData.forEach(item => {
+          if (!groups[item.section]) groups[item.section] = [];
+          groups[item.section].push(item);
+      });
+      return groups;
+  };
+
+  // ... (Main Render) ...
   return (
     <div className="space-y-6">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -617,7 +796,7 @@ export const AdminStaff = () => {
         {/* Vetting Review Modal */}
         {vettingUser && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                <div className="glass-panel w-full max-w-2xl p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col">
+                <div className="glass-panel w-full max-w-3xl p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col">
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Review Vetting</h2>
@@ -629,110 +808,110 @@ export const AdminStaff = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-                        {vettingUser.vettingData?.map(item => (
-                            <div key={item.id} className="border border-slate-200 dark:border-white/10 rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h4 className="font-bold text-slate-900 dark:text-white text-sm">{item.label}</h4>
-                                        {item.fileName && (
-                                            <a href={item.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                                                <FileText className="w-3 h-3" /> {item.fileName} <ExternalLink className="w-3 h-3" />
-                                            </a>
+                        {(() => {
+                            const grouped = getGroupedVettingItems();
+                            return Object.keys(grouped).map(sectionKey => {
+                                const items = grouped[sectionKey];
+                                const isExpanded = vettingExpandedSection === sectionKey;
+                                
+                                return (
+                                    <div key={sectionKey} className="border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
+                                        <button 
+                                            onClick={() => setVettingExpandedSection(isExpanded ? null : sectionKey as VettingSection)}
+                                            className="w-full flex justify-between items-center bg-slate-50 dark:bg-slate-800 p-4 font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition"
+                                        >
+                                            <span className="uppercase text-xs tracking-wider">{SECTION_TITLES[sectionKey]}</span>
+                                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        </button>
+                                        
+                                        {isExpanded && (
+                                            <div className="p-4 space-y-4 bg-white dark:bg-slate-900/50">
+                                                {items.map(item => (
+                                                    <div key={item.id} className="border border-slate-100 dark:border-white/5 rounded-lg p-4 relative group">
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="flex-1">
+                                                                <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                                                                    {item.label}
+                                                                    {item.adminOnly && <span className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0.5 rounded uppercase">Admin Check</span>}
+                                                                </h4>
+                                                                <p className="text-xs text-slate-500 mb-2">{item.description}</p>
+                                                                
+                                                                {renderItemDetails(item)}
+                                                                
+                                                                {item.submittedAt && <p className="text-[10px] text-slate-400 mt-2">Submitted: {new Date(item.submittedAt).toLocaleString()}</p>}
+                                                                {item.verifiedAt && <p className="text-[10px] text-green-600 mt-1 font-bold">Verified by {item.verifiedBy} on {new Date(item.verifiedAt).toLocaleDateString()}</p>}
+                                                            </div>
+                                                            <div className="flex flex-col items-end gap-2 ml-4">
+                                                                {item.status === 'accepted' ? (
+                                                                    <div className="text-right">
+                                                                        <span className="text-green-600 text-xs font-bold flex items-center gap-1"><Check className="w-4 h-4" /> Verified</span>
+                                                                        <button onClick={() => handleVettingAction(item.id, 'pending')} className="text-[10px] text-slate-400 hover:underline mt-1">Undo</button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex gap-2">
+                                                                        <button onClick={() => handleVettingAction(item.id, 'rejected')} className="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold rounded hover:bg-red-200 dark:hover:bg-red-900/50">Reject</button>
+                                                                        <button onClick={() => handleVettingAction(item.id, 'accepted')} className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded hover:bg-green-200 dark:hover:bg-green-900/50">
+                                                                            {item.adminOnly ? 'Mark Complete' : 'Accept'}
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         )}
-                                        {item.submittedAt && <p className="text-[10px] text-slate-400 mt-1">Submitted: {new Date(item.submittedAt).toLocaleString()}</p>}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        {item.status === 'accepted' ? (
-                                            <span className="text-green-600 text-xs font-bold flex items-center gap-1"><Check className="w-4 h-4" /> Verified</span>
-                                        ) : (
-                                            <>
-                                                <button onClick={() => handleVettingAction(item.id, 'rejected')} className="px-3 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200">Reject</button>
-                                                <button onClick={() => handleVettingAction(item.id, 'accepted')} className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded hover:bg-green-200">Accept</button>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                                );
+                            });
+                        })()}
                     </div>
 
                     <div className="pt-6 border-t border-slate-200 dark:border-white/5">
                         <button 
                             onClick={handleCompleteVetting}
                             disabled={vettingUser.vettingData?.some(i => i.required && i.status !== 'accepted')}
-                            className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                            className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
                         >
-                            Finalize Verification
+                            <ShieldCheck className="w-5 h-5" />
+                            <span>Finalize Verification</span>
                         </button>
                     </div>
                 </div>
             </div>
         )}
 
-        {/* Bulk Update Modal */}
+        {/* Bulk Update Modal (Unchanged) */}
         {isBulkOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                {/* ... (Same as previous) ... */}
                 <div id="bulk-update-container" className="glass-panel w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Bulk Adjust Rates</h2>
-                        <button id="bulk-close-btn" onClick={() => setIsBulkOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
-                            <X className="w-6 h-6" />
-                        </button>
+                        <button id="bulk-close-btn" onClick={() => setIsBulkOpen(false)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="w-6 h-6" /></button>
                     </div>
-
                     <div className="space-y-4 mb-6">
                         <p className="text-sm text-slate-500 dark:text-slate-400">Find staff on a specific rate and update them all at once.</p>
-                        
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Find Rate</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-xs">{currency}</span>
-                                    <input 
-                                        type="number" step="0.01"
-                                        value={bulkOldRate} onChange={(e) => setBulkOldRate(e.target.value)}
-                                        className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
-                                        placeholder="12.21"
-                                    />
+                                    <input type="number" step="0.01" value={bulkOldRate} onChange={(e) => setBulkOldRate(e.target.value)} className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm" placeholder="12.21" />
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Replace With</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-xs">{currency}</span>
-                                    <input 
-                                        type="number" step="0.01"
-                                        value={bulkNewRate} onChange={(e) => setBulkNewRate(e.target.value)}
-                                        className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
-                                        placeholder="12.56"
-                                    />
+                                    <input type="number" step="0.01" value={bulkNewRate} onChange={(e) => setBulkNewRate(e.target.value)} className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm" placeholder="12.56" />
                                 </div>
                             </div>
                         </div>
-
-                        <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl flex items-start space-x-3 border border-slate-200 dark:border-white/5">
-                            <Users className="w-5 h-5 text-brand-500 mt-0.5" />
-                            <div className="text-xs text-slate-600 dark:text-slate-400">
-                                This will identify any staff members (including those on default rates) currently earning the <b>Find Rate</b>, and set their custom hourly rate to the <b>Replace With</b> rate.
-                            </div>
-                        </div>
                     </div>
-
                     <div className="flex gap-3">
-                         <button 
-                            onClick={() => setIsBulkOpen(false)}
-                            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            onClick={handleBulkUpdate}
-                            disabled={saving || !bulkOldRate || !bulkNewRate}
-                            className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2 disabled:opacity-70"
-                        >
-                            <ArrowRightLeft className="w-4 h-4" />
-                            <span>{saving ? 'Updating...' : 'Update All'}</span>
-                        </button>
+                         <button onClick={() => setIsBulkOpen(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl">Cancel</button>
+                        <button onClick={handleBulkUpdate} disabled={saving || !bulkOldRate || !bulkNewRate} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 disabled:opacity-70"><ArrowRightLeft className="w-4 h-4 mr-2 inline" /> Update All</button>
                     </div>
                 </div>
             </div>

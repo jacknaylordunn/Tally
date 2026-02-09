@@ -1,15 +1,17 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { UserRole, Company, Location } from '../types';
+import { useTheme } from '../context/ThemeContext';
+import { UserRole, Company, Location, VettingLevel } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent, Clock, Eye, EyeOff } from 'lucide-react';
-import { updateCompanySettings, getCompany, createLocation } from '../services/api';
+import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent, Clock, Eye, EyeOff, Palette, Image, Upload, FileCheck, Shield, Building } from 'lucide-react';
+import { updateCompanySettings, getCompany, createLocation, uploadCompanyLogo } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
 import { APP_NAME } from '../constants';
 
 export const Onboarding = () => {
   const { user } = useAuth();
+  const { setBrandColor } = useTheme();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -24,22 +26,31 @@ export const Onboarding = () => {
   const [radius, setRadius] = useState(200);
   const [locLoading, setLocLoading] = useState(false);
 
-  // Step 2: Payroll
+  // Step 2: Branding & Payroll
   const [currency, setCurrency] = useState('£');
   const [hourlyRate, setHourlyRate] = useState('15.00');
   const [holidayPayEnabled, setHolidayPayEnabled] = useState(false);
   const [holidayPayRate, setHolidayPayRate] = useState('12.07');
   const [showStaffEarnings, setShowStaffEarnings] = useState(true);
+  // Branding
+  const [logoUrl, setLogoUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [primaryColor, setPrimaryColor] = useState('#0ea5e9');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Step 3: Security & Features
   const [requireApproval, setRequireApproval] = useState(false);
   
-  // Rota Settings (Sub-settings of Step 3)
+  // Rota Settings
   const [enableRota, setEnableRota] = useState(false);
   const [allowBidding, setAllowBidding] = useState(true);
   const [requireTimeOffApproval, setRequireTimeOffApproval] = useState(true);
   const [rotaShowFinishTimes, setRotaShowFinishTimes] = useState(true);
   const [blockEarlyClockIn, setBlockEarlyClockIn] = useState(false);
+
+  // Vetting Settings
+  const [vettingEnabled, setVettingEnabled] = useState(false);
+  const [vettingLevel, setVettingLevel] = useState<VettingLevel>('BS7858');
   
   // Step 4: Invite
   const [copied, setCopied] = useState(false);
@@ -79,13 +90,50 @@ export const Onboarding = () => {
   }, []);
 
   if (!user) {
-      // Don't redirect immediately to avoid flicker, just return null 
-      // The ProtectedRoute or AuthContext will handle auth flow
       return null;
   }
 
   const handleFinish = () => {
     navigate(user.role === UserRole.ADMIN ? '/admin' : '/staff');
+  };
+
+  // --- AUTO COLOR EXTRACTION ---
+  const extractColor = (src: string) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.src = src;
+      img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+              ctx.drawImage(img, 0, 0, 1, 1);
+              const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+              // Simple hex conversion
+              const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+              setPrimaryColor(hex);
+              setBrandColor(hex); // Preview instantly
+          }
+      };
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0];
+          setLogoFile(file);
+          // Create object URL for preview and extraction
+          const objectUrl = URL.createObjectURL(file);
+          setLogoUrl(objectUrl);
+          extractColor(objectUrl);
+      }
+  };
+
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const url = e.target.value;
+      setLogoUrl(url);
+      setLogoFile(null); // Clear file if URL is pasted
+      if (url.length > 10) extractColor(url);
   };
 
   // --- ADMIN HANDLERS ---
@@ -116,31 +164,36 @@ export const Onboarding = () => {
               radius: radius
           };
           await createLocation(newLoc);
-          
-          // Also save the radius to company settings as a default
           await updateCompanySettings(user.currentCompanyId, {
               geofenceRadius: radius
           });
-          
           setStep(2);
       } catch (e) {
           console.error(e);
-          alert("Failed to save location. Please try again.");
+          alert("Failed to save location.");
       } finally {
           setLoading(false);
       }
   };
 
-  const handleAdminStep2_Payroll = async () => {
+  const handleAdminStep2_BrandPayroll = async () => {
       if (!user.currentCompanyId) return;
       setLoading(true);
       try {
+          let finalLogo = logoUrl;
+          // Upload if file selected
+          if (logoFile) {
+              finalLogo = await uploadCompanyLogo(user.currentCompanyId, logoFile);
+          }
+
           await updateCompanySettings(user.currentCompanyId, {
               defaultHourlyRate: parseFloat(hourlyRate),
               currency: currency,
               holidayPayEnabled,
               holidayPayRate: parseFloat(holidayPayRate),
-              showStaffEarnings
+              showStaffEarnings,
+              logoUrl: finalLogo,
+              primaryColor: primaryColor
           });
           setStep(3);
       } catch (e) {
@@ -157,11 +210,12 @@ export const Onboarding = () => {
            await updateCompanySettings(user.currentCompanyId, {
                requireApproval: requireApproval,
                rotaEnabled: enableRota,
-               // Only save rota sub-settings if enabled, otherwise they are ignored by logic
                rotaShowFinishTimes: enableRota ? rotaShowFinishTimes : undefined,
                allowShiftBidding: enableRota ? allowBidding : undefined,
                requireTimeOffApproval: enableRota ? requireTimeOffApproval : undefined,
-               blockEarlyClockIn: enableRota ? blockEarlyClockIn : undefined
+               blockEarlyClockIn: enableRota ? blockEarlyClockIn : undefined,
+               vettingEnabled: vettingEnabled,
+               vettingLevel: vettingEnabled ? vettingLevel : undefined
            });
            setStep(4);
        } catch (e) {
@@ -277,101 +331,98 @@ export const Onboarding = () => {
             </div>
         )}
 
-        {/* STEP 2: PAYROLL & CURRENCY */}
+        {/* STEP 2: BRAND & PAYROLL */}
         {step === 2 && (
             <div className="space-y-6 text-center">
                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <DollarSign className="w-8 h-8" />
+                    <Palette className="w-8 h-8" />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Payroll Basics</h2>
-                <p className="text-slate-500">Set the default currency and pay rate for your staff.</p>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Make it yours</h2>
+                <p className="text-slate-500">Customize your brand and payroll settings.</p>
                 
-                <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 space-y-6">
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="col-span-1">
-                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Currency</label>
-                             <div className="relative">
-                                <select 
-                                    value={currency}
-                                    onChange={(e) => setCurrency(e.target.value)}
-                                    className="w-full appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white py-3 px-4 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-bold text-center"
-                                >
-                                    <option value="£">GBP (£)</option>
-                                    <option value="$">USD ($)</option>
-                                    <option value="€">EUR (€)</option>
-                                    <option value="¥">JPY (¥)</option>
-                                    <option value="A$">AUD ($)</option>
-                                    <option value="C$">CAD ($)</option>
-                                </select>
-                             </div>
-                        </div>
-                        <div className="col-span-2">
-                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Default Hourly Rate</label>
-                             <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{currency}</span>
+                <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 space-y-6 text-left">
+                    
+                    {/* Branding Section */}
+                    <div className="space-y-4">
+                        <label className="block text-xs font-bold text-slate-500 uppercase">Logo & Color</label>
+                        <div className="flex gap-4 items-start">
+                            <div className="relative group cursor-pointer w-20 h-20 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden" onClick={() => fileInputRef.current?.click()}>
+                                {logoUrl ? (
+                                    <img src={logoUrl} alt="Preview" className="w-full h-full object-contain p-1" />
+                                ) : (
+                                    <Image className="w-8 h-8 text-slate-300" />
+                                )}
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                    <Upload className="w-6 h-6 text-white" />
+                                </div>
+                                <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" />
+                            </div>
+                            <div className="flex-1 space-y-3">
                                 <input 
-                                    type="number"
-                                    step="0.01"
-                                    value={hourlyRate}
-                                    onChange={(e) => setHourlyRate(e.target.value)}
-                                    className="w-full pl-8 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
-                                    placeholder="0.00"
+                                    type="text"
+                                    value={logoUrl}
+                                    onChange={handleUrlChange}
+                                    className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                                    placeholder="Paste Image URL or Upload Left"
                                 />
+                                <div className="flex items-center gap-2">
+                                    <input type="color" value={primaryColor} onChange={e => { setPrimaryColor(e.target.value); setBrandColor(e.target.value); }} className="w-8 h-8 rounded cursor-pointer border-0 p-0" />
+                                    <span className="text-xs text-slate-500">Brand Color (Auto-detected)</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
 
-                    {/* Staff Earnings Toggle */}
-                    <div className="flex items-center justify-between text-left">
-                        <div className="pr-4">
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                                {showStaffEarnings ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
-                                Staff View Earnings
-                            </h4>
-                            <p className="text-xs text-slate-500">Allow staff to see estimated pay in their dashboard.</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input type="checkbox" checked={showStaffEarnings} onChange={(e) => setShowStaffEarnings(e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                        </label>
-                    </div>
-
-                    {/* Holiday Pay Toggle */}
-                    <div className="flex items-center justify-between text-left">
-                         <div>
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">Calculate Holiday Pay</h4>
-                            <p className="text-xs text-slate-500">Automatically calculate holiday accrual in exports.</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input type="checkbox" checked={holidayPayEnabled} onChange={(e) => setHolidayPayEnabled(e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                        </label>
-                    </div>
-
-                    {/* Holiday Pay Rate Input (Conditional) */}
-                    {holidayPayEnabled && (
-                        <div className="text-left animate-in fade-in slide-in-from-top-2">
-                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Holiday Pay Rate (%)</label>
-                             <div className="relative">
-                                <input 
-                                    type="number"
-                                    step="0.01"
-                                    value={holidayPayRate}
-                                    onChange={(e) => setHolidayPayRate(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
-                                    placeholder="12.07"
-                                />
-                                <Percent className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    {/* Payroll Section */}
+                    <div className="space-y-4">
+                        <label className="block text-xs font-bold text-slate-500 uppercase">Payroll</label>
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="col-span-1">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Currency</label>
+                                <select 
+                                    value={currency}
+                                    onChange={(e) => setCurrency(e.target.value)}
+                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 py-2 px-2 rounded-lg text-sm font-bold"
+                                >
+                                    <option value="£">GBP (£)</option>
+                                    <option value="$">USD ($)</option>
+                                    <option value="€">EUR (€)</option>
+                                </select>
                             </div>
-                            <p className="text-xs text-slate-400 mt-2">12.07% is standard for UK casual workers.</p>
+                            <div className="col-span-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Default Hourly Rate</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">{currency}</span>
+                                    <input 
+                                        type="number" step="0.01" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)}
+                                        className="w-full pl-7 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 font-bold text-sm"
+                                    />
+                                </div>
+                            </div>
                         </div>
-                    )}
+                        
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Staff View Earnings</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={showStaffEarnings} onChange={(e) => setShowStaffEarnings(e.target.checked)} className="sr-only peer" />
+                                <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            </label>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Holiday Pay</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={holidayPayEnabled} onChange={(e) => setHolidayPayEnabled(e.target.checked)} className="sr-only peer" />
+                                <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 
                 <button 
-                    onClick={handleAdminStep2_Payroll} 
+                    onClick={handleAdminStep2_BrandPayroll} 
                     disabled={loading} 
                     className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold hover:bg-brand-700 transition flex items-center justify-center space-x-2 disabled:opacity-70"
                 >
@@ -380,7 +431,7 @@ export const Onboarding = () => {
             </div>
         )}
 
-        {/* STEP 3: SECURITY & FEATURES (With Rota Config) */}
+        {/* STEP 3: FEATURES (Vetting Added) */}
         {step === 3 && (
             <div className="space-y-6">
                 <div className="text-center">
@@ -407,6 +458,46 @@ export const Onboarding = () => {
 
                     <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
 
+                    {/* Vetting Toggle */}
+                    <div className="flex items-center justify-between">
+                         <div className="flex items-start space-x-3">
+                            <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
+                                <FileCheck className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white">Enable Vetting</h4>
+                                <p className="text-xs text-slate-500">Staff must upload documents before working.</p>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input type="checkbox" checked={vettingEnabled} onChange={(e) => setVettingEnabled(e.target.checked)} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                    </div>
+
+                    {vettingEnabled && (
+                        <div className="bg-white dark:bg-slate-900 rounded-lg p-4 space-y-2 border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
+                             <label className="block text-xs font-bold text-slate-500 uppercase">Vetting Standard</label>
+                             <div className="relative">
+                                 <select 
+                                    value={vettingLevel}
+                                    onChange={e => setVettingLevel(e.target.value as VettingLevel)}
+                                    className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm outline-none cursor-pointer"
+                                 >
+                                     <option value="BS7858">BS7858 (Security Standard)</option>
+                                     <option value="BPSS">BPSS (Gov Standard)</option>
+                                     <option value="PCI_DSS">PCI DSS (Finance)</option>
+                                     <option value="AIRSIDE">Airside Pass (Airport)</option>
+                                     <option value="CQC">CQC (Care)</option>
+                                     <option value="CUSTOM">Custom (Basic Checks)</option>
+                                 </select>
+                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500"><Building className="w-4 h-4" /></div>
+                             </div>
+                        </div>
+                    )}
+
+                    <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
+
                     {/* Rota Toggle */}
                      <div className="flex items-center justify-between">
                          <div className="flex items-start space-x-3">
@@ -424,7 +515,6 @@ export const Onboarding = () => {
                         </label>
                     </div>
 
-                    {/* Rota Sub-Settings (Conditional) */}
                     {enableRota && (
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-4 space-y-4 border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
                             <div className="flex items-center justify-between">
@@ -438,23 +528,6 @@ export const Onboarding = () => {
                                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Shift Bidding</span>
                                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                     <input type="checkbox" checked={allowBidding} onChange={(e) => setAllowBidding(e.target.checked)} className="sr-only peer" />
-                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                                </label>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Approval for Time Off</span>
-                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                    <input type="checkbox" checked={requireTimeOffApproval} onChange={(e) => setRequireTimeOffApproval(e.target.checked)} className="sr-only peer" />
-                                    <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                                </label>
-                            </div>
-                            <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 mt-3">
-                                <div>
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Block Early Clock In</span>
-                                    <span className="text-xs text-slate-500">Prevent check-in before "Early In" threshold.</span>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                    <input type="checkbox" checked={blockEarlyClockIn} onChange={(e) => setBlockEarlyClockIn(e.target.checked)} className="sr-only peer" />
                                     <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                 </label>
                             </div>
@@ -484,7 +557,6 @@ export const Onboarding = () => {
                     <p className="text-slate-500">Share this code with your staff to get them started.</p>
                 </div>
 
-                {/* Improved Code Card Layout for Mobile */}
                 <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 p-6 md:p-8 rounded-2xl relative overflow-hidden group hover:border-brand-500 transition-colors flex flex-col md:block">
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 md:mb-2 text-center md:text-left">Company Invite Code</p>
                     

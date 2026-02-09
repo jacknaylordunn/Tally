@@ -17,6 +17,7 @@ import { AdminLocations } from './pages/AdminLocations';
 import { AdminSettings } from './pages/AdminSettings';
 import { AdminStaff } from './pages/AdminStaff';
 import { AdminRota } from './pages/AdminRota';
+import { AdminVetting } from './pages/AdminVetting';
 import { StaffDashboard } from './pages/StaffDashboard';
 import { StaffActivity } from './pages/StaffActivity';
 import { StaffProfile } from './pages/StaffProfile';
@@ -83,6 +84,7 @@ const router = createHashRouter(createRoutesFromElements(
         <Route path="/admin" element={<ProtectedRoute role={UserRole.ADMIN}><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/timesheets" element={<ProtectedRoute role={UserRole.ADMIN}><AdminTimesheets /></ProtectedRoute>} />
         <Route path="/admin/rota" element={<ProtectedRoute role={UserRole.ADMIN}><AdminRota /></ProtectedRoute>} />
+        <Route path="/admin/vetting" element={<ProtectedRoute role={UserRole.ADMIN}><AdminVetting /></ProtectedRoute>} />
         <Route path="/admin/staff" element={<ProtectedRoute role={UserRole.ADMIN}><AdminStaff /></ProtectedRoute>} />
         <Route path="/admin/locations" element={<ProtectedRoute role={UserRole.ADMIN}><AdminLocations /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute role={UserRole.ADMIN}><AdminSettings /></ProtectedRoute>} />
