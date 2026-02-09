@@ -67,10 +67,14 @@ export const Onboarding = () => {
         }
         
         // Auto-detect Currency preference based on Timezone
-        const tz = Intl.DateTimeFormat(undefined).resolvedOptions().timeZone;
-        if (tz.includes('America')) setCurrency('$');
-        else if (tz.includes('Europe') && !tz.includes('London')) setCurrency('€');
-        else setCurrency('£'); // Default to GBP as requested
+        try {
+            const tz = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (tz.includes('America')) setCurrency('$');
+            else if (tz.includes('Europe') && !tz.includes('London')) setCurrency('€');
+            else setCurrency('£'); // Default to GBP as requested
+        } catch (e) {
+            setCurrency('£');
+        }
         
         // Attempt to get initial location for map
         navigator.geolocation.getCurrentPosition((pos) => {

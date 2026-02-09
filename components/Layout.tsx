@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { NAVIGATION_ITEMS, APP_NAME, LOGO_URL } from '../constants';
-import { LogOut, Menu, X, ChevronRight, LayoutGrid } from 'lucide-react';
+import { LogOut, Menu, X, ChevronRight, LayoutGrid, AlertTriangle, Mail } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { getCompany } from '../services/api';
 
@@ -12,12 +12,13 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, isEmailVerified, sendVerificationEmail } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [rotaEnabled, setRotaEnabled] = useState(false);
   const [vettingEnabled, setVettingEnabled] = useState(false);
   const [logo, setLogo] = useState(LOGO_URL);
+  const [verificationSent, setVerificationSent] = useState(false);
 
   useEffect(() => {
     const checkSettings = async () => {
@@ -63,6 +64,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       if (name.includes('Locations')) return 'nav-locations';
       if (name.includes('Settings')) return 'nav-settings';
       return `nav-${name.toLowerCase().replace(' ', '-')}`;
+  };
+
+  const handleResendVerification = async () => {
+      if(verificationSent) return;
+      await sendVerificationEmail();
+      setVerificationSent(true);
+      alert("Verification email sent! Please check your inbox.");
   };
 
   return (
@@ -155,6 +163,27 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* --- MAIN CONTENT AREA --- */}
       <main className="flex-1 md:ml-24 lg:ml-80 p-6 md:p-10 pt-24 md:pt-10 pb-24 md:pb-10 min-h-screen overflow-x-hidden print:m-0 print:p-0">
+        {!isEmailVerified && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/30 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">Verify your email address</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Please check your inbox for a verification link to secure your account.</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={handleResendVerification}
+                    disabled={verificationSent}
+                    className="text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+                >
+                    <Mail className="w-3 h-3" />
+                    {verificationSent ? 'Sent!' : 'Resend Email'}
+                </button>
+            </div>
+        )}
         <div className="max-w-7xl mx-auto animate-fade-in print:max-w-none">
             {children}
         </div>

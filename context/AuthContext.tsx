@@ -1,24 +1,35 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types';
-import { getUserProfile } from '../services/api';
-import { auth } from '../lib/firebase';
+import { User, UserRole } from '../types';
+import { getUserProfile, createUserProfile } from '../services/api';
+import { auth, googleProvider } from '../lib/firebase';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
   signOut, 
   setPersistence, 
   browserLocalPersistence, 
-  browserSessionPersistence 
+  browserSessionPersistence,
+  signInWithPopup,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  sendEmailVerification,
+  User as FirebaseUser
 } from 'firebase/auth';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password?: string, remember?: boolean) => Promise<void>; 
+  loginWithGoogle: () => Promise<void>;
+  loginWithMagicLink: (email: string) => Promise<void>;
+  completeMagicLinkLogin: (email: string, href: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  sendVerificationEmail: () => Promise<void>;
   isAuthenticated: boolean;
+  isEmailVerified: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,6 +40,7 @@ const CACHE_KEY = 'tally_user_backup';
 export const AuthProvider = ({ children }: { children?: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   useEffect(() => {
     // 1. Enforce Long-Term Persistence
@@ -37,6 +49,8 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
     // 2. Auth Listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
+            setIsEmailVerified(firebaseUser.emailVerified);
+
             // A. Optimistic Load: Check Local Storage first to prevent UI flicker
             const cachedData = localStorage.getItem(CACHE_KEY);
             if (cachedData && !user) {
@@ -66,8 +80,7 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
                     localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
                 } else {
                     console.error("Profile missing after retry.");
-                    // Do not setUser(null) here immediately if we have a cache, 
-                    // but if cache was empty, user stays null and app will redirect to login.
+                    // Do not setUser(null) here immediately if we have a cache
                 }
             } catch (e) {
                 console.error("Error fetching profile", e);
@@ -75,6 +88,7 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
         } else {
             // User definitely logged out
             setUser(null);
+            setIsEmailVerified(false);
             localStorage.removeItem(CACHE_KEY);
         }
         setLoading(false);
@@ -82,6 +96,33 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
 
     return () => unsubscribe();
   }, []);
+
+  const ensureProfileExists = async (firebaseUser: FirebaseUser) => {
+      let profile = await getUserProfile(firebaseUser.uid);
+      
+      if (!profile) {
+          // Create basic shell profile for OAuth/MagicLink users
+          const fullName = firebaseUser.displayName || 'Staff Member';
+          const parts = fullName.split(' ');
+          const firstName = parts[0] || 'Staff';
+          const lastName = parts.slice(1).join(' ') || '';
+
+          const newProfile: User = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email!,
+              name: fullName,
+              firstName: firstName,
+              lastName: lastName,
+              role: UserRole.STAFF, // Default to staff
+              isApproved: true, // Auto-approve OAuth accounts for access, but they need company join
+              vettingStatus: 'not_started',
+              vettingData: []
+          };
+          await createUserProfile(newProfile);
+          profile = newProfile;
+      }
+      return profile;
+  };
 
   const login = async (email: string, password?: string, remember: boolean = true) => {
     if (!password) throw new Error("Password required");
@@ -99,6 +140,48 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
+  const loginWithGoogle = async () => {
+      try {
+          const result = await signInWithPopup(auth, googleProvider);
+          const profile = await ensureProfileExists(result.user);
+          setUser(profile);
+          localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
+      } catch (error) {
+          console.error("Google Sign In Error", error);
+          throw error;
+      }
+  };
+
+  const loginWithMagicLink = async (email: string) => {
+      // Construct a clean, absolute URL for the redirect
+      // Using origin ensures protocol and host are correct (e.g. http://localhost:5173 or https://myapp.com)
+      const origin = window.location.origin;
+      const cleanUrl = `${origin}/#/login`;
+
+      console.log(`Attempting Magic Link to: ${cleanUrl}`);
+
+      const actionCodeSettings = {
+          url: cleanUrl, 
+          handleCodeInApp: true,
+      };
+      
+      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+      // Save email for completion step
+      window.localStorage.setItem('emailForSignIn', email);
+  };
+
+  const completeMagicLinkLogin = async (email: string, href: string) => {
+      if (isSignInWithEmailLink(auth, href)) {
+          const result = await signInWithEmailLink(auth, email, href);
+          window.localStorage.removeItem('emailForSignIn');
+          const profile = await ensureProfileExists(result.user);
+          setUser(profile);
+          localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
+      } else {
+          throw new Error("Invalid sign-in link");
+      }
+  };
+
   const logout = async () => {
     await signOut(auth);
     setUser(null);
@@ -112,11 +195,36 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
             setUser(profile);
             localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
         }
+        await auth.currentUser.reload();
+        setIsEmailVerified(auth.currentUser.emailVerified);
     }
   };
 
+  const sendVerificationEmail = async () => {
+      if (auth.currentUser && !auth.currentUser.emailVerified) {
+          try {
+              await sendEmailVerification(auth.currentUser);
+          } catch (e) {
+              console.error("Failed to send verification email", e);
+              // Don't throw, just log
+          }
+      }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshSession, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ 
+        user, 
+        loading, 
+        login, 
+        loginWithGoogle, 
+        loginWithMagicLink, 
+        completeMagicLinkLogin, 
+        logout, 
+        refreshSession, 
+        sendVerificationEmail, 
+        isAuthenticated: !!user,
+        isEmailVerified
+    }}>
       {children}
     </AuthContext.Provider>
   );

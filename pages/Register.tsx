@@ -11,7 +11,7 @@ import { createUserWithEmailAndPassword, setPersistence, browserLocalPersistence
 
 export const Register = () => {
   const navigate = useNavigate();
-  const { refreshSession } = useAuth();
+  const { refreshSession, sendVerificationEmail } = useAuth();
   
   // Wizard State
   const [step, setStep] = useState(1);
@@ -166,7 +166,11 @@ export const Register = () => {
         };
         await createUserProfile(newUser);
         
+        // 4. Send Verification Email & Refresh
+        await sendVerificationEmail();
         await refreshSession();
+        
+        alert("Account created successfully! Please check your email to verify your account.");
         navigate('/onboarding');
 
     } catch (err: any) {
