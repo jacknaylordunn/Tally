@@ -143,7 +143,7 @@ export const Login = () => {
       if (err.message === 'ACCOUNT_NOT_FOUND') {
           setError(
               <span>
-                  Account not found. Please <Link to="/register" className="font-bold underline hover:text-red-700">Create an Account</Link> first.
+                  Account not found. Please <Link to="/register" className="font-bold underline hover:text-brand-600">Create an Account</Link> first.
               </span>
           );
       } else if (err.code === 'auth/invalid-credential') {
@@ -196,10 +196,15 @@ export const Login = () => {
           return;
       }
       try {
-          await sendPasswordResetEmail(auth, email);
-          setStatusMsg(`Reset link sent to ${email}`);
+          const actionCodeSettings = {
+              url: `${window.location.origin}/#/login`,
+              handleCodeInApp: true,
+          };
+          await sendPasswordResetEmail(auth, email, actionCodeSettings);
+          setStatusMsg(`Reset link sent to ${email}. Check spam folder if not received.`);
           setError('');
       } catch (err: any) {
+          console.error("Password reset error", err);
           setError('Could not send reset email. Verify the address is correct.');
       }
   };

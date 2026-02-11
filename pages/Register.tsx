@@ -186,15 +186,6 @@ export const Register = () => {
           // For now, simpler to replicate the logic:
           
           if (role === UserRole.ADMIN) {
-              // Admin flow is complex with Google Popup because we need the UID to make the company.
-              // So registerWithGoogle handles profile creation. 
-              // We need to do company creation *then* profile creation.
-              
-              // We'll trust registerWithGoogle to return or handle the user, then we do post-processing if needed.
-              // However, context doesn't expose the user immediately in the same scope easily.
-              // Better approach: Let context create the USER profile, then we create the COMPANY if admin.
-              // Actually, context `registerWithGoogle` creates the profile. We need to pass the company ID.
-              
               // Admin Strategy:
               // 1. Generate Company ID now.
               // 2. Pass it to registerWithGoogle.
