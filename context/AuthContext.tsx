@@ -23,6 +23,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password?: string, remember?: boolean) => Promise<void>; 
   loginWithGoogle: () => Promise<void>;
+  registerWithGoogle: (profileData: Partial<User>) => Promise<void>; // New method for registration
   loginWithMagicLink: (email: string) => Promise<void>;
   completeMagicLinkLogin: (email: string, href: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -51,7 +52,7 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
         if (firebaseUser) {
             setIsEmailVerified(firebaseUser.emailVerified);
 
-            // A. Optimistic Load: Check Local Storage first to prevent UI flicker
+            // A. Optimistic Load
             const cachedData = localStorage.getItem(CACHE_KEY);
             if (cachedData && !user) {
                 try {
@@ -64,23 +65,21 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
                 }
             }
 
-            // B. Network/Firestore Fetch (The Source of Truth)
+            // B. Network/Firestore Fetch
             try {
                 let profile = await getUserProfile(firebaseUser.uid);
                 
-                // Retry logic for registration race conditions
-                if (!profile) {
-                    console.warn("User authenticated but profile not found. Retrying...");
-                    await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s
-                    profile = await getUserProfile(firebaseUser.uid);
-                }
-
+                // If profile doesn't exist, it might be a new registration in progress.
+                // We do NOT auto-create here anymore.
+                
                 if (profile) {
                     setUser(profile);
                     localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
                 } else {
-                    console.error("Profile missing after retry.");
-                    // Do not setUser(null) here immediately if we have a cache
+                    // User is authenticated in Firebase but has no profile in Firestore.
+                    // This is valid during the split-second of registration, 
+                    // OR invalid if they tried to login without registering.
+                    // We leave user as null here. The Login function will handle the error.
                 }
             } catch (e) {
                 console.error("Error fetching profile", e);
@@ -97,33 +96,7 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const ensureProfileExists = async (firebaseUser: FirebaseUser) => {
-      let profile = await getUserProfile(firebaseUser.uid);
-      
-      if (!profile) {
-          // Create basic shell profile for OAuth/MagicLink users
-          const fullName = firebaseUser.displayName || 'Staff Member';
-          const parts = fullName.split(' ');
-          const firstName = parts[0] || 'Staff';
-          const lastName = parts.slice(1).join(' ') || '';
-
-          const newProfile: User = {
-              id: firebaseUser.uid,
-              email: firebaseUser.email!,
-              name: fullName,
-              firstName: firstName,
-              lastName: lastName,
-              role: UserRole.STAFF, // Default to staff
-              isApproved: true, // Auto-approve OAuth accounts for access, but they need company join
-              vettingStatus: 'not_started',
-              vettingData: []
-          };
-          await createUserProfile(newProfile);
-          profile = newProfile;
-      }
-      return profile;
-  };
-
+  // Standard Login
   const login = async (email: string, password?: string, remember: boolean = true) => {
     if (!password) throw new Error("Password required");
     
@@ -132,35 +105,84 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
     
     const credential = await signInWithEmailAndPassword(auth, email, password);
     
-    // Immediate fetch to prime state
     const profile = await getUserProfile(credential.user.uid);
-    if (profile) {
-        setUser(profile);
-        localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
+    if (!profile) {
+        // Valid credentials, but no database record.
+        await signOut(auth);
+        throw new Error("ACCOUNT_NOT_FOUND");
     }
+    
+    setUser(profile);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
   };
 
+  // Google LOGIN ONLY
   const loginWithGoogle = async () => {
       try {
           const result = await signInWithPopup(auth, googleProvider);
-          const profile = await ensureProfileExists(result.user);
+          const profile = await getUserProfile(result.user.uid);
+          
+          if (!profile) {
+              // User tried to login, but hasn't registered yet.
+              // Delete the auth session immediately to prevent "half-logged-in" state
+              await result.user.delete().catch(() => signOut(auth)); 
+              throw new Error("ACCOUNT_NOT_FOUND");
+          }
+
           setUser(profile);
           localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
-      } catch (error) {
+      } catch (error: any) {
           console.error("Google Sign In Error", error);
+          if (error.message === "ACCOUNT_NOT_FOUND") throw error;
           throw error;
       }
   };
 
+  // NEW: Google REGISTRATION
+  const registerWithGoogle = async (profileData: Partial<User>) => {
+      try {
+          const result = await signInWithPopup(auth, googleProvider);
+          const firebaseUser = result.user;
+
+          // Check if profile already exists (accidental registration of existing user)
+          const existingProfile = await getUserProfile(firebaseUser.uid);
+          if (existingProfile) {
+              // Just log them in
+              setUser(existingProfile);
+              localStorage.setItem(CACHE_KEY, JSON.stringify(existingProfile));
+              return;
+          }
+
+          // Create new profile using Auth UID + Form Data
+          const newProfile: User = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email!,
+              name: profileData.name || firebaseUser.displayName || 'Staff Member',
+              firstName: profileData.firstName || 'Staff',
+              lastName: profileData.lastName || '',
+              role: profileData.role || UserRole.STAFF,
+              currentCompanyId: profileData.currentCompanyId,
+              isApproved: profileData.isApproved ?? true,
+              vettingStatus: profileData.vettingStatus,
+              vettingData: []
+          };
+
+          await createUserProfile(newProfile);
+          setUser(newProfile);
+          localStorage.setItem(CACHE_KEY, JSON.stringify(newProfile));
+
+      } catch (error) {
+          console.error("Google Registration Error", error);
+          throw error;
+      }
+  };
+
+  // Magic Link LOGIN ONLY
   const loginWithMagicLink = async (email: string) => {
-      // Construct a clean, absolute URL for the redirect
-      // Using origin ensures protocol and host are correct (e.g. http://localhost:5173 or https://www.tallyd.app)
       const origin = window.location.origin;
-      // We use hash routing in App.tsx, so /#/login is the correct return path
       const cleanUrl = `${origin}/#/login`;
 
       console.log(`[Auth] Preparing Magic Link. Redirect URL: ${cleanUrl}`);
-      console.log(`[Auth] If this fails with auth/unauthorized-domain, ensure ${window.location.hostname} is whitelisted in Firebase Console.`);
 
       const actionCodeSettings = {
           url: cleanUrl, 
@@ -168,7 +190,6 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
       };
       
       await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-      // Save email for completion step
       window.localStorage.setItem('emailForSignIn', email);
   };
 
@@ -176,7 +197,15 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
       if (isSignInWithEmailLink(auth, href)) {
           const result = await signInWithEmailLink(auth, email, href);
           window.localStorage.removeItem('emailForSignIn');
-          const profile = await ensureProfileExists(result.user);
+          
+          const profile = await getUserProfile(result.user.uid);
+          
+          if (!profile) {
+              // Valid magic link, but no database record.
+              await result.user.delete().catch(() => signOut(auth));
+              throw new Error("ACCOUNT_NOT_FOUND");
+          }
+
           setUser(profile);
           localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
       } else {
@@ -208,7 +237,6 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
               await sendEmailVerification(auth.currentUser);
           } catch (e) {
               console.error("Failed to send verification email", e);
-              // Don't throw, just log
           }
       }
   };
@@ -218,7 +246,8 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
         user, 
         loading, 
         login, 
-        loginWithGoogle, 
+        loginWithGoogle,
+        registerWithGoogle, 
         loginWithMagicLink, 
         completeMagicLinkLogin, 
         logout, 

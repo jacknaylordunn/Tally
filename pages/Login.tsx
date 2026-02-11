@@ -86,7 +86,7 @@ export const Login = () => {
   const [loginMode, setLoginMode] = useState<'password' | 'magic'>('password');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<React.ReactNode>('');
   const [statusMsg, setStatusMsg] = useState('');
 
   // Carousel State
@@ -113,7 +113,7 @@ export const Login = () => {
                       setStatusMsg('Successfully verified! Signing you in...');
                   })
                   .catch((err) => {
-                      setError(err.message || "Invalid or expired link.");
+                      handleAuthError(err);
                       setIsSubmitting(false);
                   });
           }
@@ -138,6 +138,27 @@ export const Login = () => {
     }
   }, [isAuthenticated, user, navigate]);
 
+  const handleAuthError = (err: any) => {
+      console.error("Auth Error:", err);
+      if (err.message === 'ACCOUNT_NOT_FOUND') {
+          setError(
+              <span>
+                  Account not found. Please <Link to="/register" className="font-bold underline hover:text-red-700">Create an Account</Link> first.
+              </span>
+          );
+      } else if (err.code === 'auth/invalid-credential') {
+          setError('Incorrect email or password.');
+      } else if (err.code === 'auth/too-many-requests') {
+          setError('Too many failed attempts. Try again later.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+          setError('This sign-in method is currently disabled.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+          setError(`Configuration Error: Domain "${window.location.hostname}" not authorized in Firebase.`);
+      } else {
+          setError(err.message || 'Login failed. Please check your connection.');
+      }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -152,20 +173,7 @@ export const Login = () => {
             setStatusMsg(`Magic link sent to ${email}. Click the link in your email to sign in.`);
         }
     } catch (err: any) {
-        console.error("Login Error:", err);
-        if (err.code === 'auth/invalid-credential') {
-            setError('Incorrect email or password.');
-        } else if (err.code === 'auth/too-many-requests') {
-            setError('Too many failed attempts. Try again later.');
-        } else if (err.code === 'auth/operation-not-allowed') {
-            setError('This sign-in method is currently disabled in system settings. Please contact admin.');
-        } else if (err.code === 'auth/unauthorized-domain') {
-            setError(`Configuration Error: The domain "${window.location.hostname}" is not authorized. You MUST add it to the Firebase Console under Authentication > Settings > Authorized Domains.`);
-        } else if (err.code === 'auth/invalid-continue-uri') {
-            setError(`The redirect URL for "${window.location.hostname}" is not authorized. Check Firebase Console whitelists.`);
-        } else {
-            setError(err.message || 'Login failed. Please check your connection.');
-        }
+        handleAuthError(err);
     } finally {
         setIsSubmitting(false);
     }
@@ -177,16 +185,7 @@ export const Login = () => {
       try {
           await loginWithGoogle();
       } catch (err: any) {
-          console.error("Google Login Error:", err);
-          if (err.code === 'auth/popup-closed-by-user') {
-              setError('Sign-in cancelled.');
-          } else if (err.code === 'auth/operation-not-allowed') {
-              setError('Google Sign-In is not enabled in Firebase Console.');
-          } else if (err.code === 'auth/unauthorized-domain') {
-              setError(`Configuration Error: The domain "${window.location.hostname}" is not authorized. You MUST add it to the Firebase Console under Authentication > Settings > Authorized Domains.`);
-          } else {
-              setError(err.message || "Google Sign-In failed.");
-          }
+          handleAuthError(err);
           setIsSubmitting(false);
       }
   };
