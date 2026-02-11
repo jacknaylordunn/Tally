@@ -50,7 +50,8 @@ service cloud.firestore {
 
     // --- COMPANIES ---
     match /companies/{companyId} {
-      allow read: if isAuthenticated();
+      // Public read required for Invite Code verification during sign-up
+      allow read: if true;
       allow create: if isAuthenticated();
       allow update: if isCompanyOwner() || isCompanyAdmin(companyId);
       allow delete: if isCompanyOwner();

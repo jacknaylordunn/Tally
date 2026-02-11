@@ -196,11 +196,8 @@ export const Login = () => {
           return;
       }
       try {
-          const actionCodeSettings = {
-              url: `${window.location.origin}/#/login`,
-              handleCodeInApp: true,
-          };
-          await sendPasswordResetEmail(auth, email, actionCodeSettings);
+          // Standard Firebase reset email (opens in browser, not app)
+          await sendPasswordResetEmail(auth, email);
           setStatusMsg(`Reset link sent to ${email}. Check spam folder if not received.`);
           setError('');
       } catch (err: any) {

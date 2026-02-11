@@ -88,8 +88,9 @@ export const Register = () => {
               setError("Invalid Invite Code. Please check with your manager.");
               setVerifiedCompany(null);
           }
-      } catch (e) {
-          setError("Error verifying code.");
+      } catch (e: any) {
+          console.error("Verification error:", e);
+          setError("Error verifying code. Please check your connection.");
       } finally {
           setIsVerifyingCode(false);
       }
