@@ -79,12 +79,18 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 };
 
 export const createUserProfile = async (user: User): Promise<void> => {
-    await setDoc(doc(db, USERS_REF, user.id), user);
+    const cleanUser = Object.fromEntries(
+        Object.entries(user).filter(([_, v]) => v !== undefined)
+    );
+    await setDoc(doc(db, USERS_REF, user.id), cleanUser as any);
 };
 
 export const updateUserProfile = async (userId: string, updates: Partial<User>): Promise<void> => {
     const docRef = doc(db, USERS_REF, userId);
-    await updateDoc(docRef, updates);
+    const cleanUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+    await updateDoc(docRef, cleanUpdates);
 };
 
 // NEW: Purge all vetting data for a user (GDPR)
@@ -131,7 +137,10 @@ export const updateUserRateAndActiveShift = async (userId: string, companyId: st
     } else {
         userUpdates.customHourlyRate = deleteField();
     }
-    batch.update(userRef, userUpdates);
+    const cleanUserUpdates = Object.fromEntries(
+        Object.entries(userUpdates).filter(([_, v]) => v !== undefined)
+    );
+    batch.update(userRef, cleanUserUpdates);
 
     // 2. Determine Effective Rate for Active Shift
     let effectiveRate = 0;
@@ -264,7 +273,10 @@ export const getCompanyByCode = async (code: string): Promise<Company | null> =>
 };
 
 export const createCompany = async (company: Company): Promise<void> => {
-    await setDoc(doc(db, COMPANIES_REF, company.id), company);
+    const cleanCompany = Object.fromEntries(
+        Object.entries(company).filter(([_, v]) => v !== undefined)
+    );
+    await setDoc(doc(db, COMPANIES_REF, company.id), cleanCompany as any);
 };
 
 export const getCompany = async (companyId: string): Promise<Company> => {
@@ -276,12 +288,18 @@ export const getCompany = async (companyId: string): Promise<Company> => {
 
 export const updateCompany = async (companyId: string, updates: Partial<Company>): Promise<void> => {
     const docRef = doc(db, COMPANIES_REF, companyId);
-    await updateDoc(docRef, updates);
+    const cleanUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+    await updateDoc(docRef, cleanUpdates);
 }
 
 export const updateCompanySettings = async (companyId: string, settings: Partial<Company['settings']>): Promise<void> => {
     const company = await getCompany(companyId);
-    const newSettings = { ...company.settings, ...settings };
+    const cleanSettings = Object.fromEntries(
+        Object.entries(settings).filter(([_, v]) => v !== undefined)
+    );
+    const newSettings = { ...company.settings, ...cleanSettings };
     const docRef = doc(db, COMPANIES_REF, companyId);
     await updateDoc(docRef, { settings: newSettings });
 };
@@ -305,7 +323,10 @@ export const getLocations = async (companyId: string): Promise<Location[]> => {
 };
 
 export const createLocation = async (location: Location): Promise<void> => {
-    await setDoc(doc(db, LOCATIONS_REF, location.id), location);
+    const cleanLocation = Object.fromEntries(
+        Object.entries(location).filter(([_, v]) => v !== undefined)
+    );
+    await setDoc(doc(db, LOCATIONS_REF, location.id), cleanLocation as any);
 };
 
 export const deleteLocation = async (locationId: string): Promise<void> => {
@@ -325,7 +346,10 @@ export const updateAllLocationsRadius = async (companyId: string, radius: number
 // --- ROTA / SCHEDULE SYSTEM ---
 
 export const createScheduleShift = async (shift: ScheduleShift): Promise<void> => {
-    await setDoc(doc(db, SCHEDULE_REF, shift.id), shift);
+    const cleanShift = Object.fromEntries(
+        Object.entries(shift).filter(([_, v]) => v !== undefined)
+    );
+    await setDoc(doc(db, SCHEDULE_REF, shift.id), cleanShift as any);
 };
 
 export const createBatchScheduleShifts = async (shifts: ScheduleShift[]): Promise<void> => {
@@ -340,21 +364,30 @@ export const createBatchScheduleShifts = async (shifts: ScheduleShift[]): Promis
         const chunkBatch = writeBatch(db);
         chunk.forEach(shift => {
             const ref = doc(db, SCHEDULE_REF, shift.id);
-            chunkBatch.set(ref, shift);
+            const cleanShift = Object.fromEntries(
+                Object.entries(shift).filter(([_, v]) => v !== undefined)
+            );
+            chunkBatch.set(ref, cleanShift as any);
         });
         await chunkBatch.commit();
     }
 };
 
 export const updateScheduleShift = async (shiftId: string, updates: Partial<ScheduleShift>): Promise<void> => {
-    await updateDoc(doc(db, SCHEDULE_REF, shiftId), updates);
+    const cleanUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+    await updateDoc(doc(db, SCHEDULE_REF, shiftId), cleanUpdates);
 };
 
 export const updateBatchScheduleShifts = async (updates: { id: string, data: Partial<ScheduleShift> }[]): Promise<void> => {
     const batch = writeBatch(db);
     updates.forEach(u => {
         const ref = doc(db, SCHEDULE_REF, u.id);
-        batch.update(ref, u.data);
+        const cleanData = Object.fromEntries(
+            Object.entries(u.data).filter(([_, v]) => v !== undefined)
+        );
+        batch.update(ref, cleanData);
     });
     await batch.commit();
 };
@@ -498,7 +531,10 @@ export const publishDrafts = async (companyId: string, startTime?: number, endTi
 // --- TIME OFF ---
 
 export const createTimeOffRequest = async (request: TimeOffRequest): Promise<void> => {
-    await setDoc(doc(db, TIMEOFF_REF, request.id), request);
+    const cleanRequest = Object.fromEntries(
+        Object.entries(request).filter(([_, v]) => v !== undefined)
+    );
+    await setDoc(doc(db, TIMEOFF_REF, request.id), cleanRequest as any);
 };
 
 export const updateTimeOffStatus = async (requestId: string, status: 'approved' | 'rejected'): Promise<void> => {
@@ -586,7 +622,10 @@ export const getStaffActivity = async (userId: string): Promise<Shift[]> => {
 
 export const updateShift = async (shiftId: string, updates: Partial<Shift>): Promise<void> => {
     const docRef = doc(db, SHIFTS_REF, shiftId);
-    await updateDoc(docRef, updates);
+    const cleanUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+    await updateDoc(docRef, cleanUpdates);
 };
 
 // NEW: Break Management
@@ -644,7 +683,10 @@ export const createManualShift = async (
         createdByName: creatorName,
         createdById: creatorId
     };
-    await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
+    const cleanShift = Object.fromEntries(
+        Object.entries(newShift).filter(([_, v]) => v !== undefined)
+    );
+    await setDoc(doc(db, SHIFTS_REF, shiftId), cleanShift as any);
 };
 
 // Core Clock-In Logic
@@ -802,13 +844,11 @@ const performClockInOut = async (user: User, company: Company, method: 'dynamic_
             ...rotaData 
         };
 
-        Object.keys(newShift).forEach(key => {
-            if ((newShift as any)[key] === undefined) {
-                delete (newShift as any)[key];
-            }
-        });
+        const cleanShift = Object.fromEntries(
+            Object.entries(newShift).filter(([_, v]) => v !== undefined)
+        );
 
-        await setDoc(doc(db, SHIFTS_REF, shiftId), newShift);
+        await setDoc(doc(db, SHIFTS_REF, shiftId), cleanShift as any);
         await updateUserProfile(user.id, { activeShiftId: shiftId });
         return { success: true, message: 'Clocked In Successfully.', shift: newShift };
     }

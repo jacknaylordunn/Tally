@@ -214,12 +214,14 @@ export const Onboarding = () => {
            await updateCompanySettings(user.currentCompanyId, {
                requireApproval: requireApproval,
                rotaEnabled: enableRota,
-               rotaShowFinishTimes: enableRota ? rotaShowFinishTimes : undefined,
-               allowShiftBidding: enableRota ? allowBidding : undefined,
-               requireTimeOffApproval: enableRota ? requireTimeOffApproval : undefined,
-               blockEarlyClockIn: enableRota ? blockEarlyClockIn : undefined,
+               ...(enableRota ? {
+                   rotaShowFinishTimes,
+                   allowShiftBidding: allowBidding,
+                   requireTimeOffApproval,
+                   blockEarlyClockIn
+               } : {}),
                vettingEnabled: vettingEnabled,
-               vettingLevel: vettingEnabled ? vettingLevel : undefined
+               ...(vettingEnabled ? { vettingLevel } : {})
            });
            setStep(4);
        } catch (e) {

@@ -154,7 +154,7 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
               role: profileData.role || UserRole.STAFF,
               currentCompanyId: profileData.currentCompanyId,
               isApproved: profileData.isApproved ?? true,
-              vettingStatus: profileData.vettingStatus,
+              ...(profileData.vettingStatus ? { vettingStatus: profileData.vettingStatus } : {}),
               vettingData: []
           };
 

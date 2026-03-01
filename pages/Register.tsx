@@ -237,7 +237,7 @@ export const Register = () => {
                   role: role!,
                   currentCompanyId: companyId,
                   isApproved: isApproved,
-                  vettingStatus: vettingEnabled ? 'not_started' : undefined
+                  ...(vettingEnabled ? { vettingStatus: 'not_started' } : {})
               });
           }
 
@@ -303,7 +303,7 @@ export const Register = () => {
           currentCompanyId: companyId,
           activeShiftId: null,
           isApproved: isApproved,
-          vettingStatus: vettingEnabled ? 'not_started' : undefined,
+          ...(vettingEnabled ? { vettingStatus: 'not_started' } : {}),
           vettingData: []
       };
       await createUserProfile(newUser);
