@@ -237,7 +237,7 @@ export const Register = () => {
                   role: role!,
                   currentCompanyId: companyId,
                   isApproved: isApproved,
-                  ...(vettingEnabled ? { vettingStatus: 'not_started' } : {})
+                  vettingStatus: vettingEnabled ? 'not_started' : undefined
               });
           }
 
@@ -293,7 +293,7 @@ export const Register = () => {
 
       // 3. Create Profile
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-      const newUser: UserType = {
+      const newUser: any = {
           id: uid,
           email: email,
           name: fullName,
@@ -303,10 +303,14 @@ export const Register = () => {
           currentCompanyId: companyId,
           activeShiftId: null,
           isApproved: isApproved,
-          ...(vettingEnabled ? { vettingStatus: 'not_started' } : {}),
           vettingData: []
       };
-      await createUserProfile(newUser);
+      
+      if (vettingEnabled) {
+          newUser.vettingStatus = 'not_started';
+      }
+
+      await createUserProfile(newUser as UserType);
       
       // 4. Send Verification Email & Refresh
       await sendVerificationEmail();

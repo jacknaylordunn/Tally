@@ -75,8 +75,7 @@ export const AdminVetting = () => {
       const updatedData = targetUser.vettingData?.map(item => {
           if (item.id === itemId) {
               if (status === 'pending') {
-                  const { verifiedAt, verifiedBy, ...rest } = item;
-                  return { ...rest, status };
+                  return { ...item, status, verifiedAt: undefined, verifiedBy: undefined };
               }
               return { ...item, status, verifiedAt: Date.now(), verifiedBy: user?.name || 'Admin' };
           }

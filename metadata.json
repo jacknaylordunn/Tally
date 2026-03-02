@@ -1,0 +1,8 @@
+{
+  "name": "Tallyd",
+  "description": "Frictionless time-and-attendance platform using native QR scanning.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}

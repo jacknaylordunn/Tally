@@ -145,21 +145,26 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
           }
 
           // Create new profile
-          const newProfile: User = {
+          const newProfile: any = {
               id: firebaseUser.uid,
               email: firebaseUser.email!,
               name: profileData.name || firebaseUser.displayName || 'Staff Member',
               firstName: profileData.firstName || 'Staff',
               lastName: profileData.lastName || '',
               role: profileData.role || UserRole.STAFF,
-              currentCompanyId: profileData.currentCompanyId,
               isApproved: profileData.isApproved ?? true,
-              ...(profileData.vettingStatus ? { vettingStatus: profileData.vettingStatus } : {}),
               vettingData: []
           };
 
-          await createUserProfile(newProfile);
-          setUser(newProfile);
+          if (profileData.currentCompanyId !== undefined) {
+              newProfile.currentCompanyId = profileData.currentCompanyId;
+          }
+          if (profileData.vettingStatus !== undefined) {
+              newProfile.vettingStatus = profileData.vettingStatus;
+          }
+
+          await createUserProfile(newProfile as User);
+          setUser(newProfile as User);
           localStorage.setItem(CACHE_KEY, JSON.stringify(newProfile));
 
       } catch (error) {

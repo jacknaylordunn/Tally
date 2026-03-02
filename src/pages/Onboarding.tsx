@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserRole, Company, Location, VettingLevel } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent, Clock, Eye, EyeOff, Palette, Image, Upload, FileCheck, Shield, Building } from 'lucide-react';
+import { MapPin, Camera, Lock, CheckCircle, Copy, Check, DollarSign, Loader2, Navigation, Share2, CalendarDays, Calendar, User, Percent, Clock, Eye, EyeOff, Palette, Image as ImageIcon, Upload, FileCheck, Shield, Building } from 'lucide-react';
 import { updateCompanySettings, getCompany, createLocation, uploadCompanyLogo } from '../services/api';
 import { LocationMap } from '../components/LocationMap';
 import { APP_NAME } from '../constants';
@@ -354,7 +353,7 @@ export const Onboarding = () => {
                                 {logoUrl ? (
                                     <img src={logoUrl} alt="Preview" className="w-full h-full object-contain p-1" />
                                 ) : (
-                                    <Image className="w-8 h-8 text-slate-300" />
+                                    <ImageIcon className="w-8 h-8 text-slate-300" />
                                 )}
                                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                                     <Upload className="w-6 h-6 text-white" />
