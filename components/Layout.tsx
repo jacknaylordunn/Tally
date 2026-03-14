@@ -68,9 +68,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleResendVerification = async () => {
       if(verificationSent) return;
-      await sendVerificationEmail();
-      setVerificationSent(true);
-      alert("Verification email sent! Please check your inbox.");
+      try {
+          await sendVerificationEmail();
+          setVerificationSent(true);
+          alert("Verification email sent! Please check your inbox.");
+      } catch (e: any) {
+          alert(`Error sending verification email: ${e.message}`);
+      }
   };
 
   return (

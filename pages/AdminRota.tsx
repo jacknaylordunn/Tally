@@ -461,16 +461,21 @@ export const AdminRota = () => {
   // Helper to safely get the API key with fallback logic
   const getApiKey = () => {
       // 1. Try standard Vite ENV access
-      // This is the correct way for Vite apps. The string is replaced at build time.
-      // Cast to any to avoid TS error: Property 'env' does not exist on type 'ImportMeta'.
       const meta = import.meta as any;
+      if (meta.env && meta.env.VITE_GEMINI_API_KEY) {
+          return meta.env.VITE_GEMINI_API_KEY;
+      }
       if (meta.env && meta.env.VITE_GOOGLEGENAI_KEY) {
           return meta.env.VITE_GOOGLEGENAI_KEY;
       }
       
-      // 2. Safe fallback for other environments or if strict mode is off
-      if (typeof meta !== 'undefined' && meta.env) {
-          return meta.env.VITE_GOOGLEGENAI_KEY;
+      // 2. Try process.env replaced by Vite
+      try {
+          if (process.env.GEMINI_API_KEY) {
+              return process.env.GEMINI_API_KEY;
+          }
+      } catch (e) {
+          // Ignore
       }
 
       return '';
@@ -495,12 +500,10 @@ export const AdminRota = () => {
               
               const response = await ai.models.generateContent({
                   model: 'gemini-3-flash-preview',
-                  contents: [
-                      {
-                          role: 'user',
-                          parts: [
-                              { inlineData: { mimeType: file.type, data: base64Data } },
-                              { text: `Analyze this rota image and extract shift data into a JSON array.
+                  contents: {
+                      parts: [
+                          { inlineData: { mimeType: file.type, data: base64Data } },
+                          { text: `Analyze this rota image and extract shift data into a JSON array.
                               
                               Context:
                               - Image could be a grid (Names on Left, Dates on Top) or a list.
@@ -514,9 +517,8 @@ export const AdminRota = () => {
                               5. Ignore "OFF", "HOLIDAY", or empty cells.
                               6. Return raw name exactly as seen (e.g. "Bella Scott").
                               ` }
-                          ]
-                      }
-                  ],
+                      ]
+                  },
                   config: {
                       responseMimeType: "application/json",
                       responseSchema: {

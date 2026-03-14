@@ -231,6 +231,7 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
               await sendEmailVerification(auth.currentUser);
           } catch (e) {
               console.error("Failed to send verification email", e);
+              throw e;
           }
       }
   };

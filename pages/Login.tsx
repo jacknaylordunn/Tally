@@ -196,7 +196,6 @@ export const Login = () => {
           return;
       }
       try {
-          // Standard Firebase reset email (opens in browser, not app)
           await sendPasswordResetEmail(auth, email);
           setStatusMsg(`Reset link sent to ${email}. Check spam folder if not received.`);
           setError('');

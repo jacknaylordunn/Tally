@@ -313,7 +313,11 @@ export const Register = () => {
       await createUserProfile(newUser as UserType);
       
       // 4. Send Verification Email & Refresh
-      await sendVerificationEmail();
+      try {
+          await sendVerificationEmail();
+      } catch (e) {
+          console.error("Verification email failed to send during registration", e);
+      }
       await refreshSession();
       
       alert("Account created successfully! Please check your email to verify your account.");
