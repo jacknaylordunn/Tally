@@ -460,19 +460,21 @@ export const AdminRota = () => {
 
   // Helper to safely get the API key with fallback logic
   const getApiKey = () => {
-      // 1. Try standard Vite ENV access
-      const meta = import.meta as any;
-      if (meta.env && meta.env.VITE_GEMINI_API_KEY) {
-          return meta.env.VITE_GEMINI_API_KEY;
+      // 1. Try standard Vite ENV access (must use exact string for Vite static replacement)
+      if (import.meta.env.VITE_GEMINI_API_KEY) {
+          return import.meta.env.VITE_GEMINI_API_KEY;
       }
-      if (meta.env && meta.env.VITE_GOOGLEGENAI_KEY) {
-          return meta.env.VITE_GOOGLEGENAI_KEY;
+      if (import.meta.env.VITE_GOOGLEGENAI_KEY) {
+          return import.meta.env.VITE_GOOGLEGENAI_KEY;
       }
       
-      // 2. Try process.env replaced by Vite
+      // 2. Try process.env replaced by Vite config
       try {
           if (process.env.GEMINI_API_KEY) {
               return process.env.GEMINI_API_KEY;
+          }
+          if (process.env.API_KEY) {
+              return process.env.API_KEY;
           }
       } catch (e) {
           // Ignore
