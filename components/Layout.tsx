@@ -43,7 +43,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return <>{children}</>;
   }
 
-  const baseNavItems = user?.role === UserRole.ADMIN 
+  const isStaffView = location.pathname.startsWith('/staff');
+  const baseNavItems = (user?.role === UserRole.ADMIN && !isStaffView)
     ? NAVIGATION_ITEMS.ADMIN 
     : NAVIGATION_ITEMS.STAFF;
 

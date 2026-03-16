@@ -3,8 +3,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import { getStaffActivity, getCompany, getSchedule, updateUserProfile, uploadVettingDocument, toggleShiftBreak } from '../services/api';
-import { Shift, Company, ScheduleShift, VettingItem, AddressData, EmploymentData, VettingSection } from '../types';
-import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle, Play, StopCircle, MapPin, ChevronRight, FileCheck, Upload, Check, Loader2, ShieldCheck, FileText, CheckCircle2, Clock as ClockIcon, Plus, Trash2, ChevronDown, ChevronUp, Briefcase, Home, Lock, Info, Coffee } from 'lucide-react';
+import { Shift, Company, ScheduleShift, VettingItem, AddressData, EmploymentData, VettingSection, UserRole } from '../types';
+import { Clock, Scan, X, Calendar, RefreshCw, AlertCircle, Play, StopCircle, MapPin, ChevronRight, FileCheck, Upload, Check, Loader2, ShieldCheck, FileText, CheckCircle2, Clock as ClockIcon, Plus, Trash2, ChevronDown, ChevronUp, Briefcase, Home, Lock, Info, Coffee, Building } from 'lucide-react';
 import jsQR from 'jsqr';
 import { useNavigate } from 'react-router-dom';
 import { VETTING_TEMPLATES } from '../constants';
@@ -388,8 +388,19 @@ export const StaffDashboard = () => {
               <h1 className="text-xl font-bold text-slate-900 dark:text-white">{greeting}, {user?.name.split(' ')[0]}</h1>
               <p className="text-slate-500 text-sm">Ready to work?</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/50 flex items-center justify-center text-brand-600 dark:text-brand-300 font-bold text-lg shadow-sm dark:shadow-glow">
-              {user?.name.charAt(0)}
+          <div className="flex items-center gap-3">
+              {user?.role === UserRole.ADMIN && (
+                  <button 
+                      onClick={() => navigate('/admin')}
+                      className="glass-panel hover:bg-white/50 dark:hover:bg-white/10 text-slate-700 dark:text-white border border-slate-200 dark:border-white/10 px-3 py-2 rounded-xl font-bold transition flex items-center gap-2 text-xs"
+                  >
+                      <Building className="w-4 h-4" />
+                      <span className="hidden sm:inline">Admin View</span>
+                  </button>
+              )}
+              <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/50 flex items-center justify-center text-brand-600 dark:text-brand-300 font-bold text-lg shadow-sm dark:shadow-glow">
+                  {user?.name.charAt(0)}
+              </div>
           </div>
        </header>
 

@@ -460,6 +460,15 @@ export const AdminDashboard = () => {
             </div>
             
             <div className="flex gap-3">
+                {user?.role === UserRole.ADMIN && (
+                    <button 
+                        onClick={() => navigate('/staff')}
+                        className="glass-panel hover:bg-white/50 dark:hover:bg-white/10 text-slate-700 dark:text-white border border-slate-200 dark:border-white/10 px-5 py-3 rounded-xl font-bold transition flex items-center gap-2"
+                    >
+                        <Users className="w-4 h-4" />
+                        <span className="hidden sm:inline">Staff View</span>
+                    </button>
+                )}
                 <Link to="/admin/kiosk" id="dashboard-kiosk-btn" className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-brand-900/20 flex items-center gap-2 transition transform active:scale-95">
                     <Zap className="w-4 h-4" />
                     <span>Launch Kiosk</span>

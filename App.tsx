@@ -57,8 +57,13 @@ const ProtectedRoute = ({ children, role }: { children?: React.ReactNode, role?:
   }
 
   if (role && user?.role !== role) {
-    // Redirect to their appropriate dashboard if wrong role
-    return <Navigate to={user?.role === UserRole.ADMIN ? '/admin' : '/staff'} replace />;
+    // Allow admins to access staff routes
+    if (user?.role === UserRole.ADMIN && role === UserRole.STAFF) {
+        // Allowed
+    } else {
+        // Redirect to their appropriate dashboard if wrong role
+        return <Navigate to={user?.role === UserRole.ADMIN ? '/admin' : '/staff'} replace />;
+    }
   }
 
   return <Layout>{children}</Layout>;
