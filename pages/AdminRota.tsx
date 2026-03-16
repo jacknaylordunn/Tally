@@ -80,6 +80,7 @@ export const AdminRota = () => {
   const [importStep, setImportStep] = useState<'upload' | 'review'>('upload');
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [bulkEndTime, setBulkEndTime] = useState('17:00');
+  const [importLocationId, setImportLocationId] = useState<string>('');
   
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'shift' | 'day' | 'group', data: any } | null>(null);
@@ -101,6 +102,7 @@ export const AdminRota = () => {
   const [shiftUser, setShiftUser] = useState<string>('open'); 
   const [shiftLocation, setShiftLocation] = useState<string>('');
   const [shiftQuantity, setShiftQuantity] = useState(1);
+  const [locationFilter, setLocationFilter] = useState<string>('all');
 
   // Repeat Form States
   const [repeatMode, setRepeatMode] = useState<'daily_week' | 'custom'>('daily_week');
@@ -148,7 +150,7 @@ export const AdminRota = () => {
         getTimeOffRequests(user.currentCompanyId),
         getCompany(user.currentCompanyId),
         getShifts(user.currentCompanyId),
-        getGlobalDraftCount(user.currentCompanyId)
+        getGlobalDraftCount(user.currentCompanyId, locationFilter)
     ]);
     
     setSchedule(schedData);
@@ -160,6 +162,12 @@ export const AdminRota = () => {
     setGlobalDraftCount(draftCountData);
     setLoading(false);
   };
+
+  useEffect(() => {
+      if (user?.currentCompanyId) {
+          getGlobalDraftCount(user.currentCompanyId, locationFilter).then(setGlobalDraftCount);
+      }
+  }, [locationFilter, user?.currentCompanyId]);
 
   if (company && company.settings.rotaEnabled === false) {
       return (
@@ -189,7 +197,9 @@ export const AdminRota = () => {
       return durationHours * rate;
   };
 
-  const totalWeeklyCost = schedule.reduce((acc, s) => acc + getShiftCost(s), 0);
+  const totalWeeklyCost = schedule
+      .filter(s => locationFilter === 'all' || s.locationId === locationFilter)
+      .reduce((acc, s) => acc + getShiftCost(s), 0);
   const currency = company?.settings.currency || '£';
 
   const getGroupKey = (s: ScheduleShift) => {
@@ -209,9 +219,13 @@ export const AdminRota = () => {
   const getShiftsForDay = (date: Date) => {
     return schedule.filter(s => {
       const sDate = new Date(s.startTime);
-      return sDate.getDate() === date.getDate() &&
-             sDate.getMonth() === date.getMonth() &&
-             sDate.getFullYear() === date.getFullYear();
+      const isSameDay = sDate.getDate() === date.getDate() &&
+                        sDate.getMonth() === date.getMonth() &&
+                        sDate.getFullYear() === date.getFullYear();
+      
+      const matchesLocation = locationFilter === 'all' || s.locationId === locationFilter;
+      
+      return isSameDay && matchesLocation;
     }).sort((a, b) => a.startTime - b.startTime);
   };
 
@@ -246,21 +260,21 @@ export const AdminRota = () => {
 
   const handleCopyWeek = async () => {
       if (!user?.currentCompanyId) return;
-      if (!confirm("This will copy shifts from the previous week to the current week displayed. Continue?")) return;
+      if (!confirm(`This will copy shifts from the previous week to the current week displayed${locationFilter !== 'all' ? ' for this location' : ''}. Continue?`)) return;
       
       const { start } = getWeekRange(currentDate);
       const prevWeekStart = new Date(start);
       prevWeekStart.setDate(prevWeekStart.getDate() - 7);
       
       setLoading(true);
-      await copyScheduleWeek(user.currentCompanyId, prevWeekStart.getTime(), start.getTime());
+      await copyScheduleWeek(user.currentCompanyId, prevWeekStart.getTime(), start.getTime(), locationFilter);
       loadData();
   };
 
   const handleClearDrafts = async () => {
-      if (!confirm("Are you sure you want to delete ALL 'Draft' shifts for this week? This cannot be undone.")) return;
-      const drafts = schedule.filter(s => s.status === 'draft');
+      const drafts = schedule.filter(s => s.status === 'draft' && (locationFilter === 'all' || s.locationId === locationFilter));
       if (drafts.length === 0) return;
+      if (!confirm(`Are you sure you want to delete ALL ${drafts.length} 'Draft' shifts for this week${locationFilter !== 'all' ? ' at this location' : ''}? This cannot be undone.`)) return;
       setLoading(true);
       await Promise.all(drafts.map(s => deleteScheduleShift(s.id)));
       loadData();
@@ -657,7 +671,7 @@ export const AdminRota = () => {
           return {
               id: `sch_${Date.now()}_imp_${Math.random().toString(36).substr(2,5)}`,
               companyId: user.currentCompanyId!,
-              locationId: null, // Default
+              locationId: importLocationId || null,
               userId: finalUserId,
               userName: finalUserName,
               role: row.finalRole,
@@ -686,7 +700,7 @@ export const AdminRota = () => {
     setShiftStart('09:00');
     setShiftEnd('17:00');
     setShiftUser('open');
-    setShiftLocation(locations[0]?.id || '');
+    setShiftLocation(locationFilter !== 'all' ? locationFilter : (locations[0]?.id || ''));
     setShiftQuantity(1);
     setIsShiftModalOpen(true);
   };
@@ -1012,19 +1026,20 @@ export const AdminRota = () => {
     if (!user?.currentCompanyId) return;
     setIsPublishMenuOpen(false);
     
-    const weekDrafts = schedule.filter(s => s.status === 'draft').length;
+    const weekDrafts = schedule.filter(s => s.status === 'draft' && (locationFilter === 'all' || s.locationId === locationFilter)).length;
+    
     const confirmMsg = scope === 'week' 
-        ? `Publish ${weekDrafts} draft shifts for the currently visible week?` 
-        : `Publish ALL ${globalDraftCount} draft shifts across the entire schedule?`;
+        ? `Publish ${weekDrafts} draft shifts for the currently visible week${locationFilter !== 'all' ? ' at this location' : ''}?` 
+        : `Publish ALL ${globalDraftCount} draft shifts across the entire schedule${locationFilter !== 'all' ? ' at this location' : ''}?`;
         
     if (confirm(confirmMsg)) {
         setLoading(true);
         try {
             if (scope === 'week') {
                 const { start, end } = getWeekRange(currentDate);
-                await publishDrafts(user.currentCompanyId, start.getTime(), end.getTime());
+                await publishDrafts(user.currentCompanyId, start.getTime(), end.getTime(), locationFilter);
             } else {
-                await publishDrafts(user.currentCompanyId);
+                await publishDrafts(user.currentCompanyId, undefined, undefined, locationFilter);
             }
             setTimeout(() => loadData(), 500);
         } catch (e) {
@@ -1251,7 +1266,6 @@ export const AdminRota = () => {
   });
 
   const pendingRequestsCount = timeOffRequests.length;
-  const localDraftCount = schedule.filter(s => s.status === 'draft').length;
 
   return (
     <>
@@ -1270,6 +1284,22 @@ export const AdminRota = () => {
             </div>
             <div className="flex flex-wrap gap-2">
                  {/* Toolbar Buttons */}
+                 {locations.length > 1 && (
+                     <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 mr-2">
+                         <MapPin className="w-4 h-4 text-slate-400" />
+                         <select
+                             value={locationFilter}
+                             onChange={(e) => setLocationFilter(e.target.value)}
+                             className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                         >
+                             <option value="all">All Locations</option>
+                             {locations.map(l => (
+                                 <option key={l.id} value={l.id}>{l.name}</option>
+                             ))}
+                         </select>
+                     </div>
+                 )}
+
                  {showCosts && (
                      <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-xl border border-emerald-100 dark:border-emerald-500/20 mr-2">
                          <div className="flex flex-col">
@@ -1297,7 +1327,7 @@ export const AdminRota = () => {
                     )}
                 </button>
                 <div className="flex rounded-xl glass-panel border border-slate-200 dark:border-white/10 p-1">
-                    <button onClick={() => setIsImportModalOpen(true)} className="px-3 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition flex items-center gap-1">
+                    <button onClick={() => { setIsImportModalOpen(true); setImportLocationId(locationFilter !== 'all' ? locationFilter : (locations[0]?.id || '')); }} className="px-3 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition flex items-center gap-1">
                         <Upload className="w-3 h-3" /> <span className="hidden sm:inline">Import</span>
                     </button>
                     <div className="w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
@@ -1638,6 +1668,23 @@ export const AdminRota = () => {
                                 Support for <b>CSV</b> files or <b>Images</b> (Screenshots/Photos of rotas).<br/>
                                 Our AI will automatically extract shifts from images.
                             </p>
+                            
+                            {locations.length > 1 && (
+                                <div className="mb-6 w-full max-w-xs">
+                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2 text-center">Assign to Location</label>
+                                    <select 
+                                        value={importLocationId} 
+                                        onChange={e => setImportLocationId(e.target.value)} 
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                    >
+                                        <option value="">-- No Specific Location --</option>
+                                        {locations.map(l => (
+                                            <option key={l.id} value={l.id}>{l.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
                             <input 
                                 type="file" 
                                 ref={fileInputRef}

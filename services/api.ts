@@ -418,19 +418,26 @@ export const getSchedule = async (companyId: string, startTime: number, endTime:
     }
 };
 
-export const getGlobalDraftCount = async (companyId: string): Promise<number> => {
-    const q = query(
+export const getGlobalDraftCount = async (companyId: string, locationId?: string): Promise<number> => {
+    let q = query(
         collection(db, SCHEDULE_REF), 
         where("companyId", "==", companyId),
         where("status", "==", "draft")
     );
+    if (locationId && locationId !== 'all') {
+        q = query(q, where("locationId", "==", locationId));
+    }
     const snapshot = await getCountFromServer(q);
     return snapshot.data().count;
 };
 
-export const copyScheduleWeek = async (companyId: string, sourceWeekStart: number, targetWeekStart: number): Promise<void> => {
+export const copyScheduleWeek = async (companyId: string, sourceWeekStart: number, targetWeekStart: number, locationId?: string): Promise<void> => {
     const sourceEnd = sourceWeekStart + (7 * 24 * 60 * 60 * 1000) + (12 * 60 * 60 * 1000); 
-    const sourceShifts = await getSchedule(companyId, sourceWeekStart, sourceEnd);
+    let sourceShifts = await getSchedule(companyId, sourceWeekStart, sourceEnd);
+    
+    if (locationId && locationId !== 'all') {
+        sourceShifts = sourceShifts.filter(s => s.locationId === locationId);
+    }
     
     if (sourceShifts.length === 0) return;
 
@@ -481,7 +488,7 @@ export const assignShiftToUser = async (shiftId: string, userId: string, userNam
     });
 };
 
-export const publishDrafts = async (companyId: string, startTime?: number, endTime?: number): Promise<void> => {
+export const publishDrafts = async (companyId: string, startTime?: number, endTime?: number, locationId?: string): Promise<void> => {
     const q = query(
         collection(db, SCHEDULE_REF), 
         where("companyId", "==", companyId),
@@ -498,6 +505,13 @@ export const publishDrafts = async (companyId: string, startTime?: number, endTi
         // Apply date filter in memory if provided
         if (startTime !== undefined && endTime !== undefined) {
             if (data.startTime < startTime || data.startTime > endTime) {
+                shouldPublish = false;
+            }
+        }
+        
+        // Apply location filter in memory if provided
+        if (locationId && locationId !== 'all') {
+            if (data.locationId !== locationId) {
                 shouldPublish = false;
             }
         }

@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getSchedule, bidOnShift, cancelBid, createTimeOffRequest, getMyTimeOff, getCompany, setShiftOfferStatus, deleteTimeOffRequest } from '../services/api';
-import { ScheduleShift, TimeOffRequest, Company } from '../types';
+import { getSchedule, bidOnShift, cancelBid, createTimeOffRequest, getMyTimeOff, getCompany, setShiftOfferStatus, deleteTimeOffRequest, getLocations } from '../services/api';
+import { ScheduleShift, TimeOffRequest, Company, Location } from '../types';
 import { Calendar, MapPin, Clock, AlertCircle, CheckCircle, Plus, X, User, Lock, RotateCcw, ArrowRightLeft, Trash2, Users } from 'lucide-react';
 
 export const StaffRota = () => {
@@ -11,6 +11,8 @@ export const StaffRota = () => {
   const [schedule, setSchedule] = useState<ScheduleShift[]>([]);
   const [myRequests, setMyRequests] = useState<TimeOffRequest[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [locationFilter, setLocationFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
   // Time Off Form
@@ -32,15 +34,17 @@ export const StaffRota = () => {
     const start = new Date(); start.setHours(0,0,0,0);
     const end = new Date(); end.setDate(end.getDate() + 30);
 
-    const [schedData, reqData, companyData] = await Promise.all([
+    const [schedData, reqData, companyData, locData] = await Promise.all([
         getSchedule(user.currentCompanyId, start.getTime(), end.getTime()),
         getMyTimeOff(user.id),
-        getCompany(user.currentCompanyId)
+        getCompany(user.currentCompanyId),
+        getLocations(user.currentCompanyId)
     ]);
     
     setSchedule(schedData.filter(s => s.status === 'published'));
     setMyRequests(reqData);
     setCompany(companyData);
+    setLocations(locData);
     setLoading(false);
   };
 
@@ -105,12 +109,19 @@ export const StaffRota = () => {
       setToStart(''); setToEnd(''); setToReason('');
   };
 
-  const myShifts = schedule.filter(s => s.userId === user?.id).sort((a,b) => a.startTime - b.startTime);
+  const myShifts = schedule.filter(s => {
+      const isMine = s.userId === user?.id;
+      const matchesLocation = locationFilter === 'all' || s.locationId === locationFilter;
+      return isMine && matchesLocation;
+  }).sort((a,b) => a.startTime - b.startTime);
   
   // Logic to Group Open Shifts with Role Filtering
   const openShifts = schedule.filter(s => {
       const isOpen = s.userId === null || (s.userId !== user?.id && s.isOffered);
       if (!isOpen) return false;
+
+      const matchesLocation = locationFilter === 'all' || s.locationId === locationFilter;
+      if (!matchesLocation) return false;
 
       // Visibility Rule: If shift has a role, user must have that role in their profile.
       // Falls back to legacy `position` field if `roles` array is missing.
@@ -270,26 +281,47 @@ export const StaffRota = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-white/5">
-            <button 
-                onClick={() => setActiveTab('my-shifts')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'my-shifts' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
-            >
-                My Shifts
-            </button>
-            <button 
-                onClick={() => setActiveTab('open-board')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'open-board' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
-            >
-                Open Board
-                {openShifts.length > 0 && <span className="ml-2 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{openShifts.length}</span>}
-            </button>
-             <button 
-                onClick={() => setActiveTab('time-off')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'time-off' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
-            >
-                Time Off
-            </button>
+        <div className="flex flex-col gap-4">
+            {locations.length > 1 && (
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10">
+                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                        <MapPin className="w-4 h-4" />
+                        <span className="text-sm font-bold uppercase tracking-wider">Location</span>
+                    </div>
+                    <select
+                        value={locationFilter}
+                        onChange={(e) => setLocationFilter(e.target.value)}
+                        className="bg-transparent text-sm font-medium text-slate-900 dark:text-white outline-none cursor-pointer text-right"
+                    >
+                        <option value="all">All Locations</option>
+                        {locations.map(l => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+            <div className="flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-white/5">
+                <button 
+                    onClick={() => setActiveTab('my-shifts')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'my-shifts' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                    My Shifts
+                </button>
+                <button 
+                    onClick={() => setActiveTab('open-board')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'open-board' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                    Open Board
+                    {openShifts.length > 0 && <span className="ml-2 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{openShifts.length}</span>}
+                </button>
+                 <button 
+                    onClick={() => setActiveTab('time-off')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${activeTab === 'time-off' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                    Time Off
+                </button>
+            </div>
         </div>
 
         {/* Content */}
