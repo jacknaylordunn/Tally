@@ -33,7 +33,8 @@ export const AdminTimesheets = () => {
       separateHoliday: false,
       includeInactiveStaff: false,
       includeEmployeeId: false, 
-      timeFormat: '12h' as '12h' | '24h_dot'
+      timeFormat: '12h' as '12h' | '24h_dot',
+      additionalColumnsBetweenDays: 0
   });
 
   // Edit Modal State
@@ -223,7 +224,8 @@ export const AdminTimesheets = () => {
         companyName: company?.name,
         brandColor: company?.settings.primaryColor,
         timeFormat: exportOptions.timeFormat,
-        fileType: exportFileType
+        fileType: exportFileType,
+        additionalColumnsBetweenDays: exportOptions.additionalColumnsBetweenDays
     });
     setIsExportModalOpen(false);
   };
@@ -522,10 +524,24 @@ export const AdminTimesheets = () => {
                             <p className="text-xs font-bold text-slate-400 uppercase mb-2">Configurations</p>
                             
                             {exportFormat === 'matrix' && (
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <input type="checkbox" checked={exportOptions.showTimes} onChange={e => setExportOptions({...exportOptions, showTimes: e.target.checked})} className="rounded text-brand-600 focus:ring-brand-500" />
-                                    <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-brand-600 transition">Show In/Out Times (3 Cols per Day)</span>
-                                </label>
+                                <>
+                                    <label className="flex items-center gap-3 cursor-pointer group">
+                                        <input type="checkbox" checked={exportOptions.showTimes} onChange={e => setExportOptions({...exportOptions, showTimes: e.target.checked})} className="rounded text-brand-600 focus:ring-brand-500" />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-brand-600 transition">Show In/Out Times (3 Cols per Day)</span>
+                                    </label>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm text-slate-700 dark:text-slate-300">Add</span>
+                                        <input 
+                                            type="number" 
+                                            min="0" 
+                                            max="10" 
+                                            value={exportOptions.additionalColumnsBetweenDays} 
+                                            onChange={e => setExportOptions({...exportOptions, additionalColumnsBetweenDays: parseInt(e.target.value) || 0})}
+                                            className="w-16 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300">columns between days</span>
+                                    </div>
+                                </>
                             )}
                             
                             <label className="flex items-center gap-3 cursor-pointer group">

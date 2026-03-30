@@ -21,6 +21,7 @@ interface ExportOptions {
   includeInactiveStaff?: boolean; 
   includeEmployeeId?: boolean;
   fileType?: 'xlsx' | 'csv' | 'sheets';
+  additionalColumnsBetweenDays?: number;
 }
 
 // --- HELPERS ---
@@ -162,7 +163,8 @@ export const downloadPayrollReport = (
     companyName = 'PAYROLL MATRIX',
     dateRangeLabel = '',
     brandColor = '#4F46E5',
-    fileType = 'xlsx'
+    fileType = 'xlsx',
+    additionalColumnsBetweenDays = 0
   } = options;
 
   const BRAND_HEX = cleanHex(brandColor);
@@ -226,7 +228,9 @@ export const downloadPayrollReport = (
       const cols: any[] = [];
 
       // ROW 0: TITLE
-      const totalDateCols = dates.length * (showTimesInMatrix ? 3 : 1);
+      const additionalCols = additionalColumnsBetweenDays || 0;
+      const colsPerDay = (showTimesInMatrix ? 3 : 1) + additionalCols;
+      const totalDateCols = dates.length * colsPerDay;
       const startCols = includeEmployeeId ? 2 : 1;
       const summaryCols = 2 + (holidayPayEnabled ? 2 : 0) + (includeDeductions ? 3 : 0);
       const totalWidth = startCols + totalDateCols + summaryCols;
@@ -256,6 +260,10 @@ export const downloadPayrollReport = (
           } else {
               cols.push({ wch: 8 });
           }
+          for (let i = 0; i < additionalCols; i++) {
+              headerRow.push('');
+              cols.push({ wch: 10 });
+          }
       });
 
       headerRow.push('TOTAL HRS', 'RATE');
@@ -281,6 +289,9 @@ export const downloadPayrollReport = (
           } else {
               subHeaderRow.push('HRS');
           }
+          for (let i = 0; i < additionalCols; i++) {
+              subHeaderRow.push('');
+          }
       });
       // Summary placeholders
       subHeaderRow.push('', '');
@@ -297,7 +308,7 @@ export const downloadPayrollReport = (
       // Dates Horizontally
       let cIdx = startCols;
       dates.forEach(() => {
-          const span = showTimesInMatrix ? 3 : 1;
+          const span = colsPerDay;
           if (span > 1) merges.push({ s: { r: 2, c: cIdx }, e: { r: 2, c: cIdx + span - 1 } });
           cIdx += span;
       });
@@ -344,14 +355,9 @@ export const downloadPayrollReport = (
           for (let r = 0; r < maxDailyShifts; r++) {
               const rowData: any[] = [];
               
-              // Staff Name & ID (Fill only first row, merge later)
-              if (r === 0) {
-                  rowData.push(staff.name);
-                  if (includeEmployeeId) rowData.push(staff.employeeId || '');
-              } else {
-                  rowData.push('');
-                  if (includeEmployeeId) rowData.push('');
-              }
+              // Staff Name & ID (Repeat on every row for filtering)
+              rowData.push(staff.name);
+              if (includeEmployeeId) rowData.push(staff.employeeId || '');
 
               // Date Columns
               dates.forEach(d => {
@@ -371,9 +377,13 @@ export const downloadPayrollReport = (
                       if (showTimesInMatrix) rowData.push('', '', '');
                       else rowData.push('');
                   }
+                  
+                  for (let i = 0; i < additionalCols; i++) {
+                      rowData.push('');
+                  }
               });
 
-              // Summary Columns (Only fill first row, merge later)
+              // Summary Columns (Only fill first row, leave blank on subsequent rows)
               if (r === 0) {
                   rowData.push({ t: 'n', v: Number(totalHours.toFixed(2)) });
                   rowData.push({ t: 'n', v: Number(avgRate.toFixed(2)) });
@@ -394,20 +404,6 @@ export const downloadPayrollReport = (
               matrix.push(rowData);
           }
 
-          // 4. Merge Staff & Summary Cells Vertical
-          if (maxDailyShifts > 1) {
-              // Name
-              merges.push({ s: { r: currentRowIdx, c: 0 }, e: { r: currentRowIdx + maxDailyShifts - 1, c: 0 } });
-              // ID
-              if (includeEmployeeId) {
-                  merges.push({ s: { r: currentRowIdx, c: 1 }, e: { r: currentRowIdx + maxDailyShifts - 1, c: 1 } });
-              }
-              // Summaries
-              for (let i = totalWidth - summaryCols; i < totalWidth; i++) {
-                  merges.push({ s: { r: currentRowIdx, c: i }, e: { r: currentRowIdx + maxDailyShifts - 1, c: i } });
-              }
-          }
-
           currentRowIdx += maxDailyShifts;
       });
 
@@ -416,10 +412,10 @@ export const downloadPayrollReport = (
       ws['!merges'] = merges;
       ws['!cols'] = cols;
       
-      // AutoFilter on Header Row (Row index 2)
-      // Range: A3 to LastColumn3
+      // AutoFilter on Header Row (Row index 3)
+      // Range: A4 to LastColumn4
       const endColChar = XLSX.utils.encode_col(totalWidth - 1);
-      ws['!autofilter'] = { ref: `A3:${endColChar}${currentRowIdx}` };
+      ws['!autofilter'] = { ref: `A4:${endColChar}${currentRowIdx}` };
 
       // Apply Styles
       const range = XLSX.utils.decode_range(ws['!ref'] || "A1:A1");
@@ -440,13 +436,19 @@ export const downloadPayrollReport = (
               else if (R === 3) cell.s = (C >= totalWidth - summaryCols) ? STYLES.summaryHeader : STYLES.headerInner;
               // Data
               else {
-                  if (C === 0) cell.s = STYLES.cellName; // Name
+                  if (C < startCols) cell.s = STYLES.cellName; // Name/ID
                   else if (C >= totalWidth - summaryCols) cell.s = STYLES.cellMoney; // Summary
                   else {
                       // Time Columns
-                      if (showTimesInMatrix && ((C - startCols) % 3 === 2)) cell.s = STYLES.cellNumber; // Bold Hours
-                      else if (!showTimesInMatrix) cell.s = STYLES.cellNumber;
-                      else cell.s = STYLES.cellTime;
+                      const dayColIdx = (C - startCols) % colsPerDay;
+                      if (showTimesInMatrix) {
+                          if (dayColIdx === 2) cell.s = STYLES.cellNumber; // Bold Hours
+                          else if (dayColIdx > 2) cell.s = STYLES.cellTime; // Additional cols
+                          else cell.s = STYLES.cellTime; // IN/OUT
+                      } else {
+                          if (dayColIdx === 0) cell.s = STYLES.cellNumber; // Bold Hours
+                          else cell.s = STYLES.cellTime; // Additional cols
+                      }
                   }
               }
           }
